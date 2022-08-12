@@ -27,5 +27,6 @@
   "workspaceLayout": {
     "appsDir": "packages",
     "libsDir": "packages"
-  }
+  },
+  "plugins": ["@nxrs/cargo"]
 }
