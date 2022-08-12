@@ -3,6 +3,7 @@
   "version": 2,
   "projects": {
     "core": "packages/core",
+    "example": "packages/example",
     "netgrep": "packages/netgrep"
   }
 }

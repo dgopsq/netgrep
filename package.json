@@ -5,6 +5,8 @@
   "scripts": {},
   "private": true,
   "dependencies": {
+    "core-js": "^3.6.5",
+    "regenerator-runtime": "0.13.7",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
@@ -13,12 +15,14 @@
     "@nrwl/jest": "14.5.4",
     "@nrwl/js": "14.5.4",
     "@nrwl/linter": "14.5.4",
+    "@nrwl/web": "^14.5.4",
     "@nrwl/workspace": "14.5.4",
     "@nxrs/cargo": "^0.3.3",
     "@types/jest": "27.4.1",
     "@types/node": "16.11.7",
     "@typescript-eslint/eslint-plugin": "^5.29.0",
     "@typescript-eslint/parser": "^5.29.0",
+    "babel-jest": "27.5.1",
     "eslint": "~8.15.0",
     "eslint-config-prettier": "8.1.0",
     "jest": "27.5.1",
