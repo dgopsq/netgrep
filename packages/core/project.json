@@ -4,14 +4,10 @@
   "sourceRoot": "packages/core/src",
   "targets": {
     "build": {
-      "executor": "@nxrs/cargo:build",
+      "executor": "nx:run-commands",
       "options": {
-        "release": false
-      },
-      "configurations": {
-        "production": {
-          "release": true
-        }
+        "command": "wasm-pack build",
+        "cwd": "packages/core"
       }
     },
     "test": {
