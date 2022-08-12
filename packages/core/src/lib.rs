@@ -8,16 +8,7 @@ use wasm_bindgen::prelude::*;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-pub fn netgrep(chunk: &[u8], pattern: &str) -> JsValue {
-    let result = search(chunk, pattern);
-
-    match result {
-        true => JsValue::TRUE,
-        false => JsValue::FALSE,
-    }
-}
-
-pub fn search(chunk: &[u8], pattern: &str) -> bool {
+pub fn search(chunk: &[u8], pattern: &str) -> JsValue {
     let matcher = RegexMatcher::new_line_matcher(pattern).unwrap();
 
     let mut searcher = SearcherBuilder::new()
@@ -31,5 +22,7 @@ pub fn search(chunk: &[u8], pattern: &str) -> bool {
 
     let _ = searcher.search_slice(&matcher, chunk, printer.sink(&matcher));
 
-    return printer.has_written();
+    let result = printer.has_written();
+
+    return JsValue::from_bool(result);
 }

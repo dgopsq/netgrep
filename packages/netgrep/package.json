@@ -1,5 +1,8 @@
 {
   "name": "@netgrep/netgrep",
   "version": "0.0.1",
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "core": "../core/pkg"
+  }
 }
