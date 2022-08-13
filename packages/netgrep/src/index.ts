@@ -1,1 +1,1 @@
-export * from './lib/netgrep';
+export * from './lib/Netgrep';
