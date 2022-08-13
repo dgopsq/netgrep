@@ -73,59 +73,29 @@ describe('Netgrep', () => {
     it('should work for a positive search result', async () => {
       mockSearch.mockReturnValue(true);
 
-      const cbFn = jest.fn();
+      const results = await NG.searchBatch(urls, pattern);
 
-      NG.searchBatch(urls, pattern, cbFn);
+      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
+        url,
+        result: true,
+        error: null,
+      }));
 
-      await new Promise((resolve) => {
-        setInterval(
-          () => (cbFn.mock.calls.length === urls.length ? resolve({}) : null),
-          500
-        );
-      });
-
-      const calls = cbFn.mock.calls;
-
-      const expectedCalls: Array<Array<BatchNetgrepResult>> = urls.map(
-        (url) => [
-          {
-            url,
-            result: true,
-            error: null,
-          },
-        ]
-      );
-
-      expect(calls).toMatchObject(expectedCalls);
+      expect(results).toMatchObject(expectedResults);
     });
 
     it('should work for a negative search result', async () => {
       mockSearch.mockReturnValue(false);
 
-      const cbFn = jest.fn();
+      const results = await NG.searchBatch(urls, pattern);
 
-      NG.searchBatch(urls, pattern, cbFn);
+      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
+        url,
+        result: false,
+        error: null,
+      }));
 
-      await new Promise((resolve) => {
-        setInterval(
-          () => (cbFn.mock.calls.length === urls.length ? resolve({}) : null),
-          500
-        );
-      });
-
-      const calls = cbFn.mock.calls;
-
-      const expectedCalls: Array<Array<BatchNetgrepResult>> = urls.map(
-        (url) => [
-          {
-            url,
-            result: false,
-            error: null,
-          },
-        ]
-      );
-
-      expect(calls).toMatchObject(expectedCalls);
+      expect(results).toMatchObject(expectedResults);
     });
 
     it('should handle errors in the fetch requests', async () => {
@@ -137,30 +107,15 @@ describe('Netgrep', () => {
 
       mockSearch.mockReturnValue(false);
 
-      const cbFn = jest.fn();
+      const results = await NG.searchBatch(urls, pattern);
 
-      NG.searchBatch(urls, pattern, cbFn);
+      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
+        url,
+        result: false,
+        error: errorMessage,
+      }));
 
-      await new Promise((resolve) => {
-        setInterval(
-          () => (cbFn.mock.calls.length === urls.length ? resolve({}) : null),
-          500
-        );
-      });
-
-      const calls = cbFn.mock.calls;
-
-      const expectedCalls: Array<Array<BatchNetgrepResult>> = urls.map(
-        (url) => [
-          {
-            url,
-            result: false,
-            error: errorMessage,
-          },
-        ]
-      );
-
-      expect(calls).toMatchObject(expectedCalls);
+      expect(results).toMatchObject(expectedResults);
     });
   });
 });

@@ -64,16 +64,19 @@ export class Netgrep {
    */
   public searchBatch(
     urls: Array<string>,
-    pattern: string,
-    cb: (result: BatchNetgrepResult) => void
-  ): void {
-    urls.forEach((url) => {
-      this.search(url, pattern)
-        .then((res) => cb({ ...res, error: null }))
-        .catch((err) =>
-          cb({ url, result: false, error: this.serializeError(err) })
-        );
-    });
+    pattern: string
+  ): Promise<Array<BatchNetgrepResult>> {
+    return Promise.all(
+      urls.map((url) =>
+        this.search(url, pattern)
+          .then((res) => ({ ...res, error: null }))
+          .catch((err) => ({
+            url,
+            result: false,
+            error: this.serializeError(err),
+          }))
+      )
+    );
   }
 
   /**
