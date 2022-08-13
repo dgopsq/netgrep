@@ -2,15 +2,18 @@ import { search } from 'core';
 import { BatchNetgrepResult } from './data/BatchNetgrepResult';
 import { NetgrepConfig } from './data/NetgrepConfig';
 import { NetgrepResult } from './data/NetgrepResult';
+import { NetgrepSearchConfig } from './data/NetgrepSearchConfig';
 
 /**
  *
  */
 export class Netgrep {
   private readonly config: NetgrepConfig;
+  private abortController: AbortController;
 
   constructor(config: NetgrepConfig) {
     this.config = config;
+    this.abortController = new AbortController();
   }
 
   /**
@@ -19,7 +22,11 @@ export class Netgrep {
    * @param pattern
    * @returns
    */
-  public search(url: string, pattern: string): Promise<NetgrepResult> {
+  public search(
+    url: string,
+    pattern: string,
+    config?: NetgrepSearchConfig
+  ): Promise<NetgrepResult> {
     return new Promise((resolve, reject) => {
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>
@@ -45,7 +52,7 @@ export class Netgrep {
         });
       };
 
-      fetch(url)
+      fetch(url, { signal: config?.signal })
         .then((res) =>
           !res.body
             ? Promise.reject('No body returned from the request')
@@ -64,11 +71,12 @@ export class Netgrep {
    */
   public searchBatch(
     urls: Array<string>,
-    pattern: string
+    pattern: string,
+    config?: NetgrepSearchConfig
   ): Promise<Array<BatchNetgrepResult>> {
     return Promise.all(
       urls.map((url) =>
-        this.search(url, pattern)
+        this.search(url, pattern, config)
           .then((res) => ({ ...res, error: null }))
           .catch((err) => ({
             url,
