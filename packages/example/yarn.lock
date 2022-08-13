@@ -7,8 +7,9 @@
   resolved "https://registry.yarnpkg.com/@esbuild/linux-loong64/-/linux-loong64-0.14.54.tgz#de2a4be678bd4d0d1ffbb86e6de779cde5999028"
   integrity sha512-bZBrLAIX1kpWelV0XemxBZllyRmM6vgFQQG2GdNb+r3Fkp0FOh1NJSvekXDs7jq70k4euu1cryLMfU+mTXlEpw==
 
-core@../core/pkg:
-  version "0.1.0"
+"core@link:../netgrep/core/pkg":
+  version "0.0.0"
+  uid ""
 
 esbuild-android-64@0.14.54:
   version "0.14.54"
@@ -166,10 +167,9 @@ nanoid@^3.3.4:
   resolved "https://registry.yarnpkg.com/nanoid/-/nanoid-3.3.4.tgz#730b67e3cd09e2deacf03c027c81c9d9dbc5e8ab"
   integrity sha512-MqBkQh/OHTS2egovRtLk45wEyNXwF+cokD+1YPf9u5VfJiRdAiRwB2froX5Co9Rh20xs4siNPm8naNotSD6RBw==
 
-netgrep@../netgrep/dist:
-  version "0.0.1"
-  dependencies:
-    core "../core/pkg"
+"netgrep@link:../netgrep/dist":
+  version "0.0.0"
+  uid ""
 
 path-parse@^1.0.7:
   version "1.0.7"

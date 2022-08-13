@@ -2,5 +2,6 @@
 # yarn lockfile v1
 
 
-core@../core/pkg:
-  version "0.1.0"
+"core@link:../core/pkg":
+  version "0.0.0"
+  uid ""
