@@ -6,7 +6,7 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "make",
+        "command": "wasm-pack build --scope netgrep",
         "cwd": "packages/core",
         "outputPath": "packages/core/pkg"
       }
