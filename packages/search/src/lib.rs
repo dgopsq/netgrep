@@ -8,7 +8,7 @@ use wasm_bindgen::prelude::*;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-pub fn search(chunk: &[u8], pattern: &str) -> JsValue {
+pub fn search_bytes(chunk: &[u8], pattern: &str) -> JsValue {
     let matcher = RegexMatcher::new_line_matcher(pattern).unwrap();
 
     let mut searcher = SearcherBuilder::new()

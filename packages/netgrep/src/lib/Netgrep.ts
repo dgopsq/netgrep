@@ -1,4 +1,4 @@
-import { search } from '@netgrep/core';
+import { search_bytes } from '@netgrep/search';
 import { BatchNetgrepResult } from './data/BatchNetgrepResult';
 import { NetgrepConfig } from './data/NetgrepConfig';
 import { NetgrepResult } from './data/NetgrepResult';
@@ -52,7 +52,7 @@ export class Netgrep {
           // Execute the search in the current chunk of bytes
           // using the underneath WASM core module.
           const u8Array = new Uint8Array(value);
-          const result = search(u8Array, pattern);
+          const result = search_bytes(u8Array, pattern);
 
           // Store the `Uint8Array` in the memory cache
           // if it's enabled.
@@ -71,7 +71,7 @@ export class Netgrep {
       // Search the content in the memory cache
       // if it's enabled.
       if (this.config.enableMemoryCache && this.memoryCache[url]) {
-        const result = search(this.memoryCache[url], pattern);
+        const result = search_bytes(this.memoryCache[url], pattern);
         resolve({ url, result });
         return;
       }

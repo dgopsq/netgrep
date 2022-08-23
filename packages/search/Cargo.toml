@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "search"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,3 +12,6 @@ crate-type = ["cdylib", "rlib"]
 wasm-bindgen = "0.2.82"
 wee_alloc = "0.4.5"
 grep = { git = "https://github.com/dgopsq/ripgrep", branch = "wasm-building-support" }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.32"

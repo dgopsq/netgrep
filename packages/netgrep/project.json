@@ -2,7 +2,7 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "packages/netgrep/src",
   "projectType": "library",
-  "implicitDependencies": ["core"],
+  "implicitDependencies": ["search"],
   "targets": {
     "build": {
       "executor": "@nrwl/js:tsc",

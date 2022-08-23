@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "type": "commonjs",
   "dependencies": {
-    "@netgrep/core": "link:../core/pkg"
+    "@netgrep/search": "link:../search/pkg"
   }
 }
