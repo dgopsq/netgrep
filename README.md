@@ -1,13 +1,15 @@
 
 
-# Netgrep
+![Header](https://github.com/dgopsq/netgrep/blob/main/assets/header.jpg)
+
+# netgrep
 
 Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small-to-medium database.
 
 At the moment Netgrep is just going to tell wether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximise the performance. 
 
 > **Note**
-> Searching for posts on a blog created through a Static Site Generator is interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files!
+> Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files!
 
 ## Usage
 
