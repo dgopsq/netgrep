@@ -11,6 +11,14 @@
         "outputPath": "packages/core/pkg"
       }
     },
+    "publish": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "wasm-pack pack && wasm-pack publish",
+        "cwd": "packages/core",
+        "outputPath": "packages/core/packed"
+      }
+    },
     "test": {
       "executor": "@nxrs/cargo:test",
       "options": {}
