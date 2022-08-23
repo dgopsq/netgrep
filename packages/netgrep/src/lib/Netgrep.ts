@@ -57,7 +57,6 @@ export class Netgrep {
           // Store the `Uint8Array` in the memory cache
           // if it's enabled.
           if (this.config.enableMemoryCache) {
-            console.log('Caching the bytes array in memory...');
             this.upsertMemoryCache(url, u8Array);
           }
 
@@ -73,7 +72,6 @@ export class Netgrep {
       // if it's enabled.
       if (this.config.enableMemoryCache && this.memoryCache[url]) {
         const result = search(this.memoryCache[url], pattern);
-        console.log('Result from cache', result);
         resolve({ url, result });
         return;
       }
@@ -81,7 +79,7 @@ export class Netgrep {
       fetch(url, { signal: config?.signal })
         .then((res) =>
           !res.body
-            ? Promise.reject('No body returned from the request')
+            ? Promise.reject("The response doesn't contain a body")
             : Promise.resolve(res.body.getReader())
         )
         .then(handleReader)
