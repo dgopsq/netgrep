@@ -1,12 +1,13 @@
-use grep::printer::StandardBuilder;
 use grep::regex::RegexMatcher;
-use grep::searcher::{BinaryDetection, SearcherBuilder};
+use grep::searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
 use wasm_bindgen::prelude::*;
 
-// Use `wee_alloc` as the global allocator.
+/// Use `wee_alloc` as the global allocator.
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+/// Search a bytes array for the given pattern. This function
+/// uses `ripgrep` under the hood.
 #[wasm_bindgen]
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> JsValue {
     let matcher = RegexMatcher::new_line_matcher(pattern).unwrap();
@@ -16,13 +17,31 @@ pub fn search_bytes(chunk: &[u8], pattern: &str) -> JsValue {
         .line_number(false)
         .build();
 
-    let mut printer = StandardBuilder::new()
-        .only_matching(true)
-        .build_no_color(Vec::new());
+    let mut sink = MemSink { match_count: 0 };
 
-    let _ = searcher.search_slice(&matcher, chunk, printer.sink(&matcher));
+    let _ = searcher.search_slice(&matcher, chunk, &mut sink);
 
-    let result = printer.has_written();
+    let result = sink.match_count > 0;
 
     JsValue::from_bool(result)
+}
+
+/// An in-memory `Sink` implementation in order
+/// to store the matches in a structured way instead
+/// of just writing on a stdout.
+struct MemSink {
+    match_count: u64,
+}
+
+impl Sink for MemSink {
+    type Error = std::io::Error;
+
+    fn matched(
+        &mut self,
+        _searcher: &Searcher,
+        _mat: &SinkMatch<'_>,
+    ) -> Result<bool, std::io::Error> {
+        self.match_count += 1;
+        Ok(true)
+    }
 }
