@@ -20,10 +20,10 @@ export function App() {
 
       NG.searchBatch(
         [
-          'https://www.dgopsq.space/_next/data/ccLss2WP7L9CS5HZBe8uh/blog/inflist-an-experiment-using-purescript-and-react.json?slug=inflist-an-experiment-using-purescript-and-react',
-          'https://www.dgopsq.space/_next/data/ccLss2WP7L9CS5HZBe8uh/blog/reading-from-stdin-using-purescript.json?slug=reading-from-stdin-using-purescript',
-          'https://www.dgopsq.space/_next/data/ccLss2WP7L9CS5HZBe8uh/blog/auth0-expo-integration.json?slug=auth0-expo-integration',
-          'https://www.dgopsq.space/_next/data/ccLss2WP7L9CS5HZBe8uh/blog/handling-migrations-rn-sqlite-fp-ts.json?slug=handling-migrations-rn-sqlite-fp-ts',
+          'https://sherlock-holm.es/stories/plain-text/advs.txt',
+          'https://sherlock-holm.es/stories/plain-text/mems.txt',
+          'https://sherlock-holm.es/stories/plain-text/retn.txt',
+          'https://sherlock-holm.es/stories/plain-text/lstb.txt',
         ],
         pattern
       ).then(setResults);
