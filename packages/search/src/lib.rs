@@ -9,7 +9,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 /// Search a bytes array for the given pattern. This function
 /// uses `ripgrep` under the hood.
 #[wasm_bindgen]
-pub fn search_bytes(chunk: &[u8], pattern: &str) -> JsValue {
+pub fn search_bytes(chunk: &[u8], pattern: &str) -> bool {
     let matcher = RegexMatcher::new_line_matcher(pattern).unwrap();
 
     let mut searcher = SearcherBuilder::new()
@@ -21,9 +21,7 @@ pub fn search_bytes(chunk: &[u8], pattern: &str) -> JsValue {
 
     let _ = searcher.search_slice(&matcher, chunk, &mut sink);
 
-    let result = sink.match_count > 0;
-
-    JsValue::from_bool(result)
+    sink.match_count > 0
 }
 
 /// An in-memory `Sink` implementation in order

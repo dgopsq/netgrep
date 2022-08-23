@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod search {
-    use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -16,6 +15,6 @@ mod search {
 
         let result = search::search_bytes(bytes, "set aside");
 
-        assert_eq!(result, JsValue::from_bool(true));
+        assert_eq!(result, true);
     }
 }

@@ -20,7 +20,7 @@ const mockFetch = jest.fn();
 
 // Moking `search` function.
 jest.mock('@netgrep/search', () => {
-  return { search: () => mockSearch() };
+  return { search_bytes: () => mockSearch() };
 });
 
 // Mocking `fetch` function.
