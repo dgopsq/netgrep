@@ -2,6 +2,9 @@
 name = "search"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/dgopsq/netgrep"
+description = "The power of ripgrep over HTTP"
+license = "MIT"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
