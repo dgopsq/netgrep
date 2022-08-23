@@ -339,7 +339,6 @@ name = "search"
 version = "0.1.0"
 dependencies = [
  "grep",
- "js-sys",
  "wasm-bindgen",
  "wasm-bindgen-test",
  "wee_alloc",
