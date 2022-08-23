@@ -79,7 +79,7 @@ export class Netgrep {
       fetch(url, { signal: config?.signal })
         .then((res) =>
           !res.body
-            ? Promise.reject("The response doesn't contain a body")
+            ? Promise.reject(new Error("The response doesn't contain a body"))
             : Promise.resolve(res.body.getReader())
         )
         .then(handleReader)
