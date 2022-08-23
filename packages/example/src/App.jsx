@@ -37,7 +37,7 @@ export function App() {
 
       <ul>
         {results.map(({ result, url }) =>
-          result ? <li key={url}>{url}</li> : null
+          result.count > 0 ? <li key={url}>{url}</li> : null
         )}
       </ul>
     </div>

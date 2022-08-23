@@ -3,5 +3,9 @@
  */
 export type NetgrepResult = {
   url: string;
-  result: boolean;
+
+  result: {
+    count: number;
+    lines: Array<string>;
+  };
 };

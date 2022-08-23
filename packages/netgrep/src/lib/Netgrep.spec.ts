@@ -20,7 +20,7 @@ const mockFetch = jest.fn();
 
 // Moking `search` function.
 jest.mock('@netgrep/search', () => {
-  return { search: () => mockSearch() };
+  return { search_bytes: () => mockSearch() };
 });
 
 // Mocking `fetch` function.
@@ -34,6 +34,9 @@ describe('Netgrep', () => {
     const url = 'url';
     const pattern = 'pattern';
 
+    const okResult = { count: 1, lines: ['this is a pattern test'] };
+    const failResult = { count: 0, lines: [] };
+
     beforeEach(() => {
       mockFetch.mockClear();
 
@@ -43,33 +46,36 @@ describe('Netgrep', () => {
     });
 
     it('should work for a positive search result', async () => {
-      mockSearch.mockReturnValue(true);
+      mockSearch.mockReturnValue(okResult);
 
       const result = await NG.search(url, pattern);
 
-      expect(result).toMatchObject({ url, result: true });
+      expect(result).toMatchObject({
+        url,
+        result: okResult,
+      });
     });
 
     it('should work for a negative search result', async () => {
-      mockSearch.mockReturnValue(false);
+      mockSearch.mockReturnValue(failResult);
 
       const result = await NG.search(url, pattern);
 
-      expect(result).toMatchObject({ url, result: false });
+      expect(result).toMatchObject({ url, result: failResult });
     });
 
     it('should work with the in-memory cache active', async () => {
-      mockSearch.mockReturnValue(true);
+      mockSearch.mockReturnValue(okResult);
 
       const result = await NGWithCache.search(url, pattern);
 
       expect(mockFetch).toBeCalledTimes(1);
-      expect(result).toMatchObject({ url, result: true });
+      expect(result).toMatchObject({ url, result: okResult });
 
       const result2 = await NGWithCache.search(url, pattern);
 
       expect(mockFetch).toBeCalledTimes(1);
-      expect(result2).toMatchObject({ url, result: true });
+      expect(result2).toMatchObject({ url, result: okResult });
     });
   });
 
@@ -80,6 +86,9 @@ describe('Netgrep', () => {
     const urls = ['url1', 'url2', 'url3'];
     const pattern = 'pattern';
 
+    const okResult = { count: 1, lines: ['this is a pattern test'] };
+    const failResult = { count: 0, lines: [] };
+
     beforeEach(() => {
       mockFetch.mockClear();
 
@@ -89,13 +98,13 @@ describe('Netgrep', () => {
     });
 
     it('should work for a positive search result', async () => {
-      mockSearch.mockReturnValue(true);
+      mockSearch.mockReturnValue(okResult);
 
       const results = await NG.searchBatch(urls, pattern);
 
       const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
         url,
-        result: true,
+        result: okResult,
         error: null,
       }));
 
@@ -103,13 +112,13 @@ describe('Netgrep', () => {
     });
 
     it('should work for a negative search result', async () => {
-      mockSearch.mockReturnValue(false);
+      mockSearch.mockReturnValue(failResult);
 
       const results = await NG.searchBatch(urls, pattern);
 
       const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
         url,
-        result: false,
+        result: failResult,
         error: null,
       }));
 
@@ -123,13 +132,13 @@ describe('Netgrep', () => {
         Promise.reject(new Error(errorMessage))
       );
 
-      mockSearch.mockReturnValue(false);
+      mockSearch.mockReturnValue(failResult);
 
       const results = await NG.searchBatch(urls, pattern);
 
       const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
         url,
-        result: false,
+        result: failResult,
         error: errorMessage,
       }));
 
@@ -137,13 +146,13 @@ describe('Netgrep', () => {
     });
 
     it('should work with the in-memory cache active', async () => {
-      mockSearch.mockReturnValue(true);
+      mockSearch.mockReturnValue(okResult);
 
       const results = await NGWithCache.searchBatch(urls, pattern);
 
       const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
         url,
-        result: true,
+        result: okResult,
         error: null,
       }));
 

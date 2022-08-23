@@ -43,9 +43,10 @@ export class Netgrep {
       ) => {
         return reader.read().then(({ value, done }) => {
           // If the reader is actually done
-          // let's quit this job returning `false`.
+          // let's quit this job returning an
+          // empty result.
           if (done) {
-            resolve({ url, result: false });
+            resolve({ url, result: { count: 0, lines: [] } });
             return;
           }
 
@@ -61,7 +62,10 @@ export class Netgrep {
           }
 
           if (result) {
-            resolve({ url, result: true });
+            resolve({
+              url,
+              result: { count: result.count, lines: result.lines },
+            });
           } else {
             handleReader(reader);
           }
@@ -104,7 +108,7 @@ export class Netgrep {
           .then((res) => ({ ...res, error: null }))
           .catch((err) => ({
             url,
-            result: false,
+            result: { count: 0, lines: [] },
             error: this.serializeError(err),
           }))
       )
@@ -130,7 +134,7 @@ export class Netgrep {
         .catch((err) =>
           cb({
             url,
-            result: false,
+            result: { count: 0, lines: [] },
             error: this.serializeError(err),
           })
         )
