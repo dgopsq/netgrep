@@ -28,12 +28,15 @@ global.fetch = mockFetch;
 
 describe('Netgrep', () => {
   describe('Netgrep::search', () => {
-    const NG = new Netgrep({});
+    const NG = new Netgrep({ enableMemoryCache: false });
+    const NGWithCache = new Netgrep({ enableMemoryCache: true });
 
     const url = 'url';
     const pattern = 'pattern';
 
-    beforeAll(() => {
+    beforeEach(() => {
+      mockFetch.mockClear();
+
       mockFetch.mockImplementation(() =>
         Promise.resolve({ body: genReadableStreamFromString('test') })
       );
@@ -54,10 +57,25 @@ describe('Netgrep', () => {
 
       expect(result).toMatchObject({ url, result: false });
     });
+
+    it('should work with the in-memory cache active', async () => {
+      mockSearch.mockReturnValue(true);
+
+      const result = await NGWithCache.search(url, pattern);
+
+      expect(mockFetch).toBeCalledTimes(1);
+      expect(result).toMatchObject({ url, result: true });
+
+      const result2 = await NGWithCache.search(url, pattern);
+
+      expect(mockFetch).toBeCalledTimes(1);
+      expect(result2).toMatchObject({ url, result: true });
+    });
   });
 
   describe('Netgrep::searchBatch', () => {
-    const NG = new Netgrep({});
+    const NG = new Netgrep({ enableMemoryCache: false });
+    const NGWithCache = new Netgrep({ enableMemoryCache: true });
 
     const urls = ['url1', 'url2', 'url3'];
     const pattern = 'pattern';
@@ -116,6 +134,26 @@ describe('Netgrep', () => {
       }));
 
       expect(results).toMatchObject(expectedResults);
+    });
+
+    it('should work with the in-memory cache active', async () => {
+      mockSearch.mockReturnValue(true);
+
+      const results = await NGWithCache.searchBatch(urls, pattern);
+
+      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
+        url,
+        result: true,
+        error: null,
+      }));
+
+      expect(mockFetch).toBeCalledTimes(urls.length);
+      expect(results).toMatchObject(expectedResults);
+
+      const results2 = await NGWithCache.searchBatch(urls, pattern);
+
+      expect(mockFetch).toBeCalledTimes(urls.length);
+      expect(results2).toMatchObject(expectedResults);
     });
   });
 });

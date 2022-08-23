@@ -2,7 +2,9 @@ import { useState, useCallback } from 'react';
 import debounce from 'lodash/debounce';
 import { Netgrep } from 'netgrep';
 
-const NG = new Netgrep({});
+const NG = new Netgrep({
+  enableMemoryCache: true,
+});
 
 export function App() {
   const [results, setResults] = useState([]);

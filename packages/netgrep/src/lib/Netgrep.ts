@@ -7,19 +7,29 @@ import { NetgrepSearchConfig } from './data/NetgrepSearchConfig';
 /**
  *
  */
+const defaultConfig: NetgrepConfig = {
+  enableMemoryCache: true,
+};
+
+/**
+ *
+ */
 export class Netgrep {
   private readonly config: NetgrepConfig;
-  private abortController: AbortController;
+  private readonly memoryCache: Record<string, Uint8Array> = {};
 
-  constructor(config: NetgrepConfig) {
-    this.config = config;
-    this.abortController = new AbortController();
+  constructor(config: Partial<NetgrepConfig>) {
+    this.config = {
+      ...defaultConfig,
+      ...config,
+    };
   }
 
   /**
    *
    * @param url
    * @param pattern
+   * @param config
    * @returns
    */
   public search(
@@ -44,6 +54,13 @@ export class Netgrep {
           const u8Array = new Uint8Array(value);
           const result = search(u8Array, pattern);
 
+          // Store the `Uint8Array` in the memory cache
+          // if it's enabled.
+          if (this.config.enableMemoryCache) {
+            console.log('Caching the bytes array in memory...');
+            this.upsertMemoryCache(url, u8Array);
+          }
+
           if (result) {
             resolve({ url, result: true });
           } else {
@@ -51,6 +68,15 @@ export class Netgrep {
           }
         });
       };
+
+      // Search the content in the memory cache
+      // if it's enabled.
+      if (this.config.enableMemoryCache && this.memoryCache[url]) {
+        const result = search(this.memoryCache[url], pattern);
+        console.log('Result from cache', result);
+        resolve({ url, result });
+        return;
+      }
 
       fetch(url, { signal: config?.signal })
         .then((res) =>
@@ -67,7 +93,7 @@ export class Netgrep {
    *
    * @param urls
    * @param pattern
-   * @param cb
+   * @param config
    */
   public searchBatch(
     urls: Array<string>,
@@ -89,6 +115,32 @@ export class Netgrep {
 
   /**
    *
+   * @param urls
+   * @param pattern
+   * @param cb
+   * @param config
+   */
+  public searchBatchWithCallback(
+    urls: Array<string>,
+    pattern: string,
+    cb: (result: BatchNetgrepResult) => void,
+    config?: NetgrepSearchConfig
+  ): void {
+    urls.forEach((url) =>
+      this.search(url, pattern, config)
+        .then((res) => cb({ ...res, error: null }))
+        .catch((err) =>
+          cb({
+            url,
+            result: false,
+            error: this.serializeError(err),
+          })
+        )
+    );
+  }
+
+  /**
+   *
    * @param err
    * @returns
    */
@@ -98,5 +150,22 @@ export class Netgrep {
     } else {
       return JSON.stringify(err);
     }
+  }
+
+  /**
+   *
+   * @param url
+   * @param bytes
+   */
+  private upsertMemoryCache(url: string, bytes: Uint8Array) {
+    const currentBlockLength = this.memoryCache[url]?.length || 0;
+
+    const joinedArray = new Uint8Array(currentBlockLength + bytes.length);
+
+    if (this.memoryCache[url]) joinedArray.set(this.memoryCache[url]);
+
+    joinedArray.set(bytes, currentBlockLength);
+
+    this.memoryCache[url] = joinedArray;
   }
 }

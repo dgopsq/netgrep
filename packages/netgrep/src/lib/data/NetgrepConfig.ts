@@ -1,4 +1,6 @@
 /**
  *
  */
-export type NetgrepConfig = Record<string, never>;
+export type NetgrepConfig = {
+  enableMemoryCache: boolean;
+};
