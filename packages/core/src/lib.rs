@@ -24,5 +24,5 @@ pub fn search(chunk: &[u8], pattern: &str) -> JsValue {
 
     let result = printer.has_written();
 
-    return JsValue::from_bool(result);
+    JsValue::from_bool(result)
 }
