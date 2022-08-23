@@ -99,8 +99,8 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "globset"
-version = "0.4.9"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+version = "0.4.7"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "aho-corasick",
  "bstr",
@@ -111,8 +111,8 @@ dependencies = [
 
 [[package]]
 name = "grep"
-version = "0.2.10"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+version = "0.2.8"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "grep-cli",
  "grep-matcher",
@@ -124,7 +124,7 @@ dependencies = [
 [[package]]
 name = "grep-cli"
 version = "0.1.6"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "atty",
  "bstr",
@@ -140,7 +140,7 @@ dependencies = [
 [[package]]
 name = "grep-matcher"
 version = "0.1.5"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "memchr",
 ]
@@ -148,7 +148,7 @@ dependencies = [
 [[package]]
 name = "grep-printer"
 version = "0.1.6"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "base64",
  "bstr",
@@ -162,8 +162,8 @@ dependencies = [
 
 [[package]]
 name = "grep-regex"
-version = "0.1.10"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+version = "0.1.9"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "aho-corasick",
  "bstr",
@@ -176,8 +176,8 @@ dependencies = [
 
 [[package]]
 name = "grep-searcher"
-version = "0.1.10"
-source = "git+https://github.com/dgopsq/ripgrep?branch=wasm-building-support#645cb7e3baf7c2b286d652c3c960fcd45978c0fd"
+version = "0.1.8"
+source = "git+https://github.com/dgopsq/ripgrep?tag=13.0.0-wasm#c14c72c4cedf83ec0d2d7e89cfdec9175df350c2"
 dependencies = [
  "bstr",
  "bytecount",
@@ -253,9 +253,9 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
 name = "memmap2"
-version = "0.5.6"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e2e4455be2010e8c5e77f0d10234b30f3a636a5305725609b5a71ad00d22577"
+checksum = "00b6c2ebff6180198788f5db08d7ce3bc1d0b617176678831a7510825973e357"
 dependencies = [
  "libc",
 ]
