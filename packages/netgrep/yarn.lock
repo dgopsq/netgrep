@@ -2,6 +2,6 @@
 # yarn lockfile v1
 
 
-"core@link:../core/pkg":
+"@netgrep/core@link:../core/pkg":
   version "0.0.0"
   uid ""

@@ -1,4 +1,4 @@
-import { search } from 'core';
+import { search } from '@netgrep/core';
 import { BatchNetgrepResult } from './data/BatchNetgrepResult';
 import { NetgrepConfig } from './data/NetgrepConfig';
 import { NetgrepResult } from './data/NetgrepResult';

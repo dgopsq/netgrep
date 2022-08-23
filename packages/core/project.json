@@ -6,7 +6,7 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "wasm-pack build",
+        "command": "make",
         "cwd": "packages/core",
         "outputPath": "packages/core/pkg"
       }

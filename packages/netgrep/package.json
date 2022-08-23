@@ -3,6 +3,6 @@
   "version": "0.0.1",
   "type": "commonjs",
   "dependencies": {
-    "core": "link:../core/pkg"
+    "@netgrep/core": "link:../core/pkg"
   }
 }
