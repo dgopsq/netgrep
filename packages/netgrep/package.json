@@ -1,7 +1,7 @@
 {
   "name": "@netgrep/netgrep",
   "version": "0.1.0",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@netgrep/search": "link:../search/pkg"
   }
