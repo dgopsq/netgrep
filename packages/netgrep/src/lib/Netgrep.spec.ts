@@ -77,7 +77,8 @@ describe('Netgrep', () => {
     const NG = new Netgrep({ enableMemoryCache: false });
     const NGWithCache = new Netgrep({ enableMemoryCache: true });
 
-    const urls = ['url1', 'url2', 'url3'];
+    const urls = [{ url: 'url1' }, { url: 'url2' }, { url: 'url3' }];
+
     const pattern = 'pattern';
 
     beforeEach(() => {
@@ -93,11 +94,13 @@ describe('Netgrep', () => {
 
       const results = await NG.searchBatch(urls, pattern);
 
-      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
-        url,
-        result: true,
-        error: null,
-      }));
+      const expectedResults: Array<BatchNetgrepResult> = urls.map(
+        ({ url }) => ({
+          url,
+          result: true,
+          error: null,
+        })
+      );
 
       expect(results).toMatchObject(expectedResults);
     });
@@ -107,11 +110,13 @@ describe('Netgrep', () => {
 
       const results = await NG.searchBatch(urls, pattern);
 
-      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
-        url,
-        result: false,
-        error: null,
-      }));
+      const expectedResults: Array<BatchNetgrepResult> = urls.map(
+        ({ url }) => ({
+          url,
+          result: false,
+          error: null,
+        })
+      );
 
       expect(results).toMatchObject(expectedResults);
     });
@@ -127,11 +132,13 @@ describe('Netgrep', () => {
 
       const results = await NG.searchBatch(urls, pattern);
 
-      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
-        url,
-        result: false,
-        error: errorMessage,
-      }));
+      const expectedResults: Array<BatchNetgrepResult> = urls.map(
+        ({ url }) => ({
+          url,
+          result: false,
+          error: errorMessage,
+        })
+      );
 
       expect(results).toMatchObject(expectedResults);
     });
@@ -141,11 +148,13 @@ describe('Netgrep', () => {
 
       const results = await NGWithCache.searchBatch(urls, pattern);
 
-      const expectedResults: Array<BatchNetgrepResult> = urls.map((url) => ({
-        url,
-        result: true,
-        error: null,
-      }));
+      const expectedResults: Array<BatchNetgrepResult> = urls.map(
+        ({ url }) => ({
+          url,
+          result: true,
+          error: null,
+        })
+      );
 
       expect(mockFetch).toBeCalledTimes(urls.length);
       expect(results).toMatchObject(expectedResults);

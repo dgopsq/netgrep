@@ -20,10 +20,10 @@ export function App() {
 
       NG.searchBatch(
         [
-          'https://sherlock-holm.es/stories/plain-text/advs.txt',
-          'https://sherlock-holm.es/stories/plain-text/mems.txt',
-          'https://sherlock-holm.es/stories/plain-text/retn.txt',
-          'https://sherlock-holm.es/stories/plain-text/lstb.txt',
+          { url: 'https://sherlock-holm.es/stories/plain-text/advs.txt' },
+          { url: 'https://sherlock-holm.es/stories/plain-text/mems.txt' },
+          { url: 'https://sherlock-holm.es/stories/plain-text/retn.txt' },
+          { url: 'https://sherlock-holm.es/stories/plain-text/lstb.txt' },
         ],
         pattern
       ).then(setResults);

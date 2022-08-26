@@ -1,6 +1,7 @@
 import { search_bytes } from '@netgrep/search';
 import { BatchNetgrepResult } from './data/BatchNetgrepResult';
 import { NetgrepConfig } from './data/NetgrepConfig';
+import { NetgrepInput } from './data/NetgrepInput';
 import { NetgrepResult } from './data/NetgrepResult';
 import { NetgrepSearchConfig } from './data/NetgrepSearchConfig';
 
@@ -32,11 +33,14 @@ export class Netgrep {
    * @param config
    * @returns
    */
-  public search(
+  public search<T extends object>(
     url: string,
     pattern: string,
+    metadata?: T,
     config?: NetgrepSearchConfig
-  ): Promise<NetgrepResult> {
+  ): Promise<NetgrepResult<T>> {
+    const computedMetadata: T = metadata || ({} as T);
+
     return new Promise((resolve, reject) => {
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>
@@ -45,7 +49,7 @@ export class Netgrep {
           // If the reader is actually done
           // let's quit this job returning `false`.
           if (done) {
-            resolve({ url, result: false });
+            resolve({ url, result: false, metadata: computedMetadata });
             return;
           }
 
@@ -61,7 +65,7 @@ export class Netgrep {
           }
 
           if (result) {
-            resolve({ url, result: true });
+            resolve({ url, result: true, metadata: computedMetadata });
           } else {
             handleReader(reader);
           }
@@ -72,7 +76,7 @@ export class Netgrep {
       // if it's enabled.
       if (this.config.enableMemoryCache && this.memoryCache[url]) {
         const result = search_bytes(this.memoryCache[url], pattern);
-        resolve({ url, result });
+        resolve({ url, result, metadata: computedMetadata });
         return;
       }
 
@@ -93,21 +97,25 @@ export class Netgrep {
    * @param pattern
    * @param config
    */
-  public searchBatch(
-    urls: Array<string>,
+  public searchBatch<T extends object>(
+    inputs: Array<NetgrepInput<T>>,
     pattern: string,
     config?: NetgrepSearchConfig
-  ): Promise<Array<BatchNetgrepResult>> {
+  ): Promise<Array<BatchNetgrepResult<T>>> {
     return Promise.all(
-      urls.map((url) =>
-        this.search(url, pattern, config)
+      inputs.map((input) => {
+        const { url } = input;
+        const computedMetadata: T = input.metadata || ({} as T);
+
+        return this.search(url, pattern, computedMetadata, config)
           .then((res) => ({ ...res, error: null }))
           .catch((err) => ({
             url,
             result: false,
+            metadata: computedMetadata,
             error: this.serializeError(err),
-          }))
-      )
+          }));
+      })
     );
   }
 
@@ -118,23 +126,27 @@ export class Netgrep {
    * @param cb
    * @param config
    */
-  public searchBatchWithCallback(
-    urls: Array<string>,
+  public searchBatchWithCallback<T extends object>(
+    inputs: Array<NetgrepInput<T>>,
     pattern: string,
-    cb: (result: BatchNetgrepResult) => void,
+    cb: (result: BatchNetgrepResult<T>) => void,
     config?: NetgrepSearchConfig
   ): void {
-    urls.forEach((url) =>
-      this.search(url, pattern, config)
+    inputs.forEach((input) => {
+      const { url } = input;
+      const computedMetadata: T = input.metadata || ({} as T);
+
+      this.search(url, pattern, computedMetadata, config)
         .then((res) => cb({ ...res, error: null }))
         .catch((err) =>
           cb({
             url,
             result: false,
+            metadata: computedMetadata,
             error: this.serializeError(err),
           })
-        )
-    );
+        );
+    });
   }
 
   /**

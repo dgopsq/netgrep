@@ -3,4 +3,6 @@ import { NetgrepResult } from './NetgrepResult';
 /**
  *
  */
-export type BatchNetgrepResult = NetgrepResult & { error: string | null };
+export type BatchNetgrepResult<T extends object = object> = NetgrepResult<T> & {
+  error: string | null;
+};

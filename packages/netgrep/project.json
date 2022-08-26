@@ -26,7 +26,7 @@
       "executor": "@nrwl/jest:jest",
       "outputs": ["coverage/packages/netgrep"],
       "options": {
-        "jestConfig": "packages/netgrep/jest.config.ts",
+        "jestConfig": "packages/netgrep/jest.config.js",
         "passWithNoTests": true
       }
     }
