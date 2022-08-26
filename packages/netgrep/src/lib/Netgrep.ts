@@ -39,8 +39,6 @@ export class Netgrep {
     metadata?: T,
     config?: NetgrepSearchConfig
   ): Promise<NetgrepResult<T>> {
-    const computedMetadata: T = metadata || ({} as T);
-
     return new Promise((resolve, reject) => {
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>
@@ -49,7 +47,7 @@ export class Netgrep {
           // If the reader is actually done
           // let's quit this job returning `false`.
           if (done) {
-            resolve({ url, result: false, metadata: computedMetadata });
+            resolve({ url, result: false, metadata });
             return;
           }
 
@@ -65,7 +63,7 @@ export class Netgrep {
           }
 
           if (result) {
-            resolve({ url, result: true, metadata: computedMetadata });
+            resolve({ url, result: true, metadata });
           } else {
             handleReader(reader);
           }
@@ -76,7 +74,7 @@ export class Netgrep {
       // if it's enabled.
       if (this.config.enableMemoryCache && this.memoryCache[url]) {
         const result = search_bytes(this.memoryCache[url], pattern);
-        resolve({ url, result, metadata: computedMetadata });
+        resolve({ url, result, metadata });
         return;
       }
 
@@ -105,14 +103,13 @@ export class Netgrep {
     return Promise.all(
       inputs.map((input) => {
         const { url } = input;
-        const computedMetadata: T = input.metadata || ({} as T);
 
-        return this.search(url, pattern, computedMetadata, config)
+        return this.search(url, pattern, input.metadata, config)
           .then((res) => ({ ...res, error: null }))
           .catch((err) => ({
             url,
             result: false,
-            metadata: computedMetadata,
+            metadata: input.metadata,
             error: this.serializeError(err),
           }));
       })
@@ -134,15 +131,13 @@ export class Netgrep {
   ): void {
     inputs.forEach((input) => {
       const { url } = input;
-      const computedMetadata: T = input.metadata || ({} as T);
-
-      this.search(url, pattern, computedMetadata, config)
+      this.search(url, pattern, input.metadata, config)
         .then((res) => cb({ ...res, error: null }))
         .catch((err) =>
           cb({
             url,
             result: false,
-            metadata: computedMetadata,
+            metadata: input.metadata,
             error: this.serializeError(err),
           })
         );
