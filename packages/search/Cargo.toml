@@ -18,3 +18,7 @@ grep = { git = "https://github.com/dgopsq/ripgrep", tag = "13.0.0-wasm" }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.32"
+
+[profile.release]
+lto = true
+opt-level = 's'
