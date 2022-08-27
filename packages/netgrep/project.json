@@ -28,7 +28,8 @@
       "options": {
         "jestConfig": "packages/netgrep/jest.config.js",
         "passWithNoTests": true
-      }
+      },
+      "dependsOn": ["^build"]
     }
   },
   "tags": []
