@@ -1,0 +1,19 @@
+on: [push]
+
+name: Main CI workflow
+
+jobs:
+  test_and_build:
+    name: Rust project
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.7.0'
+          cache: 'yarn'
+      - run: yarn
+      - run: yarn nx test search
