@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "type": "module",
   "dependencies": {
-    "@netgrep/search": "link:../search/pkg"
+    "@netgrep/search": "^0.1.0"
   }
 }
