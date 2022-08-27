@@ -5,6 +5,7 @@ edition = "2021"
 repository = "https://github.com/dgopsq/netgrep"
 description = "The power of ripgrep over HTTP"
 license = "MIT"
+main = "search.js"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

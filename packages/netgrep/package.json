@@ -1,6 +1,6 @@
 {
   "name": "@netgrep/netgrep",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "dependencies": {
     "@netgrep/search": "^0.1.0"

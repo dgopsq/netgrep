@@ -6,7 +6,7 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "wasm-pack build --scope netgrep",
+        "command": "wasm-pack build --scope netgrep --out-name index",
         "cwd": "packages/search",
         "outputPath": "packages/search/pkg"
       }

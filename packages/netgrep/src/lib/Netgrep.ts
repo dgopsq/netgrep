@@ -1,9 +1,9 @@
 import { search_bytes } from '@netgrep/search';
-import { BatchNetgrepResult } from './data/BatchNetgrepResult';
-import { NetgrepConfig } from './data/NetgrepConfig';
-import { NetgrepInput } from './data/NetgrepInput';
-import { NetgrepResult } from './data/NetgrepResult';
-import { NetgrepSearchConfig } from './data/NetgrepSearchConfig';
+import { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
+import { NetgrepConfig } from './data/NetgrepConfig.js';
+import { NetgrepInput } from './data/NetgrepInput.js';
+import { NetgrepResult } from './data/NetgrepResult.js';
+import { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
 
 /**
  *
