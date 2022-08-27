@@ -17,4 +17,18 @@ mod search {
 
         assert_eq!(result, true);
     }
+
+    #[wasm_bindgen_test]
+    pub fn test_search_bytes_smart_case() {
+        let text = "One Wiseman came to Jhaampe-town. \
+                    He set aside both Queen and Crown \
+                    Did his task and fell asleep \
+                    Gave his bones to the stones to keep.";
+
+        let bytes = text.as_bytes();
+
+        let result = search::search_bytes(bytes, "both queen and crown");
+
+        assert_eq!(result, true);
+    }
 }

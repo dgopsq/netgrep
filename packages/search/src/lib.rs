@@ -1,4 +1,4 @@
-use grep::regex::RegexMatcher;
+use grep::regex::RegexMatcherBuilder;
 use grep::searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
 use wasm_bindgen::prelude::*;
 
@@ -10,7 +10,11 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 /// uses `ripgrep` under the hood.
 #[wasm_bindgen]
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> bool {
-    let matcher = RegexMatcher::new_line_matcher(pattern).unwrap();
+    let matcher = RegexMatcherBuilder::new()
+        .line_terminator(Some(b'\n'))
+        .case_smart(true)
+        .build(pattern)
+        .unwrap();
 
     let mut searcher = SearcherBuilder::new()
         .binary_detection(BinaryDetection::quit(b'\x00'))
