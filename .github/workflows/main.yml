@@ -4,7 +4,7 @@ name: Main CI workflow
 
 jobs:
   test_and_build:
-    name: Rust project
+    name: Test and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -18,3 +18,4 @@ jobs:
       - run: yarn
       - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - run: yarn nx test search
+      - run: yarn nx test netgrep
