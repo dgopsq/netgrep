@@ -11,15 +11,13 @@ At the moment Netgrep is just going to tell wether a pattern is present on a rem
 > **Note**
 > Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files!
 
-A complete example is available [here](https://github.com/dgopsq/netgrep/tree/main/packages/example) using [Vite](https://vitejs.dev/) + [React](https://reactjs.org/). 
+> **Warning**
+> At the moment this library is exported only as an ESM, thus a bundler like [Webpack](https://webpack.js.org/) it's required to use it. 
 
 ## Usage
 
-> **Warning**
-> At the moment this library is exported just as an **ESM** so It's important to use a bundler that supports `wasm-pack` generated modules. The Vite plugin ([vite-plugin-wasm](https://github.com/Menci/vite-plugin-wasm)) used in the example automatically setup [Webpack](https://webpack.js.org/) to handle that.
-
-> **Warning**
-> This short tutorial assumes that **Webpack 5** is the bundler used in the application where `netgrep` will be integrated.
+> **Note**
+> This short tutorial assumes that **Webpack 5** is the bundler used in the application where `netgrep` will be integrated. A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example).
 
 First of all install the module:
 

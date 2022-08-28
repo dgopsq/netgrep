@@ -7,10 +7,9 @@
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "yarn vite",
+        "command": "webpack serve --open",
         "cwd": "packages/example"
-      },
-      "dependsOn": ["^build"]
+      }
     }
   },
   "tags": []
