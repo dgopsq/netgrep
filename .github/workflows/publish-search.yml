@@ -20,6 +20,7 @@ jobs:
           node-version: '18.7.0'
           cache: 'yarn'
       - run: yarn
+      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - run: yarn nx build search
       - uses: JS-DevTools/npm-publish@v1
         with:
