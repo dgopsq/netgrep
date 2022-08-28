@@ -1,0 +1,28 @@
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+
+name: Test and lint workflow
+
+jobs:
+  test_and_lint:
+    name: Test and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.7.0'
+          cache: 'yarn'
+      - run: yarn
+      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - run: yarn nx run-many --target=lint
+      - run: yarn nx run-many --target=test
