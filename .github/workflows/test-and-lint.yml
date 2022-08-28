@@ -5,11 +5,12 @@ on:
   pull_request:
     branches:
       - main
+  workflow_call:
 
-name: Main CI workflow
+name: Test and lint workflow
 
 jobs:
-  test_and_build:
+  test_and_lint:
     name: Test and build
     runs-on: ubuntu-latest
     steps:
