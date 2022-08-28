@@ -1,0 +1,26 @@
+on:
+  push:
+    tags:
+      - netgrep-**
+
+jobs:
+  test-and-lint:
+    uses: ./.github/workflows/test-and-lint.yml
+
+  publish:
+    needs: test-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18.7.0'
+          cache: 'yarn'
+      - run: yarn
+      - run: yarn nx build netgrep
+      - uses: JS-DevTools/npm-publish@v1
+        with:
+          token: ${{ secrets.NPM_TOKEN }}
+          access: public
+          greater-version-only: true
+          package: ./packages/netgrep/dist/package.json
