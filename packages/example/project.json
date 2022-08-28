@@ -2,15 +2,13 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "packages/example/src",
   "projectType": "application",
-  "implicitDependencies": ["netgrep"],
   "targets": {
     "serve": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "yarn vite",
+        "command": "webpack serve --open",
         "cwd": "packages/example"
-      },
-      "dependsOn": ["^build"]
+      }
     }
   },
   "tags": []

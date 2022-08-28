@@ -2,7 +2,6 @@
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "packages/netgrep/src",
   "projectType": "library",
-  "implicitDependencies": ["search"],
   "targets": {
     "build": {
       "executor": "@nrwl/js:tsc",
@@ -11,9 +10,8 @@
         "outputPath": "packages/netgrep/dist",
         "main": "packages/netgrep/src/index.ts",
         "tsConfig": "packages/netgrep/tsconfig.lib.json",
-        "assets": ["packages/netgrep/*.md"]
-      },
-      "dependsOn": ["^build"]
+        "assets": ["README.md"]
+      }
     },
     "lint": {
       "executor": "@nrwl/linter:eslint",
