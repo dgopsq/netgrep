@@ -2,7 +2,7 @@
 # yarn lockfile v1
 
 
-"@netgrep/search@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@netgrep/search/-/search-0.1.1.tgz#843fbe286c0325cb2dc0d2169ea864ad6f327078"
-  integrity sha512-KBa3xFj+vzXXJR1ns+TetfWmY8vYSvtzfCv7JblpaRHNEvD+UFdMsSRtwnSxPi4Znkl7yqQv0kgd8qhYOuXoBw==
+"@netgrep/search@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@netgrep/search/-/search-0.1.0.tgz#b39dfca0b8977848667ee715448800bde9fad590"
+  integrity sha512-2hpMJ5tNLSVBquxSDyBpJFcIjuO3skaUnYCcz9hwKI2bgGWz/6raPMXHxjd3eIh/Dwx9Elh+nKrSCDSyJiDMIw==
