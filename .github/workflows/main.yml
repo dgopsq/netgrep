@@ -17,5 +17,5 @@ jobs:
           cache: 'yarn'
       - run: yarn
       - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - run: yarn nx test search
-      - run: yarn nx test netgrep
+      - run: yarn nx run-many --target=lint
+      - run: yarn nx run-many --target=test
