@@ -4,7 +4,7 @@
 
 # netgrep
 
-Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small files-based database.
+Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small files-based database. It uses [a fork of the original `ripgrep` repository](https://github.com/dgopsq/ripgrep) with just enough changes to make it runnable on WASM. 
 
 At the moment Netgrep is just going to tell wether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximise the performance. 
 
@@ -12,7 +12,7 @@ At the moment Netgrep is just going to tell wether a pattern is present on a rem
 > Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files!
 
 > **Warning**
-> At the moment this library is exported only as an ESM, thus a bundler like [Webpack](https://webpack.js.org/) it's required to use it. 
+> At the moment this library is exported only as an ESM, thus a bundler like [Webpack](https://webpack.js.org/) is required to use it. 
 
 ## Usage
 
@@ -91,3 +91,7 @@ NG.searchBatchWithCallback([
   console.log(`The pattern has matched for ${output.url}`, output.result)
 });
 ```
+
+## License
+
+Netgrep is under the [MIT license](https://github.com/dgopsq/netgrep/blob/main/LICENSE).
