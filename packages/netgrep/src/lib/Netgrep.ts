@@ -61,7 +61,7 @@ export class Netgrep {
           // If the reader is actually done
           // let's quit this job returning `false`.
           if (done) {
-            resolve({ url, result: false, metadata });
+            resolve({ url, pattern, result: false, metadata });
             return;
           }
 
@@ -77,7 +77,7 @@ export class Netgrep {
           }
 
           if (result) {
-            resolve({ url, result: true, metadata });
+            resolve({ url, pattern, result: true, metadata });
           } else {
             handleReader(reader);
           }
@@ -88,7 +88,7 @@ export class Netgrep {
       // if it's enabled.
       if (this.config.enableMemoryCache && this.memoryCache[url]) {
         const result = search_bytes(this.memoryCache[url], pattern);
-        resolve({ url, result, metadata });
+        resolve({ url, pattern, result, metadata });
         return;
       }
 
@@ -133,6 +133,7 @@ export class Netgrep {
           .catch((err) => ({
             url,
             result: false,
+            pattern,
             metadata: input.metadata,
             error: this.serializeError(err),
           }));
@@ -171,6 +172,7 @@ export class Netgrep {
           cb({
             url,
             result: false,
+            pattern,
             metadata: input.metadata,
             error: this.serializeError(err),
           })

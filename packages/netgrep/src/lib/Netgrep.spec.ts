@@ -97,6 +97,7 @@ describe('Netgrep', () => {
       const expectedResults: Array<BatchNetgrepResult> = urls.map(
         ({ url }) => ({
           url,
+          pattern,
           result: true,
           error: null,
         })
@@ -113,6 +114,7 @@ describe('Netgrep', () => {
       const expectedResults: Array<BatchNetgrepResult> = urls.map(
         ({ url }) => ({
           url,
+          pattern,
           result: false,
           error: null,
         })
@@ -135,6 +137,7 @@ describe('Netgrep', () => {
       const expectedResults: Array<BatchNetgrepResult> = urls.map(
         ({ url }) => ({
           url,
+          pattern,
           result: false,
           error: errorMessage,
         })
@@ -151,6 +154,7 @@ describe('Netgrep', () => {
       const expectedResults: Array<BatchNetgrepResult> = urls.map(
         ({ url }) => ({
           url,
+          pattern,
           result: true,
           error: null,
         })

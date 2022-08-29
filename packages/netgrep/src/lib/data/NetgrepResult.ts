@@ -5,6 +5,7 @@
  */
 export type NetgrepResult<T extends object = object> = {
   url: string;
+  pattern: string;
   result: boolean;
   metadata?: T;
 };
