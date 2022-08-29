@@ -6,7 +6,7 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "wasm-pack build --scope netgrep --release && node scripts/post_build.js",
+        "command": "wasm-pack build --scope netgrep --out-name index --release && node scripts/post_build.js",
         "cwd": "packages/search",
         "outputPath": "packages/search/pkg"
       }
