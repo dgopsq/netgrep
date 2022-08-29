@@ -27,6 +27,13 @@
         "jestConfig": "packages/netgrep/jest.config.js",
         "passWithNoTests": true
       }
+    },
+    "doc": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "yarn api-extractor run --local && yarn api-documenter markdown --input-folder=./temp --output-folder=../../docs",
+        "cwd": "packages/netgrep"
+      }
     }
   },
   "tags": []

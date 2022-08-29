@@ -1,6 +1,7 @@
 /**
  * The optional configuration passed in
  * a single search method.
+ * @public
  */
 export type NetgrepSearchConfig = {
   /**

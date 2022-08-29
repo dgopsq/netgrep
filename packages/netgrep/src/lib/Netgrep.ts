@@ -16,6 +16,7 @@ const defaultConfig: NetgrepConfig = {
  * The `netgrep` library allows to search remote files
  * for a specific pattern using the `ripgrep` library
  * over HTTP.
+ * @public
  */
 export class Netgrep {
   private readonly config: NetgrepConfig;
@@ -34,16 +35,16 @@ export class Netgrep {
    * start searching while downloading the file instead of
    * waiting for the whole file to be available offline.
    *
-   * @param url
+   * @param url -
    * The url to the remote file.
-   * @param pattern
+   * @param pattern -
    * The pattern to search for. This can be anything `ripgrep` can understand.
-   * @param metadata
+   * @param metadata -
    * An optional object that will be returned back as soon as a match
    * as been found in the file.
-   * @param config
+   * @param config -
    * An optional configuration respecting the `NetgrepSearchConfig` type.
-   * @returns
+   * @returns -
    * A promise resolving to a `NetgrepResult<T>` as soon as a match will
    * be found in the remote file.
    */
@@ -108,13 +109,13 @@ export class Netgrep {
    * files. This method returns a promise waiting for all
    * the executed searches to complete.
    *
-   * @param urls
+   * @param urls -
    * An array of `NetgrepInput<T>` containing the urls to the
    * files. `T` is the generic type for the optional metadata to
    * pass for each url.
-   * @param pattern
+   * @param pattern -
    * The pattern to search for. This can be anything `ripgrep` can understand.
-   * @param config
+   * @param config -
    * An optional configuration respecting the `NetgrepSearchConfig` type.
    * @returns
    * A promise waiting for all the executed searches to complete.
@@ -146,16 +147,16 @@ export class Netgrep {
    * files. This method takes a callback as an input and
    * executes it everytime a match happens.
    *
-   * @param urls
+   * @param urls -
    * An array of `NetgrepInput<T>` containing the urls to the
    * files. `T` is the generic type for the optional metadata to
    * pass for each url.
-   * @param pattern
+   * @param pattern -
    * The pattern to search for. This can be anything `ripgrep` can understand.
-   * @param cb
+   * @param cb -
    * The callback that will be triggered at every match. It takes
    * a `BatchNetgrepResult<T>` as a parameter.
-   * @param config
+   * @param config -
    * An optional configuration respecting the `NetgrepSearchConfig` type.
    */
   public searchBatchWithCallback<T extends object>(
@@ -183,6 +184,7 @@ export class Netgrep {
   /**
    * Transform an `unknown` type returned from a catch
    * into a `string`.
+   * @internal
    */
   private serializeError(err: unknown): string {
     if (err instanceof Error) {
@@ -194,6 +196,7 @@ export class Netgrep {
 
   /**
    * Upsert a slice of bytes into the in-memory cache.
+   * @internal
    */
   private upsertMemoryCache(url: string, bytes: Uint8Array) {
     const currentBlockLength = this.memoryCache[url]?.length || 0;
