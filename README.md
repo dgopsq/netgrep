@@ -9,7 +9,7 @@ Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSush
 At the moment Netgrep is just going to tell wether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximise the performance. 
 
 > **Note**
-> Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files!
+> Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files. A live example for this behaviour can be found on [my blog](https://www.dgopsq.space/) (you can take a look at the [source code](https://github.com/dgopsq/writings)).
 
 > **Warning**
 > At the moment this library is exported only as an ESM, thus a bundler like [Webpack](https://webpack.js.org/) is required to use it. 
