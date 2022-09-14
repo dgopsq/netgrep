@@ -1,4 +1,4 @@
-
+[
 
 ![Header](https://github.com/dgopsq/netgrep/blob/main/assets/header.jpg)
 
@@ -95,3 +95,4 @@ NG.searchBatchWithCallback([
 ## License
 
 Netgrep is under the [MIT license](https://github.com/dgopsq/netgrep/blob/main/LICENSE).
+](https://github.com/Undermaken/netgrep/edit/main/README.md)
