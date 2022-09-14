@@ -6,10 +6,10 @@
 
 Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small files-based database. It uses [a fork of the original `ripgrep` repository](https://github.com/dgopsq/ripgrep) with just enough changes to make it runnable on WASM. 
 
-At the moment Netgrep is just going to tell wether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximise the performance. 
+At the moment Netgrep is just going to tell whether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximize the performance. 
 
 > **Note**
-> Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw posts files. A live example for this behaviour can be found on [my blog](https://www.dgopsq.space/) (you can take a look at the [source code](https://github.com/dgopsq/writings)).
+> Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw post files. A live example for this behavior can be found on [my blog](https://www.dgopsq.space/) (you can take a look at the [source code](https://github.com/dgopsq/writings)).
 
 > **Warning**
 > At the moment this library is exported only as an ESM, thus a bundler like [Webpack](https://webpack.js.org/) is required to use it. 
@@ -29,7 +29,7 @@ yarn add @netgrep/netgrep
 npm install @netgrep/netgrep
 ```
 
-The [`asyncWebAssembbly` experiment flag](https://webpack.js.org/configuration/experiments/) shuld be enabled inside the `webpack.config.js`:
+The [`asyncWebAssembbly` experiment flag](https://webpack.js.org/configuration/experiments/) should be enabled inside the `webpack.config.js`:
 
 ```js
 module.exports = {
@@ -66,7 +66,7 @@ NG.search("url", "pattern", { post })
     console.log('Metadata', output.metadata)
   });
 
-// There is a convenience method to do batched searches
+// There is a convenient method to do batched searches
 // to multiple urls. Using `searchBatch` the resulting `Promise`
 // will resolve only after the completion of all the searches.
 NG.searchBatch([
@@ -82,7 +82,7 @@ NG.searchBatch([
 
 // If you want to avoid waiting for the completion of
 // all the searches, the method `searchBatchWithCallback` will
-// execute a callback everytime a search completes.
+// execute a callback every time a search completes.
 NG.searchBatchWithCallback([
   { url: 'url1' },
   { url: 'url2' },
