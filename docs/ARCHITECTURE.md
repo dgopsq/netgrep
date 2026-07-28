@@ -20,6 +20,11 @@ understand out of the box.
 
 **Non-goals:** indexing, ranking, snippets, highlighting, Node.js support, filesystem search, a CLI.
 
+**It is an experiment rather than a recommended way to build search**, and the public README leads with that.
+A prebuilt index will usually beat it on size, speed and capability; what netgrep tests is whether ripgrep's
+real engine is usable over HTTP against files as they download. That framing is why the correctness caveats
+below are documented rather than hidden, and why the API has stayed a boolean.
+
 ---
 
 ## The three packages

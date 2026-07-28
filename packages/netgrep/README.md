@@ -1,3 +1,15 @@
 # @netgrep/netgrep
 
 The main `netgrep` package. See the [main README](https://github.com/dgopsq/netgrep) for more information.
+
+> **Note**
+> **This is an experiment, not a recommendation.** netgrep is almost certainly not the best way to add
+> search to your site — a prebuilt index ([Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
+> [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service) will usually be smaller,
+> faster and far more capable. What this explores is a narrower question: what happens if you compile
+> ripgrep's actual search engine to WebAssembly and run it over HTTP against files *while they are still
+> downloading*.
+>
+> It answers one question per URL — *does this pattern occur?* — as a boolean. No ranking, no snippets, no
+> match positions. It has [known limitations](https://github.com/dgopsq/netgrep#known-limitations),
+> including silent false negatives, that are worth reading before you build on it.
