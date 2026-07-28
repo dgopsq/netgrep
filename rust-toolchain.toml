@@ -9,7 +9,9 @@
 # `pnpm lint` runs clippy, and a pinned toolchain is installed bare, so the
 # component has to be requested explicitly.
 #
-# See docs/plans/MODERNIZATION.md — decisions 5 and 9.
+# See AGENTS.md §3 for the pinning rationale, and
+# docs/decisions/0001-fork-ripgrep-for-wasm.md for why this version and the
+# ripgrep sub-crates had to move together.
 [toolchain]
 channel = "1.97.1"
 targets = ["wasm32-unknown-unknown"]

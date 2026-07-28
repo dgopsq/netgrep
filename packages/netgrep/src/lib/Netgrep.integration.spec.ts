@@ -14,12 +14,12 @@ import { Netgrep } from './Netgrep.js';
  *
  * WHY THIS EXISTS
  * ---------------
- * It was written as the behavioural baseline for the modernization sequence in
- * `docs/plans/MODERNIZATION.md`, ahead of the PRs that replaced the entire JS
- * toolchain and then jumped `wasm-bindgen` 44 minor versions while removing the
- * ripgrep fork. The claim those PRs had to support was "behaviour is
- * identical", and nothing in this repository could previously substantiate it.
- * It keeps that job for every future dependency change.
+ * It was written as the behavioural baseline for the 2026 modernization, ahead
+ * of the PRs that replaced the entire JS toolchain and then jumped
+ * `wasm-bindgen` 44 minor versions while removing the ripgrep fork. The claim
+ * those PRs had to support was "behaviour is identical", and nothing in this
+ * repository could previously substantiate it. It keeps that job for every
+ * future dependency change.
  *
  * So: these assertions describe what netgrep ACTUALLY DOES TODAY, which is not
  * always what it should do. The `documented defects` block at the bottom pins
@@ -334,11 +334,11 @@ describe('Netgrep integration (real WASM)', () => {
    *
    * Read this before changing anything below.
    *
-   * The modernization is explicitly toolchain-only (`MODERNIZATION.md`
-   * decision 6), so these bugs are carried across unchanged and on purpose.
-   * Their job here is to detect *unintended* change during a large dependency
-   * jump — a test asserting the correct-but-not-yet-implemented behaviour
-   * would fail today and tell us nothing.
+   * The modernization was explicitly toolchain-only, so these bugs were
+   * carried across unchanged and on purpose. Their job here is to detect
+   * *unintended* change during a large dependency jump — a test asserting the
+   * correct-but-not-yet-implemented behaviour would fail today and tell us
+   * nothing. See docs/decisions/0011-tests-that-assert-known-bugs.md.
    *
    * When one of these is genuinely fixed, the corresponding assertion must be
    * inverted IN THE SAME PR. That is the point: the fix cannot land quietly.

@@ -84,6 +84,9 @@ The Rust pin is deliberate, not incidental. `rust-toolchain.toml` used to say `c
 meant an unrelated Rust release broke the build with no commit to point at (1.82 changed the wasm C ABI).
 Moving the pin is a reviewable commit; drifting is not.
 
+**CI builds on one Node version, not a matrix.** A Node 20/22/24 matrix was considered and rejected: the
+shipped artefact is a browser-targeted ESM library, so the Node version only ever affects build tooling.
+
 ---
 
 ## 4. Commands
@@ -183,6 +186,10 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    a side effect of unrelated work. If a tool suggests an upgrade while you are doing something else, add it
    to [`docs/BACKLOG.md`](docs/BACKLOG.md) and move on.
 
+   **There is deliberately no Renovate or Dependabot**, and adding one is not a maintenance task to pick up.
+   On a repository maintained in bursts, per-dependency PRs become noise that gets ignored, which is worse
+   than deliberate periodic review. Revisit only if the pinned versions start going stale in practice.
+
 3. **The example is a demo.** It now runs against local workspace source, so it is a legitimate manual smoke
    test — but it is not automated and does not run in CI. Correctness is established by `pnpm test`,
    `pnpm test:wasm` and `pnpm verify:pack`.
@@ -235,5 +242,4 @@ property that is the whole point of the project. See
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, data flow, build/release pipeline, known limitations |
 | [`docs/decisions/`](docs/decisions/) | Why the system is shaped this way — one record per decision |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | Sanctioned maintenance work, prioritised |
-| [`docs/plans/MODERNIZATION.md`](docs/plans/MODERNIZATION.md) | The 2026 modernization: decisions, rationale, outcomes |
 | [`README.md`](README.md) | Public-facing usage docs. Audience is consumers, not contributors. |
