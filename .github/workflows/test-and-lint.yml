@@ -21,15 +21,26 @@ jobs:
           toolchain: 1.81.0
           target: wasm32-unknown-unknown
           components: clippy
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v3
         with:
-          node-version: '18.7.0'
-          cache: 'yarn'
-      - run: yarn
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
       - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - run: yarn nx run-many --target=lint
-      # The netgrep integration tests drive the real WASM engine, which needs a
-      # Node-loadable build. The published `pkg/` uses wasm-pack's bundler
-      # target and cannot be required directly.
-      - run: yarn nx build-node search
-      - run: yarn nx run-many --target=test
+
+      # The WASM builds come first: `@netgrep/netgrep` resolves
+      # `@netgrep/search` to this workspace, so typecheck and build both need
+      # packages/search/pkg/index.d.ts to exist.
+      #
+      # `pkg` is the published bundler-target build; `pkg-node` is the same Rust
+      # compiled for Node, which the integration tests load because the bundler
+      # target cannot be required directly.
+      - run: pnpm build:wasm
+      - run: pnpm build:wasm-node
+
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm test:wasm

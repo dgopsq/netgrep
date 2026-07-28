@@ -1,4 +1,4 @@
-import { NetgrepResult } from './NetgrepResult.js';
+import type { NetgrepResult } from './NetgrepResult.js';
 
 /**
  * Type representing a `NetgrepResult` for a batch

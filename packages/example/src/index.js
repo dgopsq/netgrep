@@ -47,5 +47,5 @@ function execSearch(pattern) {
 // `input` event using the lodash `debounce` utility.
 searchInput.addEventListener(
   'input',
-  debounce((e) => execSearch(e.target.value), 250)
+  debounce((e) => execSearch(e.target.value), 250),
 );
