@@ -15,7 +15,7 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
-          toolchain: 1.81.0
+          toolchain: 1.97.1
           target: wasm32-unknown-unknown
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v3

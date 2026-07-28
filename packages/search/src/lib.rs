@@ -1,10 +1,6 @@
-use grep::regex::RegexMatcherBuilder;
-use grep::searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
+use grep_regex::RegexMatcherBuilder;
+use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
 use wasm_bindgen::prelude::*;
-
-/// Use `wee_alloc` as the global allocator.
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 /// Search a bytes array for the given pattern. This function
 /// uses `ripgrep` under the hood.

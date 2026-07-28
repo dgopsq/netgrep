@@ -1,21 +1,16 @@
 # Pinned deliberately, not floating on `stable`.
 #
-# `wasm-bindgen 0.2.82` predates the wasm C ABI change in Rust 1.82 and fails to
-# build against any newer compiler:
+# The repository was previously on `channel = "stable"`, which meant an
+# unrelated Rust release could — and did — break the build with no commit to
+# point at: Rust 1.82 changed the wasm C ABI, and the `wasm-bindgen 0.2.82`
+# pinned at the time could not cope. Pinning makes the build reproducible and
+# turns a version move into a deliberate, reviewable commit.
 #
-#   error: older versions of the `wasm-bindgen` crate are incompatible with
-#          current versions of Rust; please update to `wasm-bindgen` v0.2.88
-#
-# 1.81.0 is therefore the last toolchain this dependency set can use. This pin is
-# a stopgap: it makes the build reproducible instead of breaking whenever `stable`
-# moves. It is superseded by the Rust modernization PR, which lifts
-# `wasm-bindgen` and moves this pin forward.
+# `pnpm lint` runs clippy, and a pinned toolchain is installed bare, so the
+# component has to be requested explicitly.
 #
 # See docs/plans/MODERNIZATION.md — decisions 5 and 9.
 [toolchain]
-channel = "1.81.0"
+channel = "1.97.1"
 targets = ["wasm32-unknown-unknown"]
-# `nx lint search` runs clippy. A pinned toolchain is installed bare, so the
-# component has to be requested explicitly — unlike the `stable` that CI
-# runners ship with preinstalled.
 components = ["clippy"]

@@ -393,39 +393,42 @@ describe('Netgrep integration (real WASM)', () => {
       ).rejects.toThrow('unreachable');
     });
 
-    it('UNDOCUMENTED: `^` anchors to the chunk, not the line, for case-sensitive patterns', async () => {
-      // `lib.rs` builds its RegexMatcher without `.multi_line(true)`. When
-      // `case_smart` leaves a pattern case-sensitive (i.e. it contains an
-      // uppercase letter), the searcher takes a whole-buffer path where `^`
-      // means "start of chunk". An all-lowercase pattern takes the
-      // line-by-line path, where `^` behaves correctly.
+    it('BACKLOG 3e (FIXED upstream): `^` anchors to the line, on any line', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: `^`
+      // anchored to the start of the CHUNK rather than the line whenever
+      // `case_smart` left a pattern case-sensitive, so `^Needle` matched only
+      // on line 1 while `^needle` worked everywhere.
       //
-      // Verified against grep @ 13.0.0-wasm: adding `.multi_line(true)` makes
-      // every case below pass, with no regression elsewhere. Deliberately not
-      // fixed here — see the block comment above.
+      // Dropping the ripgrep fork for grep-regex 0.1.14 / grep-searcher 0.1.17
+      // fixed it upstream — no change to lib.rs was needed. The baseline
+      // caught the behaviour change, and per the block comment above the
+      // assertion is inverted in the same PR that changed it.
       const NG = new Netgrep({ enableMemoryCache: false });
 
-      // Correct: anchor honoured on the first line.
       serve([encoder.encode('Needle x\nother\n')]);
       await expect(NG.search('a', '^Needle')).resolves.toMatchObject({
         result: true,
       });
 
-      // WRONG: the same line, no longer first, is no longer found.
+      // Previously false. This is the case that was broken.
       serve([encoder.encode('other\nNeedle x\n')]);
       await expect(NG.search('b', '^Needle')).resolves.toMatchObject({
-        result: false,
-      });
-
-      // Lowercase pattern, so case-insensitive, so the anchor works.
-      serve([encoder.encode('other\nneedle x\n')]);
-      await expect(NG.search('c', '^needle')).resolves.toMatchObject({
         result: true,
       });
 
-      // `$` is unaffected in both modes.
+      serve([encoder.encode('a\nb\nNeedle x\n')]);
+      await expect(NG.search('c', '^Needle')).resolves.toMatchObject({
+        result: true,
+      });
+
+      // The case-insensitive path was always correct; still is.
+      serve([encoder.encode('other\nneedle x\n')]);
+      await expect(NG.search('d', '^needle')).resolves.toMatchObject({
+        result: true,
+      });
+
       serve([encoder.encode('other\nxx Needle\n')]);
-      await expect(NG.search('d', 'Needle$')).resolves.toMatchObject({
+      await expect(NG.search('e', 'Needle$')).resolves.toMatchObject({
         result: true,
       });
     });
