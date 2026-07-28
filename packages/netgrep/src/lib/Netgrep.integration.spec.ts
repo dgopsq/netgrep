@@ -1,8 +1,6 @@
 import { ReadableStream } from 'node:stream/web';
-// jsdom does not expose `TextEncoder` as a global under Node 18, so take it
-// from Node directly rather than relying on the test environment.
-import { TextEncoder } from 'node:util';
-import { Netgrep } from './Netgrep';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Netgrep } from './Netgrep.js';
 
 /**
  * Integration tests: the REAL WASM engine driven through the REAL streaming
@@ -38,13 +36,14 @@ import { Netgrep } from './Netgrep';
  *   cd packages/search && wasm-pack build --target nodejs \
  *     --out-dir pkg-node --out-name index --release
  */
-jest.mock('@netgrep/search', () => {
-  /* eslint-disable @typescript-eslint/no-var-requires */
-  const { existsSync } = require('fs');
-  const { resolve } = require('path');
-  /* eslint-enable @typescript-eslint/no-var-requires */
+vi.mock('@netgrep/search', async () => {
+  const { existsSync } = await import('node:fs');
+  const { createRequire } = await import('node:module');
+  const { dirname, resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
 
-  const pkgNode = resolve(__dirname, '../../../search/pkg-node/index.js');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const pkgNode = resolve(here, '../../../search/pkg-node/index.js');
 
   if (!existsSync(pkgNode)) {
     throw new Error(
@@ -59,11 +58,13 @@ jest.mock('@netgrep/search', () => {
         '',
         `Expected at: ${pkgNode}`,
         '',
-      ].join('\n')
+      ].join('\n'),
     );
   }
 
-  return require(pkgNode);
+  // The nodejs-target build is CommonJS, so it needs `require` rather than a
+  // dynamic import to expose its named exports directly.
+  return createRequire(import.meta.url)(pkgNode);
 });
 
 const encoder = new TextEncoder();
@@ -131,12 +132,12 @@ function chunked(str: string, size: number): Array<Uint8Array> {
 function bytes(...parts: Array<string | number>): Uint8Array {
   return new Uint8Array(
     parts.flatMap((part) =>
-      typeof part === 'string' ? Array.from(encoder.encode(part)) : [part]
-    )
+      typeof part === 'string' ? Array.from(encoder.encode(part)) : [part],
+    ),
   );
 }
 
-const mockFetch = jest.fn();
+const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 /**
@@ -150,7 +151,7 @@ function serve(chunks: Array<Uint8Array>) {
   const state = { reads: 0 };
 
   mockFetch.mockImplementation(() =>
-    Promise.resolve({ body: countingBody(streamOfChunks(chunks), state) })
+    Promise.resolve({ body: countingBody(streamOfChunks(chunks), state) }),
   );
 
   return state;
@@ -173,7 +174,7 @@ describe('Netgrep integration (real WASM)', () => {
 
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
-        'set aside'
+        'set aside',
       );
 
       expect(result).toMatchObject({ result: true, pattern: 'set aside' });
@@ -185,7 +186,7 @@ describe('Netgrep integration (real WASM)', () => {
 
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
-        'dragon'
+        'dragon',
       );
 
       expect(result).toMatchObject({ result: false });
@@ -198,7 +199,7 @@ describe('Netgrep integration (real WASM)', () => {
 
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
-        'stones'
+        'stones',
       );
 
       expect(result).toMatchObject({ result: true });
@@ -235,7 +236,9 @@ describe('Netgrep integration (real WASM)', () => {
 
       const NG = new Netgrep({ enableMemoryCache: false });
 
-      await expect(NG.search('url', 'Queen (and|or) Crown')).resolves.toMatchObject({
+      await expect(
+        NG.search('url', 'Queen (and|or) Crown'),
+      ).resolves.toMatchObject({
         result: true,
       });
     });
@@ -245,7 +248,7 @@ describe('Netgrep integration (real WASM)', () => {
 
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
-        'both queen and crown'
+        'both queen and crown',
       );
 
       expect(result).toMatchObject({ result: true });
@@ -256,7 +259,7 @@ describe('Netgrep integration (real WASM)', () => {
 
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
-        'Wiseman'
+        'Wiseman',
       );
 
       expect(result).toMatchObject({ result: false });
@@ -268,7 +271,7 @@ describe('Netgrep integration (real WASM)', () => {
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
         'Wiseman',
-        { id: 42 }
+        { id: 42 },
       );
 
       expect(result).toMatchObject({ result: true, metadata: { id: 42 } });
@@ -280,7 +283,7 @@ describe('Netgrep integration (real WASM)', () => {
       const NG = new Netgrep({ enableMemoryCache: false });
 
       await expect(NG.search('url', 'Wiseman')).rejects.toThrow(
-        "The response doesn't contain a body"
+        "The response doesn't contain a body",
       );
     });
   });
@@ -289,10 +292,9 @@ describe('Netgrep integration (real WASM)', () => {
     it('resolves a result per input against the real engine', async () => {
       serve([encoder.encode(POEM)]);
 
-      const results = await new Netgrep({ enableMemoryCache: false }).searchBatch(
-        [{ url: 'a' }, { url: 'b' }, { url: 'c' }],
-        'fell asleep'
-      );
+      const results = await new Netgrep({
+        enableMemoryCache: false,
+      }).searchBatch([{ url: 'a' }, { url: 'b' }, { url: 'c' }], 'fell asleep');
 
       expect(results).toMatchObject([
         { url: 'a', result: true, error: null },
@@ -311,14 +313,14 @@ describe('Netgrep integration (real WASM)', () => {
       await expect(NG.search('url', 'dragon')).resolves.toMatchObject({
         result: false,
       });
-      expect(mockFetch).toBeCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
       // Whole file cached (the miss drained the stream), so a different
       // pattern is answered from memory.
       await expect(NG.search('url', 'Wiseman')).resolves.toMatchObject({
         result: true,
       });
-      expect(mockFetch).toBeCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -347,14 +349,14 @@ describe('Netgrep integration (real WASM)', () => {
       // Control: the same bytes in one chunk match.
       serve([encoder.encode(text)]);
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful')
+        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: true });
 
       // Split mid-word, and the match vanishes. Chunks are searched in
       // isolation with no tail retained.
       serve([encoder.encode('hello won'), encoder.encode('derful world')]);
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful')
+        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: false });
     });
 
@@ -378,7 +380,7 @@ describe('Netgrep integration (real WASM)', () => {
       await expect(NG.search('url', 'omega')).resolves.toMatchObject({
         result: false,
       });
-      expect(mockFetch).toBeCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('BACKLOG 3c: an invalid pattern traps the WASM instance', async () => {
@@ -387,7 +389,7 @@ describe('Netgrep integration (real WASM)', () => {
       // `.build(pattern).unwrap()` in lib.rs panics on a malformed regex,
       // which surfaces as a wasm trap rather than a catchable domain error.
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', '(')
+        new Netgrep({ enableMemoryCache: false }).search('url', '('),
       ).rejects.toThrow('unreachable');
     });
 

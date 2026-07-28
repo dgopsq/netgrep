@@ -17,16 +17,20 @@ jobs:
           # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
           toolchain: 1.81.0
           target: wasm32-unknown-unknown
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v3
         with:
-          node-version: '18.7.0'
-          cache: 'yarn'
-      - run: yarn
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
       - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      - run: yarn nx build search
+      - run: pnpm build:wasm
       - uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
+          # The hand-written wrapper manifest is what gets published now, not
+          # the one wasm-pack generates into pkg/. Its version is synced from
+          # Cargo.toml by scripts/post_build.js.
           greater-version-only: true
-          package: ./packages/search/pkg/package.json
+          package: ./packages/search/package.json

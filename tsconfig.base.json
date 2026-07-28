@@ -1,22 +1,22 @@
 {
-  "compileOnSave": false,
   "compilerOptions": {
-    "rootDir": ".",
+    "target": "es2022",
+    "lib": ["es2022", "dom", "dom.iterable"],
+
+    // The published package is ESM-only and its relative imports already carry
+    // explicit `.js` extensions, which is exactly what nodenext expects.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "declaration": true,
     "sourceMap": true,
-    "declaration": false,
-    "moduleResolution": "node",
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true,
-    "importHelpers": true,
-    "target": "es2015",
-    "module": "esnext",
-    "lib": ["es2017", "dom"],
-    "skipLibCheck": true,
-    "skipDefaultLibCheck": true,
-    "baseUrl": ".",
-    "paths": {
-      "@netgrep/netgrep": ["packages/netgrep/src/index.ts"]
-    }
-  },
-  "exclude": ["node_modules", "tmp"]
+    "skipLibCheck": true
+  }
 }

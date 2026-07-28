@@ -1,9 +1,9 @@
 import { search_bytes } from '@netgrep/search';
-import { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
-import { NetgrepConfig } from './data/NetgrepConfig.js';
-import { NetgrepInput } from './data/NetgrepInput.js';
-import { NetgrepResult } from './data/NetgrepResult.js';
-import { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
+import type { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
+import type { NetgrepConfig } from './data/NetgrepConfig.js';
+import type { NetgrepInput } from './data/NetgrepInput.js';
+import type { NetgrepResult } from './data/NetgrepResult.js';
+import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
 
 /**
  * The default configuration used by `netgrep`.
@@ -51,11 +51,11 @@ export class Netgrep {
     url: string,
     pattern: string,
     metadata?: T,
-    config?: NetgrepSearchConfig
+    config?: NetgrepSearchConfig,
   ): Promise<NetgrepResult<T>> {
     return new Promise((resolve, reject) => {
       const handleReader = (
-        reader: ReadableStreamDefaultReader<Uint8Array>
+        reader: ReadableStreamDefaultReader<Uint8Array>,
       ) => {
         return reader.read().then(({ value, done }) => {
           // If the reader is actually done
@@ -96,7 +96,7 @@ export class Netgrep {
         .then((res) =>
           !res.body
             ? Promise.reject(new Error("The response doesn't contain a body"))
-            : Promise.resolve(res.body.getReader())
+            : Promise.resolve(res.body.getReader()),
         )
         .then(handleReader)
         .catch(reject);
@@ -122,7 +122,7 @@ export class Netgrep {
   public searchBatch<T extends object>(
     inputs: Array<NetgrepInput<T>>,
     pattern: string,
-    config?: NetgrepSearchConfig
+    config?: NetgrepSearchConfig,
   ): Promise<Array<BatchNetgrepResult<T>>> {
     return Promise.all(
       inputs.map((input) => {
@@ -137,7 +137,7 @@ export class Netgrep {
             metadata: input.metadata,
             error: this.serializeError(err),
           }));
-      })
+      }),
     );
   }
 
@@ -162,7 +162,7 @@ export class Netgrep {
     inputs: Array<NetgrepInput<T>>,
     pattern: string,
     cb: (result: BatchNetgrepResult<T>) => void,
-    config?: NetgrepSearchConfig
+    config?: NetgrepSearchConfig,
   ): void {
     inputs.forEach((input) => {
       const { url } = input;
@@ -175,7 +175,7 @@ export class Netgrep {
             pattern,
             metadata: input.metadata,
             error: this.serializeError(err),
-          })
+          }),
         );
     });
   }

@@ -1,8 +1,23 @@
 {
   "name": "@netgrep/netgrep",
   "version": "0.1.5",
+  "description": "The power of ripgrep over HTTP",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dgopsq/netgrep"
+  },
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json"
+  },
   "dependencies": {
-    "@netgrep/search": "^0.1.5"
+    "@netgrep/search": "workspace:*"
   }
 }

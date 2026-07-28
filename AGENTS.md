@@ -3,6 +3,21 @@
 Operating guide for AI agents working in the **netgrep** repository.
 Canonical source — `CLAUDE.md` points here. Keep this file authoritative; do not fork its content.
 
+> ## ⚠️ Partially out of date — migration in progress
+>
+> A modernization is landing across five PRs; see [`docs/plans/MODERNIZATION.md`](docs/plans/MODERNIZATION.md).
+> This file is rewritten in the final one. Until then, **§2, §3 and §4 are stale**:
+>
+> | this file says | reality |
+> |---|---|
+> | Nx + yarn (`yarn nx test netgrep`) | Nx and yarn are gone. Use pnpm: `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm test:wasm`, `pnpm build:wasm`, `pnpm build:wasm-node` |
+> | Node 18.7.0 | Node 24 LTS, pinned in `.node-version` |
+> | jest / ESLint / Prettier | Vitest + Biome |
+> | §2: local edits never reach the TS package or the example | **Fixed.** pnpm workspaces link them; the example bundles local source |
+>
+> Rust is untouched so far: still `wasm-bindgen 0.2.82` on the pinned Rust 1.81.0, still the ripgrep fork.
+> Everything in §6 (hard rules) and §7 (correctness caveats) still applies.
+
 ---
 
 ## 1. What this project is

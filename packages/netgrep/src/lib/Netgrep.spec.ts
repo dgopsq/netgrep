@@ -1,6 +1,7 @@
-import { Netgrep } from './Netgrep';
 import { ReadableStream } from 'node:stream/web';
-import { BatchNetgrepResult } from './data/BatchNetgrepResult';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
+import { Netgrep } from './Netgrep.js';
 
 /**
  * Helper function to generate a `ReadableStream`
@@ -15,11 +16,15 @@ export function genReadableStreamFromString(str: string): ReadableStream {
   });
 }
 
-const mockSearch = jest.fn();
-const mockFetch = jest.fn();
+// `vi.hoisted` is required, not stylistic: `vi.mock` is lifted above the module
+// body, and its factory runs while `./Netgrep.js` is being imported — before a
+// plain `const` here would have been initialised.
+const { mockSearch } = vi.hoisted(() => ({ mockSearch: vi.fn() }));
 
-// Moking `search` function.
-jest.mock('@netgrep/search', () => {
+const mockFetch = vi.fn();
+
+// Mocking the `search_bytes` function.
+vi.mock('@netgrep/search', () => {
   return { search_bytes: () => mockSearch() };
 });
 
@@ -38,7 +43,7 @@ describe('Netgrep', () => {
       mockFetch.mockClear();
 
       mockFetch.mockImplementation(() =>
-        Promise.resolve({ body: genReadableStreamFromString('test') })
+        Promise.resolve({ body: genReadableStreamFromString('test') }),
       );
     });
 
@@ -63,12 +68,12 @@ describe('Netgrep', () => {
 
       const result = await NGWithCache.search(url, pattern);
 
-      expect(mockFetch).toBeCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result).toMatchObject({ url, result: true });
 
       const result2 = await NGWithCache.search(url, pattern);
 
-      expect(mockFetch).toBeCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(result2).toMatchObject({ url, result: true });
     });
   });
@@ -85,7 +90,7 @@ describe('Netgrep', () => {
       mockFetch.mockClear();
 
       mockFetch.mockImplementation(() =>
-        Promise.resolve({ body: genReadableStreamFromString('test') })
+        Promise.resolve({ body: genReadableStreamFromString('test') }),
       );
     });
 
@@ -100,7 +105,7 @@ describe('Netgrep', () => {
           pattern,
           result: true,
           error: null,
-        })
+        }),
       );
 
       expect(results).toMatchObject(expectedResults);
@@ -117,7 +122,7 @@ describe('Netgrep', () => {
           pattern,
           result: false,
           error: null,
-        })
+        }),
       );
 
       expect(results).toMatchObject(expectedResults);
@@ -127,7 +132,7 @@ describe('Netgrep', () => {
       const errorMessage = 'message';
 
       mockFetch.mockImplementation(() =>
-        Promise.reject(new Error(errorMessage))
+        Promise.reject(new Error(errorMessage)),
       );
 
       mockSearch.mockReturnValue(false);
@@ -140,7 +145,7 @@ describe('Netgrep', () => {
           pattern,
           result: false,
           error: errorMessage,
-        })
+        }),
       );
 
       expect(results).toMatchObject(expectedResults);
@@ -157,15 +162,15 @@ describe('Netgrep', () => {
           pattern,
           result: true,
           error: null,
-        })
+        }),
       );
 
-      expect(mockFetch).toBeCalledTimes(urls.length);
+      expect(mockFetch).toHaveBeenCalledTimes(urls.length);
       expect(results).toMatchObject(expectedResults);
 
       const results2 = await NGWithCache.searchBatch(urls, pattern);
 
-      expect(mockFetch).toBeCalledTimes(urls.length);
+      expect(mockFetch).toHaveBeenCalledTimes(urls.length);
       expect(results2).toMatchObject(expectedResults);
     });
   });

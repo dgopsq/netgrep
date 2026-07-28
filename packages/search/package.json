@@ -1,0 +1,23 @@
+{
+  "name": "@netgrep/search",
+  "version": "0.1.5",
+  "description": "The power of ripgrep over HTTP",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dgopsq/netgrep"
+  },
+  "type": "module",
+  "main": "pkg/index.js",
+  "types": "pkg/index.d.ts",
+  "files": [
+    "pkg"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "wasm-pack build --scope netgrep --out-name index --release && node scripts/post_build.js",
+    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node --out-name index --release",
+    "test": "wasm-pack test --chrome --headless",
+    "lint": "cargo clippy -p search -- -D warnings --no-deps"
+  }
+}
