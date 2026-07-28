@@ -20,6 +20,7 @@ jobs:
           # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
           toolchain: 1.81.0
           target: wasm32-unknown-unknown
+          components: clippy
       - uses: actions/setup-node@v3
         with:
           node-version: '18.7.0'

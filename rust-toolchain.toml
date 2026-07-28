@@ -15,3 +15,7 @@
 [toolchain]
 channel = "1.81.0"
 targets = ["wasm32-unknown-unknown"]
+# `nx lint search` runs clippy. A pinned toolchain is installed bare, so the
+# component has to be requested explicitly — unlike the `stable` that CI
+# runners ship with preinstalled.
+components = ["clippy"]
