@@ -11,6 +11,14 @@
         "outputPath": "packages/search/pkg"
       }
     },
+    "build-node": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "wasm-pack build --target nodejs --out-dir pkg-node --out-name index --release",
+        "cwd": "packages/search",
+        "outputPath": "packages/search/pkg-node"
+      }
+    },
     "publish": {
       "executor": "nx:run-commands",
       "options": {
