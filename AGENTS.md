@@ -3,233 +3,221 @@
 Operating guide for AI agents working in the **netgrep** repository.
 Canonical source — `CLAUDE.md` points here. Keep this file authoritative; do not fork its content.
 
-> ## ⚠️ Partially out of date — migration in progress
->
-> A modernization is landing across five PRs; see [`docs/plans/MODERNIZATION.md`](docs/plans/MODERNIZATION.md).
-> This file is rewritten in the final one. Until then, **§2, §3 and §4 are stale**:
->
-> | this file says | reality |
-> |---|---|
-> | Nx + yarn (`yarn nx test netgrep`) | Nx and yarn are gone. Use pnpm: `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm test:wasm`, `pnpm build:wasm` |
-> | Node 18.7.0 | Node 24 LTS, pinned in `.node-version` |
-> | jest / ESLint / Prettier | Vitest + Biome |
-> | §2: local edits never reach the TS package or the example | **Fixed.** pnpm workspaces link them; the example bundles local source |
-> | Rust 1.81.0, `wasm-bindgen 0.2.82`, the `dgopsq/ripgrep` fork | **Rust 1.97.1**, `wasm-bindgen 0.2.126`, and the fork is gone — `grep-matcher`/`grep-regex`/`grep-searcher` come from crates.io |
-> | §7 caveat: `^` anchors to the chunk, not the line | **Fixed upstream** by the dependency change |
->
-> Everything in §6 (hard rules) still applies. The remaining §7 caveats — chunk-boundary false negatives,
-> the poisoned partial cache, the panic on an invalid pattern — are all still live.
+Everything below was verified end-to-end on **2026-07-28** (macOS arm64, Node 24.18.0, Rust 1.97.1).
 
 ---
 
 ## 1. What this project is
 
-netgrep is an **experimental** port of [ripgrep](https://github.com/BurntSushi/ripgrep) to WebAssembly that
-searches remote files **over HTTP while they are still downloading**. It answers exactly one question:
-*does this pattern occur in the file at this URL?* — a boolean, nothing more.
+netgrep is a port of [ripgrep](https://github.com/BurntSushi/ripgrep) to WebAssembly that searches remote
+files **over HTTP while they are still downloading**. It answers exactly one question: *does this pattern
+occur in the file at this URL?* — a boolean, nothing more.
 
-The intended use case is a client-side search engine over a small, static, file-based corpus
-(e.g. Markdown posts emitted by a static site generator), as an alternative to standing up an index-based
-search backend.
+The intended use case is a client-side search over a small, static, file-based corpus (e.g. Markdown posts
+emitted by a static site generator), as an alternative to standing up an index-based search backend.
 
-**Project status: maintenance only.** Keep it building, keep it correct, keep dependencies from rotting.
-Do not propose or implement new features. See [`docs/BACKLOG.md`](docs/BACKLOG.md) for sanctioned work.
+**Project status: maintained, conservative.** The toolchain is current and CI is green. Keep it that way:
+fix defects, keep dependencies from rotting, keep it working for existing consumers. **Do not add features.**
+The public API is deliberately small — a boolean per URL — and widening it (match positions, line numbers,
+Node support) is a design conversation, not a task to pick up. See [`docs/BACKLOG.md`](docs/BACKLOG.md) for
+sanctioned work.
 
 ---
 
 ## 2. ⚠️ Read this before you edit anything
 
-**Local source edits do not reach the example app or the TypeScript package.** This repo has no linking
-between its own packages. Verified on 2026-07-28:
+Two things will mislead you if you do not know them.
 
-- The root `package.json` declares **no yarn workspaces**.
-- The root `yarn.lock` pins `@netgrep/netgrep@0.1.3` and `@netgrep/search@0.1.2` — *published 2022 copies of
-  this repo's own packages*, fetched from the npm registry. After `yarn install`, that is literally what sits
-  in `node_modules/@netgrep/`.
-- `packages/netgrep/yarn.lock` pins `@netgrep/search@^0.1.5` **from npm**. The locally built WASM output
-  (`packages/search/pkg/`, gitignored) is never linked into it.
-- `packages/example/webpack.config.js` has no `resolve.alias` and no tsconfig-paths plugin, and the example is
-  plain JavaScript — so it resolves `@netgrep/netgrep` from `node_modules`, i.e. **version 0.1.3 from 2022**.
+### 2.1 Some tests assert behaviour that is WRONG, on purpose
 
-**Consequences you must internalise:**
+`packages/netgrep/src/lib/Netgrep.integration.spec.ts` ends with a block titled
+**`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a pattern
+straddling a chunk boundary returning `false`, a NUL byte discarding a chunk, and so on.
 
-| You edit… | What actually changes |
-|---|---|
-| `packages/search/src/lib.rs` | Only `packages/search/pkg/` after a rebuild, and the Rust tests. **Not** `packages/netgrep`. **Not** the example. |
-| `packages/netgrep/src/**` | Only `packages/netgrep/dist/` and the jest suite. **Not** the example. |
+They are not mistakes and they are not out of date. Their job is to detect *unintended* change during
+dependency work: a test asserting the correct-but-unimplemented behaviour would fail today and tell us
+nothing.
 
-So: rebuilding the WASM and then running the example proves **nothing**. If you "verify" a change that way you
-will observe 2022 behaviour and draw a false conclusion. This is the single most expensive trap in this repo.
+**If one of them fails, that is a signal, not a nuisance.** Something changed the engine's behaviour. Find out
+what, decide whether the new behaviour is right, and if it is, **invert the assertion in the same PR** with a
+note saying why. Do not "fix" a defect test to make CI green, and do not fix the underlying bug without
+inverting its test in the same change.
 
-**Verify changes with the test suites instead** (§4). If you genuinely need an end-to-end check, you must wire
-the packages together manually (`yarn link`, or a temporary `file:` dependency, or publishing) — and that
-wiring is *not* committed, so revert it before you finish.
+This has already paid for itself once: upgrading off the ripgrep fork silently fixed the `^`-anchoring bug,
+and only this block noticed.
 
-The disconnect is **known and deliberately left as-is**. Do not "fix" it as a side effect of another task.
+### 2.2 The WASM must be built before almost anything works
+
+`@netgrep/netgrep` resolves `@netgrep/search` to this workspace, and that package's entry points at
+`packages/search/pkg/` — a **gitignored build output**. On a fresh clone it does not exist, so `pnpm
+typecheck`, `pnpm build` and the integration tests all fail until you run:
+
+```bash
+pnpm build:wasm
+```
+
+`pnpm install` works without it, and so do the unit tests (they mock the engine). Everything else does not.
+This is the first thing to try when something fails inexplicably on a clean checkout.
 
 ---
 
 ## 3. Toolchain
 
-Exact versions matter here; this project is pinned to 2022 and several pins are load-bearing.
+Versions are pinned in files, and CI reads those files rather than restating them. Change a version in one
+place only.
 
-| Tool | Version | Notes |
+| Tool | Version | Pinned in |
 |---|---|---|
-| Node | **18.7.0** | Per `.node-version`. Nx 14 is not expected to work on modern Node. |
-| yarn | 1.x (classic) | Verified with 1.22.22. |
-| Rust | **1.81.0** | **NOT `stable`.** See the warning below. |
-| wasm-pack | 0.13.1 | Verified. |
-| Rust target | `wasm32-unknown-unknown` | `rustup target add wasm32-unknown-unknown` |
-| ChromeDriver | must match your installed Chrome **major** version | Needed only for `nx test search`. |
+| Node | **24.18.0** | `.node-version` |
+| pnpm | **11.17.0** | `packageManager` in root `package.json` (via corepack) |
+| Rust | **1.97.1** | `rust-toolchain.toml`, with `wasm32-unknown-unknown` + clippy |
+| wasm-pack | 0.13.1 | CI action; install locally with `cargo install wasm-pack` |
 
-### ⚠️ `rust-toolchain.toml` says `stable` and that is broken
-
-`rust-toolchain.toml` pins `channel = "stable"`, which resolves to whatever stable is today. On current stable
-(verified with 1.97.1) the build fails:
-
-```
-error: older versions of the `wasm-bindgen` crate are incompatible with current versions of Rust;
-       please update to `wasm-bindgen` v0.2.88
-```
-
-Rust 1.82 changed the wasm C ABI; `wasm-bindgen 0.2.82` (pinned in `packages/search/Cargo.toml`) predates that.
-**1.81.0 is the last Rust that compiles this project.** Use it explicitly:
-
-```bash
-rustup toolchain install 1.81.0 --target wasm32-unknown-unknown
-export RUSTUP_TOOLCHAIN=1.81.0     # or prefix commands with `cargo +1.81.0`
-```
-
-**This also means CI is currently broken** — `.github/workflows/*.yml` install `toolchain: stable`. Any push
-that triggers a Rust build today fails at this error. Tracked in [`docs/BACKLOG.md`](docs/BACKLOG.md).
+The Rust pin is deliberate, not incidental. `rust-toolchain.toml` used to say `channel = "stable"`, which
+meant an unrelated Rust release broke the build with no commit to point at (1.82 changed the wasm C ABI).
+Moving the pin is a reviewable commit; drifting is not.
 
 ---
 
 ## 4. Commands
 
-All verified end-to-end on 2026-07-28 (macOS arm64, Node 18.7.0, Rust 1.81.0) unless noted.
+All run from the repository root.
 
 ```bash
-# One-time
-yarn install                       # root; also `cd packages/netgrep && yarn install` if working there
+pnpm install           # once
+pnpm build:wasm        # REQUIRED FIRST — see §2.2
 ```
 
-| Target | Command | Status |
+| Task | Command | Notes |
 |---|---|---|
-| Lint TS | `npx nx lint netgrep` | ✅ passes |
-| Test TS | `npx nx test netgrep` | ✅ 7 tests pass (jest, jsdom) |
-| Build TS | `npx nx build netgrep` | ✅ → `packages/netgrep/dist/` |
-| Lint Rust | `npx nx lint search` | ✅ passes (clippy, `failOnWarnings: true`) |
-| Build WASM | `npx nx build search` | ✅ → `packages/search/pkg/`, **1.0 MB** `index_bg.wasm` |
-| Test Rust | `npx nx test search` | ⚠️ see below |
-| Run example | `npx nx serve example` | Demo only — see §2. Not a verification tool. |
+| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.12 MB `index_bg.wasm` |
+| Build TS | `pnpm build` | → `packages/netgrep/dist/` |
+| Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`) |
+| Format | `pnpm format` | Biome, writes in place |
+| Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
+| Test TS | `pnpm test` | Vitest — **24 tests** (7 unit, 17 integration) |
+| Test Rust | `pnpm test:wasm` | wasm-bindgen in headless Chrome — **2 tests** |
+| Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs |
+| Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
 
-Rust commands require `RUSTUP_TOOLCHAIN=1.81.0` in the environment.
+### `pnpm test:wasm` may fail on your machine
 
-### `nx test search` fails out of the box
+`wasm-pack` downloads the *latest* ChromeDriver, which cannot drive an older installed Chrome
+(`invalid session id`, driver killed with signal 9). CI is unaffected — its Chrome and driver move together.
 
-The target runs `wasm-pack test --chrome --headless`. wasm-pack downloads the *latest* ChromeDriver, which will
-not drive an older installed Chrome. Observed failure: ChromeDriver 151 vs Chrome 150 →
-`invalid session id`, driver killed with signal 9.
-
-Workaround — supply a matching driver from
-[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/):
-
-```bash
-export CHROMEDRIVER=/path/to/matching/chromedriver
-export RUSTUP_TOOLCHAIN=1.81.0
-cd packages/search && wasm-pack test --chrome --headless
-```
-
-With a matching driver the suite passes: **2 tests**, verified.
+It also **overrides** `CHROMEDRIVER`, so exporting it and re-running `wasm-pack` changes nothing. Invoke the
+harness directly; see [`docs/BACKLOG.md`](docs/BACKLOG.md) item 2 for the exact commands.
 
 ---
 
 ## 5. Repository map
 
-Three packages, ~400 lines of first-party source in total. Nx orchestrates both the JS and Rust builds.
+Three packages, ~450 lines of first-party source. pnpm workspaces link them; there is no task runner.
 
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         48 lines. Exports one function: search_bytes(&[u8], &str) -> bool
+    src/lib.rs         ~45 lines. Exports one function: search_bytes(&[u8], &str) -> bool
     tests/search.rs    wasm-bindgen tests, run in headless Chrome
-    scripts/post_build.js   adds "type": "module" to the generated pkg/package.json
+    scripts/post_build.js   fixes up the generated pkg/ (see below)
+    package.json       hand-written wrapper; THIS is what gets published
     pkg/               BUILD OUTPUT, gitignored
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts        the whole public API (~200 lines)
-    src/lib/data/*.ts         5 type definitions, one per file
-    src/lib/Netgrep.spec.ts   jest suite; mocks both fetch and the WASM module
+    src/lib/Netgrep.ts               the whole public API (~215 lines)
+    src/lib/data/*.ts                5 type definitions, one per file
+    src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
+    src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
-  example/           Webpack 5 demo searching ~60 Sherlock Holmes .txt files.
-                     Not published. Not a test. Runs against npm, not local source.
+  example/           Webpack 5 demo searching 67 Sherlock Holmes .txt files.
+                     Not published. Runs against local workspace source.
+
+scripts/verify-pack.mjs   Packaging guard, run in CI.
 ```
 
-Root config: `nx.json` / `workspace.json` (Nx), `Cargo.toml` (Rust workspace),
-`tsconfig.base.json`, `.eslintrc.json`, `jest.config.ts`, `.github/workflows/`.
+Root config: `pnpm-workspace.yaml`, `Cargo.toml` (Rust workspace **and** the release profile — Cargo ignores
+`[profile.*]` in member packages), `tsconfig.base.json`, `biome.jsonc`, `vitest.config.ts`,
+`rust-toolchain.toml`, `.node-version`, `.github/workflows/`.
+
+### Two things about `packages/search` that surprise people
+
+**The published package is not `pkg/`.** `pkg/` is wasm-pack's output; `packages/search/package.json` is a
+hand-written wrapper that owns the npm name and includes `pkg/` via `"files"`. That indirection exists
+because a workspace cannot glob a gitignored build output.
+
+**`post_build.js` is load-bearing.** It marks `pkg/` as ESM, copies the version from `Cargo.toml` so the two
+manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pkg/`** — that file contains
+`*`, and npm honours it when packing, which once produced a tarball containing no WASM at all.
 
 ### Where to change what
 
 | Goal | File |
 |---|---|
-| Change matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
-| Change what a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts` |
-| Change streaming, batching, caching, abort behaviour | `packages/netgrep/src/lib/Netgrep.ts` |
-| Add/adjust a config option | `packages/netgrep/src/lib/data/NetgrepConfig.ts` or `NetgrepSearchConfig.ts` |
-| Change build/publish steps | `packages/*/project.json`, `.github/workflows/` |
+| Matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
+| What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts` |
+| Streaming, batching, caching, abort behaviour | `packages/netgrep/src/lib/Netgrep.ts` |
+| A config option | `packages/netgrep/src/lib/data/NetgrepConfig.ts` or `NetgrepSearchConfig.ts` |
+| Build or release steps | root `package.json` scripts, `packages/*/package.json` scripts, `.github/workflows/` |
+| Binary size / release profile | root `Cargo.toml` — **not** `packages/search/Cargo.toml` |
 
 ---
 
 ## 6. Hard rules
 
-1. **Never bump dependencies opportunistically.** The 2022 pins are interlocked:
-   Nx 14 ↔ `@nrwl/*` scope ↔ Node 18, and `wasm-bindgen 0.2.82` ↔ Rust ≤ 1.81 ↔ the ripgrep fork.
-   Any version change is its own deliberate, tested task — never a side effect of unrelated work.
-   If a tool suggests an upgrade while you are doing something else, note it in `docs/BACKLOG.md` and move on.
+1. **Version bumps and publishing are human-only.** Releases fire from pushed git tags (`netgrep-**`,
+   `search-**`) and publish to npm under the maintainer's token. You may *prepare* a release; you may never
+   trigger one, push a release tag, or run `npm publish` / `wasm-pack publish`. `.claude/settings.json`
+   denies these outright.
 
-2. **Never edit the ripgrep fork from this repository.** It lives in a separate repo,
-   [`dgopsq/ripgrep`](https://github.com/dgopsq/ripgrep), consumed as a git dependency pinned to tag
-   `13.0.0-wasm`. There is no vendored copy here to patch. Changing it requires:
-   fork repo → commit → **new tag** → bump the `tag = "…"` in `packages/search/Cargo.toml` → rebuild.
-   See [`docs/decisions/0001-fork-ripgrep-for-wasm.md`](docs/decisions/0001-fork-ripgrep-for-wasm.md) for
-   exactly what the fork changes.
+2. **Never bump dependencies opportunistically.** A version change is its own deliberate, tested task, never
+   a side effect of unrelated work. If a tool suggests an upgrade while you are doing something else, add it
+   to [`docs/BACKLOG.md`](docs/BACKLOG.md) and move on.
 
-3. **Version bumps and publishing are human-only.** Releases fire from pushed git tags
-   (`netgrep-**`, `search-**`) and publish to npm under the maintainer's token. You may *prepare* a release;
-   you may never trigger one, push a release tag, or run `npm publish` / `wasm-pack publish`.
+3. **The example is a demo.** It now runs against local workspace source, so it is a legitimate manual smoke
+   test — but it is not automated and does not run in CI. Correctness is established by `pnpm test`,
+   `pnpm test:wasm` and `pnpm verify:pack`.
 
-4. **The example app is a demo, not a test.** It proves nothing about local code (§2). Correctness is
-   established only by `nx test netgrep` (jest) and `nx test search` (wasm-bindgen in headless Chrome).
+4. **Do not commit build outputs or lockfile churn.** `packages/netgrep/dist/` and `packages/search/pkg/` are
+   gitignored. If a command rewrites a lockfile as a side effect of something unrelated, revert it.
 
-5. **Do not commit build outputs or lockfile churn.** `packages/netgrep/dist/` and `packages/search/pkg/` are
-   gitignored. If `yarn install` or `cargo` rewrites a lockfile as a side effect, revert it.
+5. **Publish `@netgrep/search` before `@netgrep/netgrep`.** The dependency is `workspace:*`, which pnpm
+   rewrites to a real version at pack time; the wrapper will not resolve if the core is not on npm yet.
 
 ---
 
 ## 7. Known correctness caveats
 
-These are real, present in the published `@netgrep/netgrep@0.1.5`, and **documented rather than fixed**.
-Read [`docs/ARCHITECTURE.md §Known limitations`](docs/ARCHITECTURE.md#known-limitations--correctness-caveats)
-before touching search or caching logic — the two bugs interact, and fixing one naively reintroduces the other.
+Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test in
+`Netgrep.integration.spec.ts` — read §2.1 before touching any of them.
 
-- **Chunk-boundary false negatives** — `packages/netgrep/src/lib/Netgrep.ts:71`
-- **Poisoned partial cache** — `packages/netgrep/src/lib/Netgrep.ts:76`, `:80`, `:89-91`
-- **Unbounded cache growth**, **per-chunk regex recompilation**, **panic on invalid pattern** — see the doc.
+| | Where | Effect |
+|---|---|---|
+| Chunk-boundary false negatives | `Netgrep.ts` search loop | A match spanning two `fetch` chunks is never found. Silent, non-deterministic. |
+| Poisoned partial cache | `Netgrep.ts` cache paths | Early resolution caches a prefix; later searches answer `false` for text never downloaded. |
+| Panic on invalid pattern | `lib.rs`, `.build(pattern).unwrap()` | A stray `(` traps the WASM instance instead of surfacing a catchable error. |
+| One NUL discards the chunk | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
+
+The first two **interact** — fixing either naively (by draining the stream) destroys the early-resolution
+property that is the whole point of the project. See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#known-limitations--correctness-caveats) and
+[decision 0002](docs/decisions/0002-search-while-downloading.md).
 
 ---
 
 ## 8. Conventions
 
-- **TypeScript**: ESM only, `"type": "module"`. Relative imports carry the **`.js` extension**
-  (`./data/NetgrepResult.js`) even though the sources are `.ts` — required for ESM output. Match this.
+- **ESM only.** `"type": "module"`, and relative imports carry the **`.js` extension**
+  (`./data/NetgrepResult.js`) even though the sources are `.ts`. `moduleResolution` is `nodenext`, which
+  requires this. Match it.
 - One type per file under `src/lib/data/`, named after the type.
-- TSDoc comments on every public method and type. Keep that density.
-- Prettier + ESLint for TS; rustfmt + clippy for Rust. Clippy runs with `failOnWarnings: true`.
+- TSDoc on every public method and type. Keep that density.
+- **Biome** formats and lints JS/TS (`biome.jsonc`); **rustfmt + clippy** for Rust, clippy with `-D warnings`.
 - `.editorconfig` is authoritative for whitespace.
+- Comments should explain *why*, especially where the code looks wrong but is not. The repository has several
+  such places, and they are commented for a reason.
 
 ---
 
@@ -240,4 +228,5 @@ before touching search or caching logic — the two bugs interact, and fixing on
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, data flow, build/release pipeline, known limitations |
 | [`docs/decisions/`](docs/decisions/) | Why the system is shaped this way — one record per decision |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | Sanctioned maintenance work, prioritised |
-| [`README.md`](README.md) | Public-facing usage docs. Audience is library consumers, not contributors. |
+| [`docs/plans/MODERNIZATION.md`](docs/plans/MODERNIZATION.md) | The 2026 modernization: decisions, rationale, outcomes |
+| [`README.md`](README.md) | Public-facing usage docs. Audience is consumers, not contributors. |

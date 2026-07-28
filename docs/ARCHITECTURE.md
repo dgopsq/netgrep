@@ -13,8 +13,10 @@ No line numbers, no byte offsets, no matched text, no match counts.
 The distinguishing property is *when* it answers: the search runs against each chunk of the HTTP response
 **as it arrives**, so a match in the first kilobyte resolves without waiting for the remaining megabytes.
 
-It is a browser-targeted library. It requires `fetch` with a readable response body stream, and a bundler
-capable of loading WebAssembly asynchronously.
+It is a browser-targeted library. It requires `fetch` with a readable response body stream. It needs **no
+bundler configuration**: since 0.2.0 the WASM is loaded through a standard
+`new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
+understand out of the box.
 
 **Non-goals:** indexing, ranking, snippets, highlighting, Node.js support, filesystem search, a CLI.
 
@@ -25,33 +27,40 @@ capable of loading WebAssembly asynchronously.
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ packages/example  — webpack 5 demo, not published                │
-│   plain JS, ~60 .txt files, debounced input → searchBatch        │
+│   plain JS, 67 .txt files, debounced input → searchBatch         │
 └───────────────────────────┬─────────────────────────────────────┘
-                            │ imports (from npm — see AGENTS.md §2)
+                            │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
 │ packages/netgrep  — @netgrep/netgrep (TypeScript, ESM)           │
 │   streaming, batching, in-memory cache, abort, error shaping     │
+│   awaits init() once, then calls search_bytes per chunk          │
 └───────────────────────────┬─────────────────────────────────────┘
-                            │ imports search_bytes (from npm)
+                            │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
 │ packages/search   — @netgrep/search (Rust → WASM)                │
 │   search_bytes(&[u8], &str) -> bool                              │
+│   wasm-pack `web` target: new URL(…, import.meta.url)            │
 └───────────────────────────┬─────────────────────────────────────┘
-                            │ cargo git dependency, tag 13.0.0-wasm
+                            │ crates.io
 ┌───────────────────────────▼─────────────────────────────────────┐
-│ github.com/dgopsq/ripgrep — fork of ripgrep 13.0.0               │
-│   grep meta-crate: grep-regex, grep-searcher, grep-printer, …    │
+│ grep-matcher · grep-regex · grep-searcher   (upstream ripgrep)   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-The arrows are *package* dependencies resolved from npm, **not** local source links. See
-[`../AGENTS.md` §2](../AGENTS.md#2--read-this-before-you-edit-anything).
+The arrows are **pnpm workspace links**: local source, resolved from this repository. They used to be npm
+dependencies on this repo's own published packages, which meant local edits reached neither the wrapper nor
+the example — the single most expensive trap the project had. It is gone.
+
+netgrep no longer depends on a ripgrep **fork**. The fork existed only to patch `std::time` usage in
+`grep-printer`, `ignore` and the CLI core, none of which this project uses; they arrived solely because
+`Cargo.toml` depended on the `grep` *meta-crate*. Depending on the three sub-crates directly means they are
+never compiled. See [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md).
 
 ---
 
 ## The Rust core — `packages/search`
 
-`src/lib.rs` is 48 lines and exposes exactly one `#[wasm_bindgen]` function:
+`src/lib.rs` is ~45 lines and exposes exactly one `#[wasm_bindgen]` function:
 
 ```rust
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> bool
@@ -67,9 +76,16 @@ Per call it:
    counter — chosen because ripgrep's real sinks write to stdout, which does not exist in WASM.
 4. Returns `match_count > 0`.
 
-`wee_alloc` is the global allocator, chosen to keep the WASM binary small. The release profile uses
-`lto = true` and `opt-level = 's'`. The resulting `index_bg.wasm` is **~1.0 MB** — every consumer of the
-library downloads that.
+The default Rust allocator is used. `wee_alloc` was the global allocator until 2026; it was removed once
+measurement showed it saved 6,839 bytes — 0.6% — which no longer justified an unmaintained dependency with a
+known leak in a published package's hot path. See [decision 0008](decisions/0008-wee-alloc.md).
+
+The release profile (`lto`, `opt-level = 's'`, `codegen-units = 1`, `panic = 'abort'`) lives in the
+**workspace root** `Cargo.toml`. It has to: Cargo silently ignores `[profile.*]` in a member package, and for
+most of this project's life the size-tuned profile sat in `packages/search/Cargo.toml` doing nothing at all.
+
+`index_bg.wasm` is **~1.12 MB** (~500 KB gzipped) — every consumer downloads it. Roughly a third is
+`regex-automata`'s DFA and Unicode tables.
 
 ---
 
@@ -96,6 +112,8 @@ which a caller correlates results back to domain objects (a blog post, a documen
 ```
 search(url, pattern)
   │
+  ├─ await wasmReady          ← init() started once at module load
+  │
   ├─ cache enabled AND cache[url] exists?
   │     └─ yes → search_bytes(cache[url], pattern) → resolve   ← see caveat 2
   │
@@ -117,9 +135,13 @@ non-`Error` throws.
 
 ## Known limitations & correctness caveats
 
-All verified by reading the source at the versions in this repo. All present in the published
-`@netgrep/netgrep@0.1.5`. **Documented, not fixed** — the project is in maintenance mode, and caveats 1 and 2
-interact: fixing either one naively reintroduces or worsens the other.
+All verified against the source in this repository, and each is **pinned by a test** in
+`Netgrep.integration.spec.ts` that asserts the current, wrong behaviour — see
+[`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) before touching
+any of them.
+
+**Documented, not fixed.** Caveats 1 and 2 interact: fixing either one naively reintroduces or worsens the
+other.
 
 ### 1. Chunk-boundary false negatives — `Netgrep.ts:71`
 
@@ -159,11 +181,21 @@ reallocates and copies the whole accumulated buffer **per chunk**, making cache 
 `search_bytes` builds a fresh `RegexMatcher` on **every call**, i.e. once per network chunk per file. Regex
 compilation is the expensive part of a small search; this discards it every time.
 
-### 5. Panic on invalid pattern — `lib.rs:17`
+### 5. Panic on invalid pattern
 
 `.build(pattern).unwrap()` panics inside WASM if the pattern is not valid regex. Since patterns typically come
-straight from a user-facing search box, a stray `(` or `[` aborts the WASM instance rather than surfacing a
-catchable JavaScript error.
+straight from a user-facing search box, a stray `(` or `[` surfaces as a wasm trap
+(`RuntimeError: unreachable`) rather than a catchable domain error. The instance does remain usable
+afterwards.
+
+### 7. One NUL byte discards the whole chunk
+
+`BinaryDetection::quit(b'\x00')` does not stop *at* the NUL — it abandons the entire chunk. A match is
+dropped even when it occurs before the NUL, and even on an earlier line. Any remote file containing a stray
+NUL therefore reports "no match" for content that is demonstrably present.
+
+Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
+"binary, not searched" from "no match", because the API is a boolean.
 
 ### 6. No completion signal from `searchBatchWithCallback`
 
@@ -177,34 +209,46 @@ detect completion, and a batch of N URLs opens N simultaneous connections.
 ### `packages/search` (Rust → WASM)
 
 ```
-wasm-pack build --scope netgrep --out-name index --release
-  → packages/search/pkg/{index.js, index_bg.js, index_bg.wasm, index.d.ts, package.json}
+wasm-pack build --scope netgrep --out-name index --target web --release
+  → packages/search/pkg/{index.js, index_bg.wasm, index.d.ts, package.json}
 node scripts/post_build.js
-  → injects "type": "module" into pkg/package.json
 ```
 
-`post_build.js` exists because `wasm-pack` does not emit `"type": "module"`, without which the generated ESM
-is misinterpreted by Node and some bundlers.
+`post_build.js` does three things, all of them load-bearing:
+
+1. Marks `pkg/` as ESM — `wasm-pack` does not emit `"type": "module"`.
+2. Copies the version from `Cargo.toml` into `packages/search/package.json`, so the Rust and npm manifests
+   cannot drift.
+3. **Deletes the `.gitignore` `wasm-pack` writes into `pkg/`.** It contains `*`, and npm honours a
+   package-internal `.gitignore` when there is no `.npmignore` — combined with `"files": ["pkg"]` that once
+   produced a tarball containing no WASM at all.
+
+The **`web`** target matters: its entry loads the binary via `new URL('index_bg.wasm', import.meta.url)`,
+which every current bundler understands. The previous `bundler` target used an ESM-integration wasm import
+that only webpack supported, and that failed *silently* under Vite — see
+[decision 0005](decisions/0005-esm-only-distribution.md).
 
 ### `packages/netgrep` (TypeScript)
 
-`@nrwl/js:tsc` compiles to `packages/netgrep/dist/`, copying `README.md` and synthesising `main`, `typings`
-and a `tslib` peer dependency into the emitted `package.json`.
+`tsc -p tsconfig.lib.json` compiles to `packages/netgrep/dist/`. The published manifest is the hand-written
+`packages/netgrep/package.json`, not a synthesised one.
 
 ### CI — `.github/workflows/`
 
 | Workflow | Trigger | Action |
 |---|---|---|
-| `test-and-lint.yml` | push/PR to `main`, or called | `nx run-many --target=lint`, then `--target=test` |
-| `publish-search.yml` | tag `search-**` | test-and-lint → `nx build search` → npm publish `pkg/package.json` |
-| `publish-netgrep.yml` | tag `netgrep-**` | test-and-lint → `nx build netgrep` → npm publish `dist/package.json` |
+| `test-and-lint.yml` | push/PR to `main`, or called | `build:wasm` → `lint` → `typecheck` → `build` → `test` → `test:wasm` → `verify:pack` |
+| `publish-search.yml` | tag `search-**` | test-and-lint → `build:wasm` → npm publish `packages/search/package.json` |
+| `publish-netgrep.yml` | tag `netgrep-**` | test-and-lint → `build:wasm` → `build` → npm publish `packages/netgrep/package.json` |
 
-Both publish workflows use `greater-version-only: true`, so the version in the respective manifest must be
-bumped by hand before tagging.
+Both publish workflows use `greater-version-only: true`, so a forgotten version bump makes the publish a
+silent no-op rather than a loud failure.
 
-**CI is currently broken.** Both Rust-touching workflows install `toolchain: stable`, and current stable fails
-on `wasm-bindgen 0.2.82` (see [`../AGENTS.md` §3](../AGENTS.md#3-toolchain)). They also pin
-`actions/checkout@v2` and the archived `actions-rs/toolchain`. Tracked in [`BACKLOG.md`](BACKLOG.md).
+`verify:pack` exists because every other check inspects the working tree, while the tarball is the only
+artefact a consumer ever receives. That gap is how a published package containing no WASM became possible.
+
+Workflows read the pinned versions from `rust-toolchain.toml` and `.node-version` rather than restating them,
+so local and CI cannot drift the way they once did.
 
 ---
 
@@ -212,10 +256,20 @@ on `wasm-bindgen 0.2.82` (see [`../AGENTS.md` §3](../AGENTS.md#3-toolchain)). T
 
 | Suite | Runner | What it covers |
 |---|---|---|
-| `packages/netgrep/src/lib/Netgrep.spec.ts` | jest + jsdom, 7 tests | Orchestration only — `fetch` **and** `@netgrep/search` are both mocked. Verifies result shape, error capture, and that a cache hit avoids a second `fetch`. |
-| `packages/search/tests/search.rs` | `wasm-bindgen-test` in headless Chrome, 2 tests | Real matching behaviour: a literal match and a smart-case match. |
+| `Netgrep.spec.ts` | Vitest, 7 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, error capture, and that a cache hit avoids a second `fetch`. |
+| `Netgrep.integration.spec.ts` | Vitest, 17 tests | **The real engine through the real streaming loop.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `wasm-bindgen-test` in headless Chrome, 2 tests | The engine in a real browser. |
+| `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
-Because the TypeScript suite mocks the WASM module, **nothing in CI exercises the real engine through the
-TypeScript API.** The chunk-boundary bug (caveat 1) is invisible to both suites by construction.
+The integration suite loads **the artefact that actually ships** (`packages/search/pkg`), handing the bytes to
+`initSync` because `import.meta.url` has no meaning under Node. There is no separate Node-target build to
+drift from what consumers receive.
 
-The example app is a demo and verifies nothing — it runs against published npm packages.
+Its last block deliberately asserts **incorrect** behaviour, pinning the caveats above so that an unintended
+change is caught. Read
+[`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) before editing it.
+That block has already earned its place: modernizing the ripgrep dependencies silently *fixed* the
+`^`-anchoring bug, and nothing else would have noticed.
+
+The example is a manual smoke test. It runs against local workspace source, so it is honest — but it is not
+automated and does not run in CI.

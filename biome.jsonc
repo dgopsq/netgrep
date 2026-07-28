@@ -42,6 +42,17 @@
   },
   "overrides": [
     {
+      // scripts/ holds CLI tools whose entire interface is stdout.
+      "includes": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    },
+    {
       // The example is a single-purpose demo whose only interactive element is
       // the search box, so autofocusing it steals focus from nothing. Biome's
       // HTML suppression comments cannot target an attribute on its own line,

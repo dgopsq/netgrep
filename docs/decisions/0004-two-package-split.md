@@ -31,3 +31,26 @@ Each has its own release workflow, triggered by its own git tag prefix (`search-
 - Combined with the absence of workspace linking, this is the root cause of the disconnected dev loop
   documented in [`../../AGENTS.md` §2](../../AGENTS.md#2--read-this-before-you-edit-anything):
   `packages/netgrep` resolves `@netgrep/search` from the registry, never from the sibling directory.
+
+
+---
+
+## Amendment (2026-07-28)
+
+The split stands, but two of its costs are gone.
+
+**Version drift is now structural, not manual.** `packages/netgrep` depends on `@netgrep/search` as
+`workspace:*`, and `scripts/post_build.js` copies the version out of `Cargo.toml` into the npm manifest on
+every build. The two cannot disagree. `pnpm verify:pack` asserts it, and also that no `workspace:` range
+survives packing.
+
+**The packages are linked locally.** They used to resolve to this repository's own *published* releases, so
+local edits reached neither the wrapper nor the example. pnpm workspaces fixed that; see
+[0009](0009-pnpm-workspaces.md).
+
+What remains true is the release ordering: `@netgrep/search` must be published **before** `@netgrep/netgrep`,
+because pnpm rewrites `workspace:*` into a real version range at pack time.
+
+One wrinkle this record did not anticipate: the publishable unit for `@netgrep/search` is
+`packages/search/pkg/`, a **gitignored build output**, which no workspace glob can point at. The package is
+therefore a hand-written `packages/search/package.json` wrapping `pkg/` via `"files"`.

@@ -1,7 +1,6 @@
 # 0001 — Depend on a fork of ripgrep to reach `wasm32`
 
-**Status:** Accepted (2022) — but the constraint that forced it **no longer applies to netgrep's usage**.
-See *Current assessment*.
+**Status: SUPERSEDED (2026-07-28).** The fork was dropped; see *Outcome* at the end.
 
 ## Context
 
@@ -76,3 +75,27 @@ So depending on the three sub-crates directly instead of the `grep` meta-crate w
 dropping the fork and upgrading `wasm-bindgen` must be a single coordinated change.
 
 Tracked in [`../BACKLOG.md`](../BACKLOG.md).
+
+
+---
+
+## Outcome (2026-07-28)
+
+**The fork is gone, and it did not need replacing — the problem it solved stopped existing.**
+
+`lib.rs` only ever used `grep-regex`, `grep-searcher` and `grep-matcher`. The patched crates
+(`grep-printer`, `ignore`, CLI core) arrived *solely* because `Cargo.toml` depended on the `grep`
+**meta-crate**. Depending on the three sub-crates directly means they are never compiled, so their
+`std::time` usage — the entire substance of the fork — never reaches the wasm target.
+
+`packages/search/src/lib.rs` changed by two import lines. `Cargo.lock` lost 21 crates, including
+`grep`, `grep-cli`, `grep-printer`, `globset`, `instant`, `termcolor`, `atty`, `bytecount` and `base64`.
+
+This record also claimed the upgrade was blocked: current `grep-matcher` needs edition 2024 (Rust ≥ 1.85)
+while `wasm-bindgen 0.2.82` needed Rust ≤ 1.81, "mutually exclusive". That was an artifact of the old pins.
+Both sides move together cleanly.
+
+**It fixed a bug for free.** `^` had been anchoring to the start of the *chunk* rather than the line whenever
+`case_smart` left a pattern case-sensitive. The newer crates correct it; no change to `lib.rs` was needed.
+
+`github.com/dgopsq/ripgrep` is now unreferenced. Archiving it is the maintainer's call.
