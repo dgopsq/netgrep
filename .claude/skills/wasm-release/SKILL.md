@@ -8,6 +8,7 @@ description: Build, verify and prepare a release of the netgrep packages (@netgr
 Two independently published packages, each released by pushing a git tag. This skill covers building,
 verifying and **preparing** a release.
 
+> [!CAUTION]
 > **You may never publish.** Version bumps, `git tag`, `git push` and any `publish` command are human-only
 > actions (see [`AGENTS.md` §6](../../../AGENTS.md#6-hard-rules)). `.claude/settings.json` denies them
 > outright. Prepare the release, verify it, then hand over with the exact commands for a human to run.

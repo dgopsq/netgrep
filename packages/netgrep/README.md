@@ -2,7 +2,7 @@
 
 The main `netgrep` package. See the [main README](https://github.com/dgopsq/netgrep) for more information.
 
-> **Note**
+> [!IMPORTANT]
 > **This is an experiment, not a recommendation.** netgrep is almost certainly not the best way to add
 > search to your site — a prebuilt index ([Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
 > [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service) will usually be smaller,

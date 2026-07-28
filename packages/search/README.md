@@ -8,7 +8,7 @@ HTTP. Used directly, this one exposes a single function —
 `search_bytes(chunk: Uint8Array, pattern: string): boolean` — and its default export is an `init` you must
 await before calling it.
 
-> **Note**
+> [!IMPORTANT]
 > **This is an experiment, not a recommendation.** netgrep is almost certainly not the best way to add
 > search to your site — a prebuilt index ([Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
 > [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service) will usually be smaller,
