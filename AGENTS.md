@@ -14,9 +14,11 @@ Canonical source — `CLAUDE.md` points here. Keep this file authoritative; do n
 > | Node 18.7.0 | Node 24 LTS, pinned in `.node-version` |
 > | jest / ESLint / Prettier | Vitest + Biome |
 > | §2: local edits never reach the TS package or the example | **Fixed.** pnpm workspaces link them; the example bundles local source |
+> | Rust 1.81.0, `wasm-bindgen 0.2.82`, the `dgopsq/ripgrep` fork | **Rust 1.97.1**, `wasm-bindgen 0.2.126`, and the fork is gone — `grep-matcher`/`grep-regex`/`grep-searcher` come from crates.io |
+> | §7 caveat: `^` anchors to the chunk, not the line | **Fixed upstream** by the dependency change |
 >
-> Rust is untouched so far: still `wasm-bindgen 0.2.82` on the pinned Rust 1.81.0, still the ripgrep fork.
-> Everything in §6 (hard rules) and §7 (correctness caveats) still applies.
+> Everything in §6 (hard rules) still applies. The remaining §7 caveats — chunk-boundary false negatives,
+> the poisoned partial cache, the panic on an invalid pattern — are all still live.
 
 ---
 

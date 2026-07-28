@@ -12,13 +12,33 @@ crate-type = ["cdylib", "rlib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wasm-bindgen = "0.2.82"
-wee_alloc = "0.4.5"
-grep = { git = "https://github.com/dgopsq/ripgrep", tag = "13.0.0-wasm" }
+wasm-bindgen = "0.2.126"
+
+# The three ripgrep crates this package actually uses, taken straight from
+# crates.io.
+#
+# This used to be the `grep` meta-crate from a fork (dgopsq/ripgrep, tag
+# 13.0.0-wasm). The fork existed only to swap `std::time` for the `instant`
+# crate in `grep-printer`, `ignore` and the CLI core — `Instant::now()` has no
+# clock on wasm32-unknown-unknown. None of those crates are used here; they
+# arrived solely because the meta-crate pulled them in.
+#
+# Depending on the sub-crates directly means they are never compiled, so the
+# problem the fork solved no longer exists. See
+# docs/decisions/0001-fork-ripgrep-for-wasm.md.
+grep-matcher = "0.1.9"
+grep-regex = "0.1.14"
+# `memmap2` comes in unconditionally here — it is a plain dependency of
+# grep-searcher, not feature-gated, and the crate's only features are
+# deprecated no-ops. `default-features = false` would drop nothing. It is dead
+# weight in a browser (this crate only ever calls `search_slice`, never the
+# mmap reader), but removing it would mean patching grep-searcher, which is
+# exactly the fork this PR is deleting. Left alone on purpose.
+grep-searcher = "0.1.17"
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.32"
+wasm-bindgen-test = "0.3.76"
 
-[profile.release]
-lto = true
-opt-level = 's'
+# NOTE: profile settings live in the WORKSPACE ROOT Cargo.toml. Cargo ignores
+# `[profile.*]` in a member package, so the `lto`/`opt-level` that used to sit
+# here had never taken effect.

@@ -2,3 +2,23 @@
 members = [
     "packages/search"
 ]
+resolver = "2"
+
+# These must live at the workspace root. Cargo ignores `[profile.*]` in a
+# non-root package and only warns about it, so the size-tuned profile that used
+# to sit in packages/search/Cargo.toml had never taken effect — every release
+# build was made at the default opt-level with no LTO.
+#
+# `codegen-units = 1` and `panic = 'abort'` are new. Modernizing the ripgrep
+# dependencies grew the binary (newer regex-automata carries larger DFA and
+# Unicode tables), and these recover a good part of that. `panic = 'abort'` was
+# checked against the integration suite: a panic still surfaces as a wasm
+# `unreachable` trap, so nothing observable changes.
+#
+# `opt-level = 'z'` shrinks it a further ~27 KB but trades away throughput in
+# what is a regex-scanning hot path, so 's' stays.
+[profile.release]
+lto = true
+opt-level = 's'
+codegen-units = 1
+panic = 'abort'

@@ -329,6 +329,15 @@ separate commit.
 plan. `.wasm` size delta reported in the PR body against the ~1.0 MB baseline, `wee_alloc` removal isolated
 enough to attribute.
 
+*Outcome:* one assertion did change, and correctly so — the dependency move **fixed backlog 3e** (`^`
+anchoring to the chunk instead of the line), so that test was inverted in the same PR, as its own comment
+required. Everything else held.
+
+Three findings: `[profile.release]` had never applied, because Cargo ignores it outside the workspace root —
+so every release build to date was unoptimized; `wee_alloc` turned out to be worth only 0.6%, vindicating
+this item's "measure, do not assume"; and the binary still grew 10.6% net, driven by `regex-automata`'s
+larger tables. Full accounting in [`../BACKLOG.md`](../BACKLOG.md) items 14 and 15.
+
 ### PR 4 — Example + CI
 
 - webpack → Vite, wired to workspace source.

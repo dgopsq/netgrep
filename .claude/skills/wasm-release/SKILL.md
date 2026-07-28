@@ -18,19 +18,15 @@ verifying and **preparing** a release.
 
 Nothing works otherwise:
 
+`rust-toolchain.toml` pins **1.97.1** and `.node-version` pins **24.18.0**; both are read automatically, so
+there is nothing to export beyond having the tools on `PATH`.
+
 ```bash
-export PATH="$HOME/.asdf/installs/nodejs/18.7.0/bin:$HOME/.cargo/bin:$PATH"
-export RUSTUP_TOOLCHAIN=1.81.0
+corepack enable pnpm
 ```
 
-**Rust must be 1.81.0, not `stable`.** `rust-toolchain.toml` says `stable`, which is wrong and currently
-broken — Rust ≥ 1.82 changed the wasm C ABI and fails against the pinned `wasm-bindgen 0.2.82`:
-
-```
-error: older versions of the `wasm-bindgen` crate are incompatible with current versions of Rust
-```
-
-Install it if missing: `rustup toolchain install 1.81.0 --target wasm32-unknown-unknown`
+Install the toolchain if missing:
+`rustup toolchain install 1.97.1 --target wasm32-unknown-unknown --component clippy`
 
 ---
 
@@ -47,21 +43,20 @@ Install it if missing: `rustup toolchain install 1.81.0 --target wasm32-unknown-
 ## 2. Verify before anything else
 
 ```bash
-npx nx lint netgrep && npx nx test netgrep && npx nx build netgrep
-npx nx lint search && npx nx build search
+pnpm install
+pnpm build:wasm        # must run first: pkg/index.d.ts is what the TS package compiles against
+pnpm build:wasm-node   # needed by the integration tests
+pnpm lint              # Biome + clippy
+pnpm typecheck
+pnpm build
+pnpm test              # 24 tests
+pnpm test:wasm         # 2 tests
 ```
 
-For the Rust tests, `npx nx test search` fails on a fresh machine — `wasm-pack` fetches the latest
-ChromeDriver, which cannot drive an older installed Chrome (`invalid session id`). Supply a matching driver
-from [Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/):
-
-```bash
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version   # match this major version
-export CHROMEDRIVER=/path/to/matching/chromedriver
-cd packages/search && wasm-pack test --chrome --headless
-```
-
-Expected: 7 jest tests, 2 wasm tests.
+`pnpm test:wasm` fails on a fresh machine — `wasm-pack` fetches the latest ChromeDriver, which cannot drive
+an older installed Chrome (`invalid session id`, driver killed with signal 9). It also **overrides**
+`CHROMEDRIVER`, so exporting it and re-running `wasm-pack` changes nothing; invoke the harness directly. See
+[`docs/BACKLOG.md`](../../../docs/BACKLOG.md) item 2 for the exact commands.
 
 Do **not** try to verify via the example app — it runs against published npm packages, not local source.
 
@@ -69,42 +64,41 @@ Do **not** try to verify via the example app — it runs against published npm p
 
 ## 3. Build outputs
 
-**`@netgrep/search`** (`npx nx build search` runs both steps):
+**`@netgrep/search`** — `pnpm build:wasm` runs `wasm-pack` then `scripts/post_build.js`, which marks `pkg/`
+as ESM and copies the version out of `Cargo.toml`. Do not skip the second step.
+
+→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.12 MB), `index.d.ts`,
+`package.json`. Gitignored.
+
+**What gets published is `packages/search/package.json`**, a hand-written wrapper with `"files": ["pkg"]` —
+not the manifest wasm-pack generates inside `pkg/`.
+
+**`@netgrep/netgrep`** — `pnpm build` → `packages/netgrep/dist/`, also gitignored. The published manifest is
+`packages/netgrep/package.json`, hand-written, with `"files": ["dist"]`.
+
+Sanity-check before handing over:
 
 ```bash
-cd packages/search
-wasm-pack build --scope netgrep --out-name index --release
-node scripts/post_build.js     # injects "type": "module" into pkg/package.json — required, do not skip
+cat packages/search/package.json     # version matches Cargo.toml?
+cat packages/netgrep/package.json    # version right? @netgrep/search dependency right?
 ```
 
-→ `packages/search/pkg/` containing `index.js`, `index_bg.js`, `index_bg.wasm` (~1.0 MB), `index.d.ts`,
-`package.json`. Gitignored. **`pkg/package.json` is what gets published** — `wasm-pack` generates it from
-`Cargo.toml`, so the version comes from `Cargo.toml`.
-
-**`@netgrep/netgrep`**: `npx nx build netgrep` → `packages/netgrep/dist/`. Also gitignored. `@nrwl/js:tsc`
-synthesises `main`, `typings` and the `tslib` peer dependency into `dist/package.json`.
-
-Sanity-check the emitted manifest before handing over:
-
-```bash
-cat packages/search/pkg/package.json | head -20     # correct version? "type": "module" present?
-cat packages/netgrep/dist/package.json              # correct version? @netgrep/search range correct?
-```
+Note `@netgrep/netgrep` depends on `@netgrep/search` as `workspace:*`. pnpm rewrites that to a real version
+range when packing, so **publish `@netgrep/search` first**.
 
 ---
 
 ## 4. Version bumps — the coupling that bites
 
-Versions live in **two hand-maintained places** with nothing enforcing agreement:
+Versions live in two places, but only one is hand-maintained:
 
 | Package | Version source | Must also update |
 |---|---|---|
-| `@netgrep/search` | `packages/search/Cargo.toml` | `packages/netgrep/package.json` → `dependencies["@netgrep/search"]` |
+| `@netgrep/search` | `packages/search/Cargo.toml` | nothing — `post_build.js` syncs the npm manifest |
 | `@netgrep/netgrep` | `packages/netgrep/package.json` | — |
 
-So a change to the Rust core is a **two-release sequence**: publish `@netgrep/search` first, bump the
-dependency range in `packages/netgrep/package.json`, then publish `@netgrep/netgrep`. Nothing checks this and
-CI will not catch a mismatch.
+A change to the Rust core is still a **two-release sequence**: publish `@netgrep/search` first, then
+`@netgrep/netgrep`. The version drift that used to need watching is now handled by the build.
 
 Both publish workflows set `greater-version-only: true`, so a forgotten bump means the publish silently
 no-ops rather than failing loudly.
@@ -124,9 +118,8 @@ git tag search-<version> && git push origin search-<version>
 git tag netgrep-<version> && git push origin netgrep-<version>
 ```
 
-**Warn the human that CI is currently broken** for anything touching Rust: the workflows install
-`toolchain: stable`, which fails on `wasm-bindgen 0.2.82`. A `search-**` tag push will fail at the build step
-until [`docs/BACKLOG.md`](../../../docs/BACKLOG.md) item 1 or 4 is done.
+CI is green. The workflows pin the same Rust version as `rust-toolchain.toml` and read Node from
+`.node-version`, so a tag push builds what you built locally.
 
 ---
 
