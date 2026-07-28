@@ -1,6 +1,7 @@
 # 0005 — ESM only; a bundler is required
 
-**Status:** Accepted. Acknowledged in the README as a limitation.
+**Status:** Accepted, **amended (2026-07-28)** — see *Amendment* at the end. ESM-only still holds, but the
+bundler requirement recorded below is gone; consumers now need no bundler configuration at all.
 
 ## Context
 
@@ -16,8 +17,8 @@ Ship ESM only.
   `wasm-pack` does not emit it and without it Node and some bundlers misread the generated ESM.
 - Consumers must enable `experiments.asyncWebAssembly` in their webpack config.
 
-The README carries this as an explicit warning: *"At the moment this library is exported only as an ESM, thus
-a bundler like Webpack is required to use it."*
+The README carried this as an explicit warning: *"At the moment this library is exported only as an ESM, thus
+a bundler like Webpack is required to use it."* (Removed in 2026 — see the amendment.)
 
 ## Consequences
 

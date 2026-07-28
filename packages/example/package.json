@@ -10,7 +10,7 @@
     "@netgrep/netgrep": "workspace:*",
     "lodash": "^4.17.21"
   },
-  "//": "Unchanged from the pre-pnpm root manifest on purpose. The example moves to Vite in its own PR; bumping webpack here would drag in the dev-server 5 config break (`http2` removed) for no benefit.",
+  "//": "Deliberately left on these versions. The example is an unpublished manual smoke test, so its dependencies are not on the maintenance path; bumping them buys nothing and risks another dev-server config break. That the published package works under other bundlers is established by docs/decisions/0005-esm-only-distribution.md, not by this app.",
   "devDependencies": {
     "html-webpack-plugin": "^5.5.0",
     "webpack": "^5.74.0",

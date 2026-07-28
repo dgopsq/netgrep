@@ -98,7 +98,7 @@ The runner must match the `wasm-bindgen` version in `Cargo.toml`; a stale cached
 `panicked at 'remaining data [...]', crates/cli-support/src/descriptor.rs`. Running `wasm-pack test` once
 downloads the right one into the cache.
 
-### 14. The `.wasm` is ~1.12 MB, up 10.6% from the 2022 build
+### 14. The `.wasm` is ~1.15 MB, up 10.6% from the 2022 build
 
 1,038,608 → 1,148,922 bytes. Accounted for (all measured 2026-07-28, release builds through `wasm-pack`):
 
@@ -112,7 +112,7 @@ downloads the right one into the cache.
 | **net** | **+110,314** |
 
 The bulk is upstream — newer `regex-automata` carries larger DFA and Unicode tables — and is not really
-reducible without giving up the modern crates. Roughly 500 KB gzipped over the wire.
+reducible without giving up the modern crates. Roughly 480 KB gzipped over the wire.
 
 Remaining levers, none taken: `opt-level = 'z'` (a further ~27 KB, at some throughput cost in a
 regex-scanning hot path); `wasm-opt -Oz`; disabling `grep-regex`'s Unicode support, which would change

@@ -90,7 +90,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 
 | Task | Command | Notes |
 |---|---|---|
-| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.12 MB `index_bg.wasm` |
+| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.15 MB `index_bg.wasm` |
 | Build TS | `pnpm build` | → `packages/netgrep/dist/` |
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`) |
 | Format | `pnpm format` | Biome, writes in place |
@@ -125,7 +125,7 @@ packages/
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts               the whole public API (~215 lines)
+    src/lib/Netgrep.ts               the whole public API (~225 lines)
     src/lib/data/*.ts                5 type definitions, one per file
     src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
     src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop

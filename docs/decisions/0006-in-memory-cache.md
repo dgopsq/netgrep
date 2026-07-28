@@ -18,8 +18,8 @@ const defaultConfig: NetgrepConfig = { enableMemoryCache: true };
 ```
 
 On a cache hit, `search_bytes` runs once over the stored bytes and resolves immediately, skipping `fetch`
-entirely (`Netgrep.ts:89-91`). While streaming, each chunk is appended via `upsertMemoryCache`
-(`Netgrep.ts:76`).
+entirely (the cache-hit branch at the top of `Netgrep.search`). While streaming, each chunk is appended via
+`upsertMemoryCache`.
 
 The cache is per-instance, so a consumer can scope or discard it by managing the `Netgrep` object's lifetime.
 

@@ -14,11 +14,12 @@ import { Netgrep } from './Netgrep.js';
  *
  * WHY THIS EXISTS
  * ---------------
- * It is the behavioural baseline for the modernization sequence described in
- * `docs/plans/MODERNIZATION.md`. The next two PRs replace the entire JS
- * toolchain and then jump `wasm-bindgen` 44 minor versions while removing the
- * ripgrep fork. The claim those PRs need to support is "behaviour is
+ * It was written as the behavioural baseline for the modernization sequence in
+ * `docs/plans/MODERNIZATION.md`, ahead of the PRs that replaced the entire JS
+ * toolchain and then jumped `wasm-bindgen` 44 minor versions while removing the
+ * ripgrep fork. The claim those PRs had to support was "behaviour is
  * identical", and nothing in this repository could previously substantiate it.
+ * It keeps that job for every future dependency change.
  *
  * So: these assertions describe what netgrep ACTUALLY DOES TODAY, which is not
  * always what it should do. The `documented defects` block at the bottom pins
@@ -435,7 +436,7 @@ describe('Netgrep integration (real WASM)', () => {
       });
     });
 
-    it('UNDOCUMENTED: one NUL byte discards the entire chunk, match included', async () => {
+    it('BACKLOG 3f: one NUL byte discards the entire chunk, match included', async () => {
       // `BinaryDetection::quit(b'\x00')` abandons the chunk on the first NUL.
       // Not "stops at the NUL" — the match is dropped even when it occurs
       // BEFORE the NUL, and even on an earlier line.

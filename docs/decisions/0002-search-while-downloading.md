@@ -11,7 +11,7 @@ files, that is the difference between feeling instant and feeling broken.
 ## Decision
 
 Consume the response as a stream (`res.body.getReader()`) and call the WASM matcher on **each chunk as it
-arrives**, resolving the promise the moment a chunk matches. See `Netgrep.ts:50-104`.
+arrives**, resolving the promise the moment a chunk matches. See `handleReader` inside `Netgrep.search`.
 
 This is why the matching engine has to be ripgrep rather than a JavaScript regex over the assembled string:
 the whole point is to never assemble the string.
@@ -27,8 +27,8 @@ the whole point is to never assemble the string.
 - **Correctness: patterns straddling a chunk boundary are missed.** Chunks are searched in isolation with no
   overlap retained, so a match spanning the boundary is invisible. Silent false negative, dependent on
   non-deterministic network chunking. See `ARCHITECTURE.md` caveat 1.
-- The regex is recompiled per chunk (`lib.rs:13-17`), discarding the most expensive part of the work on every
-  iteration.
+- The regex is recompiled per chunk (the `RegexMatcherBuilder` in `lib.rs`'s `search_bytes`), discarding the
+  most expensive part of the work on every iteration.
 - Resolving early stops *reading* but does not cancel the underlying request, so bytes may keep arriving.
 - Interacts badly with the memory cache — the cache is left holding a partial file. See
   [0006](0006-in-memory-cache.md) and `ARCHITECTURE.md` caveat 2.

@@ -51,23 +51,31 @@ pnpm typecheck
 pnpm build
 pnpm test              # 24 tests
 pnpm test:wasm         # 2 tests
+pnpm verify:pack       # the tarballs that would actually reach npm
 ```
+
+`pnpm verify:pack` matters most of all here, and it is the only check that looks at a release artefact.
+Everything above it inspects the working tree, which is how `@netgrep/search` once published a tarball
+containing no WASM at all. Never hand over a release without it passing.
 
 `pnpm test:wasm` fails on a fresh machine — `wasm-pack` fetches the latest ChromeDriver, which cannot drive
 an older installed Chrome (`invalid session id`, driver killed with signal 9). It also **overrides**
 `CHROMEDRIVER`, so exporting it and re-running `wasm-pack` changes nothing; invoke the harness directly. See
 [`docs/BACKLOG.md`](../../../docs/BACKLOG.md) item 2 for the exact commands.
 
-Do **not** try to verify via the example app — it runs against published npm packages, not local source.
+The example app now runs against **local workspace source**, so `pnpm dev` is a legitimate manual smoke
+test. It is still not automated and does not run in CI, so it never substitutes for the targets above.
 
 ---
 
 ## 3. Build outputs
 
 **`@netgrep/search`** — `pnpm build:wasm` runs `wasm-pack` then `scripts/post_build.js`, which marks `pkg/`
-as ESM and copies the version out of `Cargo.toml`. Do not skip the second step.
+as ESM, copies the version out of `Cargo.toml`, **and deletes the `.gitignore` wasm-pack writes into
+`pkg/`** — that file contains `*`, npm honours it, and it is what emptied the tarball. Do not skip the
+second step.
 
-→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.12 MB), `index.d.ts`,
+→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.15 MB), `index.d.ts`,
 `package.json`. Gitignored.
 
 **What gets published is `packages/search/package.json`**, a hand-written wrapper with `"files": ["pkg"]` —

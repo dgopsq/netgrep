@@ -52,7 +52,7 @@ all. Measure before and after rather than assuming either way. Tracked in [`../B
 
 **Removed. The measurement this record asked for was taken, and the assumption behind it no longer held.**
 
-Against the modernized dependencies, `wee_alloc` was worth **6,839 bytes — 0.6%** of a ~1.12 MB binary.
+Against the modernized dependencies, `wee_alloc` was worth **6,839 bytes — 0.6%** of a ~1.15 MB binary.
 Modern `rustc` has closed the gap that justified it in 2022, so the project was carrying an unmaintained
 crate with a known unfixed leak, in a published package's hot path, for a rounding error.
 
