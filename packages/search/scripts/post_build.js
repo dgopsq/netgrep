@@ -1,13 +1,17 @@
 /**
  * Post-processing for `wasm-pack build`.
  *
- * Two jobs:
+ * Three jobs, all of them load-bearing:
  *
  *  1. Mark the generated `pkg/` as ESM. wasm-pack does not emit
  *     `"type": "module"`, and without it Node treats `pkg/index.js` as
  *     CommonJS and the import fails.
  *
- *  2. Copy the version out of `Cargo.toml` into `packages/search/package.json`.
+ *  2. Delete the `.gitignore` wasm-pack drops into `pkg/`. It contains `*`,
+ *     and npm honours a package-internal .gitignore, which silently empties
+ *     the published tarball. See the comment at the step itself.
+ *
+ *  3. Copy the version out of `Cargo.toml` into `packages/search/package.json`.
  *     Cargo.toml is the single source of truth for this package's version — the
  *     npm manifest is a hand-written wrapper around the wasm-pack output, so
  *     without this the two drift silently and a release ships the wrong number.
@@ -30,7 +34,7 @@ const generated = readJson(generatedPath);
 generated.type = 'module';
 writeJson(generatedPath, generated);
 
-// 1b. Delete the `.gitignore` wasm-pack drops into pkg/. It contains `*`, and
+// 2. Delete the `.gitignore` wasm-pack drops into pkg/. It contains `*`, and
 // npm honours a package-internal .gitignore when there is no .npmignore — so
 // with `"files": ["pkg"]` in the wrapper manifest it silently excludes the
 // entire directory and publishes a tarball containing no WASM at all.
@@ -42,7 +46,7 @@ if (existsSync(generatedGitignore)) {
   rmSync(generatedGitignore);
 }
 
-// 2. Cargo.toml -> package.json version sync.
+// 3. Cargo.toml -> package.json version sync.
 const cargoToml = readFileSync(join(packageRoot, 'Cargo.toml'), 'utf8');
 const cargoVersion = cargoToml.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
 

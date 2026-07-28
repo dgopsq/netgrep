@@ -84,8 +84,8 @@ The release profile (`lto`, `opt-level = 's'`, `codegen-units = 1`, `panic = 'ab
 **workspace root** `Cargo.toml`. It has to: Cargo silently ignores `[profile.*]` in a member package, and for
 most of this project's life the size-tuned profile sat in `packages/search/Cargo.toml` doing nothing at all.
 
-`index_bg.wasm` is **~1.12 MB** (~500 KB gzipped) — every consumer downloads it. Roughly a third is
-`regex-automata`'s DFA and Unicode tables.
+`index_bg.wasm` is **~1.15 MB** (1,148,922 bytes; ~480 KB gzipped) — every consumer downloads it. Roughly a
+third is `regex-automata`'s DFA and Unicode tables.
 
 ---
 
@@ -143,7 +143,7 @@ any of them.
 **Documented, not fixed.** Caveats 1 and 2 interact: fixing either one naively reintroduces or worsens the
 other.
 
-### 1. Chunk-boundary false negatives — `Netgrep.ts:71`
+### 1. Chunk-boundary false negatives — `Netgrep.ts`, the `search_bytes` call in `handleReader`
 
 `search_bytes(u8Array, pattern)` is called with **one chunk at a time**, and chunks are never overlapped or
 joined before searching. A pattern that straddles the boundary between two `fetch` chunks is never seen by the
@@ -155,14 +155,14 @@ network chunking, so it is non-deterministic across runs and effectively untesta
 *Any fix requires retaining a tail buffer of at least `pattern.length - 1` bytes (more for regex patterns,
 where the maximum match length is not knowable from the pattern alone) and prepending it to the next chunk.*
 
-### 2. Poisoned partial cache — `Netgrep.ts:76`, `:80`, `:89-91`
+### 2. Poisoned partial cache — `Netgrep.ts`, `handleReader` and the cache-hit branch of `search`
 
-`upsertMemoryCache` appends each chunk as it arrives (`:76`), but the loop **resolves and stops reading the
-moment a chunk matches** (`:80`). The cache is then left holding only the *prefix* of the file downloaded so
-far, with no marker that it is incomplete.
+`upsertMemoryCache` appends each chunk as it arrives, but the loop **resolves and stops reading the moment a
+chunk matches**. The cache is then left holding only the *prefix* of the file downloaded so far, with no
+marker that it is incomplete.
 
-A later search on the same URL for a different pattern takes the cache-hit path (`:89-91`) and searches that
-truncated prefix — returning `false` for text that was never downloaded.
+A later search on the same URL for a different pattern takes the cache-hit branch at the top of `search` and
+searches that truncated prefix — returning `false` for text that was never downloaded.
 
 Reproduction: search a large file for a term near the top (populates a short prefix), then search the same URL
 for a term near the bottom → `false`.
@@ -170,13 +170,13 @@ for a term near the bottom → `false`.
 *Any fix needs a completeness flag per cache entry, so partial entries are only ever used to resume, never to
 answer.*
 
-### 3. Unbounded cache growth — `Netgrep.ts:198`
+### 3. Unbounded cache growth — `Netgrep.ts`, `upsertMemoryCache`
 
 The cache is a plain `Record<string, Uint8Array>` with no eviction, no size cap and no TTL. It retains the
 full bytes of every file searched for the lifetime of the `Netgrep` instance. `upsertMemoryCache` also
 reallocates and copies the whole accumulated buffer **per chunk**, making cache population O(n²) in bytes.
 
-### 4. Regex recompiled per chunk — `lib.rs:13-17`
+### 4. Regex recompiled per chunk — `lib.rs`, the `RegexMatcherBuilder` in `search_bytes`
 
 `search_bytes` builds a fresh `RegexMatcher` on **every call**, i.e. once per network chunk per file. Regex
 compilation is the expensive part of a small search; this discards it every time.
@@ -188,7 +188,12 @@ straight from a user-facing search box, a stray `(` or `[` surfaces as a wasm tr
 (`RuntimeError: unreachable`) rather than a catchable domain error. The instance does remain usable
 afterwards.
 
-### 7. One NUL byte discards the whole chunk
+### 6. No completion signal from `searchBatchWithCallback`
+
+It returns `void` and starts every search eagerly with no concurrency limit. Callers cannot await it, cannot
+detect completion, and a batch of N URLs opens N simultaneous connections.
+
+### 7. One NUL byte discards the whole chunk — `lib.rs`, `BinaryDetection::quit`
 
 `BinaryDetection::quit(b'\x00')` does not stop *at* the NUL — it abandons the entire chunk. A match is
 dropped even when it occurs before the NUL, and even on an earlier line. Any remote file containing a stray
@@ -196,11 +201,6 @@ NUL therefore reports "no match" for content that is demonstrably present.
 
 Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
 "binary, not searched" from "no match", because the API is a boolean.
-
-### 6. No completion signal from `searchBatchWithCallback`
-
-It returns `void` and starts every search eagerly with no concurrency limit. Callers cannot await it, cannot
-detect completion, and a batch of N URLs opens N simultaneous connections.
 
 ---
 

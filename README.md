@@ -4,7 +4,7 @@
 
 # netgrep
 
-Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small files-based database. It uses [a fork of the original `ripgrep` repository](https://github.com/dgopsq/ripgrep) with just enough changes to make it runnable on WASM. 
+Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small files-based database. It is built on the `grep-matcher`, `grep-regex` and `grep-searcher` crates published from the `ripgrep` repository, used unmodified from crates.io. 
 
 At the moment Netgrep is just going to tell whether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximize the performance. 
 
@@ -12,7 +12,9 @@ At the moment Netgrep is just going to tell whether a pattern is present on a re
 > Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw post files. A live example for this behavior can be found on [my blog](https://diegopasquali.com/search) (you can take a look at the [source code](https://github.com/dgopsq/writings)).
 
 > **Warning**
-> At the moment this library is exported only as an ESM, thus a bundler like [Webpack](https://webpack.js.org/) is required to use it. 
+> This library is distributed as **ESM only** and targets the browser. There is no CommonJS `require` entry
+> point and no Node.js support — it needs `fetch` with a readable response body stream. Since `0.2.0` no
+> bundler *configuration* is required; see below.
 
 ## Usage
 

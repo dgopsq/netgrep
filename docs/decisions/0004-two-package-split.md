@@ -1,6 +1,7 @@
 # 0004 — Ship two npm packages, not one
 
-**Status:** Accepted.
+**Status:** Accepted, **amended (2026-07-28)** — see *Amendment* at the end. Two of the costs recorded below
+no longer apply, and the description of what gets published is out of date.
 
 ## Context
 
