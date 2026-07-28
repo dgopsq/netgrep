@@ -3,7 +3,9 @@
 **Status:** Complete as of 2026-07-28, with two amendments recorded below (decision 1 and the PR
 sequence). Kept as the record of why the repository changed shape.
 **Goal:** a repository that builds, lints and tests green on a current toolchain.
-**Explicit non-goal:** shipping anything to npm. See [Decision 1](#1-the-finish-line-is-green-ci-not-a-release).
+**Originally an explicit non-goal:** shipping anything to npm — later amended to include a 0.2.0 release of
+both packages, once PR 4 established that what was already on npm did not work under Vite. See
+[Decision 1](#1-the-finish-line-is-green-ci-not-a-release--amended-2026-07-28).
 
 This document is the durable record of a design conversation. It exists so that the *reasoning* behind the
 fourteen decisions below survives — an agent resuming at PR 3 should not have to re-derive why pnpm, why the
@@ -11,7 +13,7 @@ grep sub-crates, why no dependency bot.
 
 Every version number here was verified against the live registries on **2026-07-28**. Every claim about the
 repository was verified by reading it. The one non-obvious technical claim — that the ripgrep fork is
-droppable — was verified by building it; see [Appendix A](#appendix-a-the-fork-removal-probe).
+droppable — was verified by building it; see [Appendix A](#appendix-a--the-fork-removal-probe).
 
 ---
 
@@ -150,7 +152,7 @@ keeps dragging in exactly the wasm-hostile crates the fork had to patch.
 atomic change, not three — 0.2.82 requires Rust ≤ 1.81 (Rust 1.82 changed the wasm C ABI), and current
 `grep-matcher` requires edition 2024, i.e. Rust ≥ 1.85. Backlog item 4 called these mutually exclusive. They
 are not; that deadlock was an artifact of the old pins, and both sides clear together. Verified — see
-[Appendix A](#appendix-a-the-fork-removal-probe).
+[Appendix A](#appendix-a--the-fork-removal-probe).
 
 *Also:* remove `wee_alloc` (dead since 2019, known unfixed leak) and **report the `.wasm` size delta**.
 Current binary is ~1.0 MB. Modern `rustc` may have closed the gap that justified it in 2022. Measure; do not

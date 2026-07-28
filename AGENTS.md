@@ -14,7 +14,14 @@ files **over HTTP while they are still downloading**. It answers exactly one que
 occur in the file at this URL?* — a boolean, nothing more.
 
 The intended use case is a client-side search over a small, static, file-based corpus (e.g. Markdown posts
-emitted by a static site generator), as an alternative to standing up an index-based search backend.
+emitted by a static site generator), instead of standing up an index-based search backend.
+
+**It is an experiment, and the README says so first.** netgrep is not claimed to be a good way to build
+search — a prebuilt index (Pagefind, Lunr, FlexSearch, a hosted service) is usually smaller, faster and more
+capable, and can rank, snippet and locate matches, none of which netgrep does. What the project explores is
+the narrower question of whether ripgrep's real engine can usefully run over HTTP against files as they
+download. Keep that framing when you touch user-facing text: describe what it does and what it costs, and do
+not sell it.
 
 **Project status: maintained, conservative.** The toolchain is current and CI is green. Keep it that way:
 fix defects, keep dependencies from rotting, keep it working for existing consumers. **Do not add features.**
