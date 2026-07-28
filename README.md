@@ -4,7 +4,7 @@
 
 # netgrep
 
-> **Note**
+> [!IMPORTANT]
 > **This is an experiment, not a recommendation.** Netgrep is almost certainly not the best way to add search
 > to your site. A prebuilt index — [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
 > [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service — will usually be smaller,
@@ -20,7 +20,7 @@ Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSush
 
 At the moment Netgrep is just going to tell whether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximize the performance. 
 
-> **Note**
+> [!NOTE]
 > Searching for posts on a blog created through a Static Site Generator is an interesting use-case for this experiment. Netgrep could easily be used to create a real-time search engine from the raw post files. A live example for this behavior can be found on [my blog](https://diegopasquali.com/search) (you can take a look at the [source code](https://github.com/dgopsq/writings)).
 
 ## Requirements
@@ -35,7 +35,7 @@ Since `0.2.0` no bundler *configuration* is required.
 
 ## Usage
 
-> **Note**
+> [!TIP]
 > A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example).
 
 First of all install the module:
@@ -52,6 +52,7 @@ No bundler configuration is required. `netgrep` loads its WebAssembly through a 
 `new URL('…', import.meta.url)` reference, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
 understand out of the box.
 
+> [!TIP]
 > **Upgrading from 0.1.x?** Delete the `experiments.asyncWebAssembly` flag from your webpack config — it is
 > no longer needed. Nothing else changes; the API is identical.
 
@@ -126,7 +127,7 @@ The batch methods add an `error` field, and this is the part worth reading twice
 { /* …as above… */ error: string | null }
 ```
 
-> **Warning**
+> [!WARNING]
 > **`searchBatch` and `searchBatchWithCallback` never reject.** A failed request — network error, 404, CORS —
 > is captured as `{ result: false, error: "…" }`, which is indistinguishable from a genuine "no match" unless
 > you check `error`. Single `search` calls behave the opposite way: they *reject*, and have no `error` field.
@@ -150,7 +151,7 @@ itself uses. Note that **smart case is hardcoded on**:
 
 This is not configurable. Lowercase your pattern to search case-insensitively.
 
-> **Warning**
+> [!CAUTION]
 > **An invalid pattern crashes the search engine.** A stray `(` or `[` surfaces as a
 > `RuntimeError: unreachable` from WebAssembly rather than a catchable error. If patterns come straight from
 > a user-facing search box — the use case this library was built for — validate or escape them before
