@@ -1,4 +1,4 @@
-import { search_bytes } from '@netgrep/search';
+import init, { search_bytes } from '@netgrep/search';
 import type { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
 import type { NetgrepConfig } from './data/NetgrepConfig.js';
 import type { NetgrepInput } from './data/NetgrepInput.js';
@@ -11,6 +11,18 @@ import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
 const defaultConfig: NetgrepConfig = {
   enableMemoryCache: true,
 };
+
+/**
+ * The WASM module has to be instantiated before `search_bytes` can be called.
+ *
+ * Started once at module load and shared by every `Netgrep` instance: the
+ * download begins as soon as the library is imported rather than on the first
+ * search, and awaiting an already-settled promise costs nothing.
+ *
+ * Kept module-private on purpose — callers should not have to know the engine
+ * needs booting.
+ */
+const wasmReady = init();
 
 /**
  * The `netgrep` library allows to search remote files
@@ -47,12 +59,16 @@ export class Netgrep {
    * A promise resolving to a `NetgrepResult<T>` as soon as a match will
    * be found in the remote file.
    */
-  public search<T extends object>(
+  public async search<T extends object>(
     url: string,
     pattern: string,
     metadata?: T,
     config?: NetgrepSearchConfig,
   ): Promise<NetgrepResult<T>> {
+    // Nothing below can run before the engine exists. Everything after this
+    // line is unchanged from the synchronous-instantiation version.
+    await wasmReady;
+
     return new Promise((resolve, reject) => {
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>,

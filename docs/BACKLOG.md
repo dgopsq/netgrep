@@ -201,40 +201,31 @@ taken: `opt-level = 'z'` (a further ~27 KB, at some throughput cost in a regex-s
 `wasm-opt -Oz`; and disabling `grep-regex`'s Unicode support, which would change matching behaviour and is
 therefore out of scope.
 
-### 16. The example cannot move to Vite — the published wasm target only bundles under webpack
+### 16. ~~The published package does not work under Vite~~ — FIXED
 
-Attempted 2026-07-28 and **reverted**. Recording the exact failure so it is not re-attempted blind.
+`@netgrep/search` shipped wasm-pack's **bundler** target, whose entry does
+`import * as wasm from './index_bg.wasm'`. webpack supported that behind `experiments.asyncWebAssembly`;
+Vite did not, and failed **silently** — `vite build` emitted the `.wasm`, kept the glue, never assigned the
+exports object, and every search returned `false` with no error. `searchBatch` folds per-URL failures into
+`{result: false}`, so a completely broken build was indistinguishable from "no matches".
 
-`@netgrep/search` is built with wasm-pack's **bundler** target, whose entry does:
+**Fixed by shipping `--target web` instead** (`@netgrep/search` 0.2.0). The binary is now loaded through a
+standard `new URL('index_bg.wasm', import.meta.url)`, which every current bundler understands.
 
-```js
-import * as wasm from './index_bg.wasm';
-```
+Verified 2026-07-28, each in real headless Chrome:
 
-That is an ESM-integration wasm import. webpack supports it natively behind `experiments.asyncWebAssembly`
-— which is why `packages/example/webpack.config.js` has exactly one non-default setting. Vite has no native
-equivalent and needs `vite-plugin-wasm`.
+| consumer | before | after |
+|---|---|---|
+| Vite 8, no plugins | silently returned `false` for everything | correct results |
+| webpack 5 | required `experiments.asyncWebAssembly` | works with **no config at all** |
+| Rollup / esbuild / Parcel / Bun | unsupported | standard `new URL` semantics |
 
-**With the plugin installed and loaded, `vite build` silently produces a broken bundle:**
+Costs, for the record: `init()` must be awaited before `search_bytes`, which is a breaking change to
+`@netgrep/search` — absorbed inside `Netgrep`, so `@netgrep/netgrep`'s public API is untouched. The glue grew
+3,136 bytes; the `.wasm` is byte-identical.
 
-- `vite dev` works — 67/67 fixtures match, verified in real Chrome.
-- `vite build` emits `index_bg-<hash>.wasm` as an asset, but **nothing in the JS bundle references it**. The
-  glue survives (`g.search_bytes`, `g.__wbindgen_malloc`, `g.memory`) while `g` is never assigned, so every
-  search returns `false`.
-- **No error is reported anywhere.** `searchBatch` folds per-URL failures into `{result: false, error}` and
-  the demo only renders successes, so a broken build looks exactly like "no matches".
-
-Reproduced on Vite **8.1.5** and **7.3.6**, with and without `optimizeDeps.exclude`. The plugin is loaded and
-well-formed (`enforce`/`resolveId`/`load` hooks present) and declares `vite: ^2 || ... || ^8`, so this is a
-silent incompatibility rather than a declared one. Root cause not established within the timebox.
-
-*Consequence beyond the demo:* this is a **consumer-facing limitation of the published package**. Anyone on
-Vite — most of the current ecosystem — hits it. The real fix is to stop shipping the bundler target: build
-with `--target web`, or ship both behind conditional `exports`. That changes the published artifact, so it
-was ruled out under [`plans/MODERNIZATION.md`](plans/MODERNIZATION.md) decision 1 (no release), and it is the
-strongest argument yet for revisiting that.
-
-Until then the example stays on webpack, which works.
+Dropping the bundler target also removed the need for a separate `--target nodejs` build: the integration
+tests now load the artefact that actually ships.
 
 ### 15. `memmap2` is compiled into a browser binary
 

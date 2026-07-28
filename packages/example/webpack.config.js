@@ -8,9 +8,9 @@ module.exports = {
     filename: 'main.js',
     path: path.resolve(__dirname, 'dist'),
   },
-  experiments: {
-    asyncWebAssembly: true,
-  },
+  // No `experiments.asyncWebAssembly` needed any more. @netgrep/search now
+  // ships wasm-pack's `web` target, which loads the binary through a standard
+  // `new URL('index_bg.wasm', import.meta.url)` — plain webpack asset handling.
   devServer: {
     static: ['assets', 'dist'],
     // `http2: true` was removed here, not merely deprecated away: it routes

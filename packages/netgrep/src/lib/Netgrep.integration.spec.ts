@@ -24,47 +24,49 @@ import { Netgrep } from './Netgrep.js';
  * always what it should do. The `documented defects` block at the bottom pins
  * known-wrong behaviour on purpose. See the comment there before "fixing" it.
  *
- * WHY pkg-node AND NOT pkg
- * ------------------------
- * The published `pkg/` is built with wasm-pack's *bundler* target, whose
- * `import * as wasm from './index_bg.wasm'` no bundler-less Node can resolve.
- * `pkg-node/` is the same Rust, same release profile, same `.wasm` binary,
- * compiled with `--target nodejs` so the test can load it. The generated
- * marshalling glue is identical; only the module-loading preamble differs.
+ * IT RUNS THE ARTEFACT THAT SHIPS
+ * -------------------------------
+ * `pkg/` is exactly what gets published — wasm-pack's `web` target. The only
+ * accommodation is instantiation: the real `init()` fetches the `.wasm` over
+ * HTTP relative to `import.meta.url`, which has no meaning under Node, so the
+ * bytes are handed to `initSync` from disk instead. Same module, same binary,
+ * same marshalling glue; only the loader differs.
  *
- * Build it with:
- *   cd packages/search && wasm-pack build --target nodejs \
- *     --out-dir pkg-node --out-name index --release
+ * This used to load a separate `--target nodejs` build. That build no longer
+ * exists — the test is now one step closer to what consumers actually get.
+ *
+ * Build it with: pnpm build:wasm
  */
 vi.mock('@netgrep/search', async () => {
-  const { existsSync } = await import('node:fs');
-  const { createRequire } = await import('node:module');
+  const { existsSync, readFileSync } = await import('node:fs');
   const { dirname, resolve } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
 
   const here = dirname(fileURLToPath(import.meta.url));
-  const pkgNode = resolve(here, '../../../search/pkg-node/index.js');
+  const pkg = resolve(here, '../../../search/pkg');
+  const wasmPath = resolve(pkg, 'index_bg.wasm');
 
-  if (!existsSync(pkgNode)) {
+  if (!existsSync(wasmPath)) {
     throw new Error(
       [
         '',
-        'The Node-target WASM build is missing, so the integration tests cannot',
-        'run against the real engine.',
+        'The WASM build is missing, so the integration tests cannot run',
+        'against the real engine.',
         '',
-        'Build it with:',
-        '  cd packages/search && wasm-pack build --target nodejs \\',
-        '    --out-dir pkg-node --out-name index --release',
+        'Build it with:  pnpm build:wasm',
         '',
-        `Expected at: ${pkgNode}`,
+        `Expected at: ${wasmPath}`,
         '',
       ].join('\n'),
     );
   }
 
-  // The nodejs-target build is CommonJS, so it needs `require` rather than a
-  // dynamic import to expose its named exports directly.
-  return createRequire(import.meta.url)(pkgNode);
+  const mod = await import(resolve(pkg, 'index.js'));
+  mod.initSync({ module: readFileSync(wasmPath) });
+
+  // `default` is the real `init()`; it is already instantiated, so awaiting it
+  // must be a no-op rather than a second (fetch-based) instantiation.
+  return { ...mod, default: () => Promise.resolve() };
 });
 
 const encoder = new TextEncoder();

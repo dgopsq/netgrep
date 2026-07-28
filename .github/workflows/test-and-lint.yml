@@ -50,15 +50,10 @@ jobs:
       # installed Chrome is older than the driver wasm-pack fetches; CI does
       # not have that problem.
 
-      # The WASM builds come first: `@netgrep/netgrep` resolves
-      # `@netgrep/search` to this workspace, so typecheck and build both need
-      # packages/search/pkg/index.d.ts to exist.
-      #
-      # `pkg` is the published bundler-target build; `pkg-node` is the same Rust
-      # compiled for Node, which the integration tests load because the bundler
-      # target cannot be required directly.
+      # The WASM build comes first: `@netgrep/netgrep` resolves
+      # `@netgrep/search` to this workspace, so typecheck, build and the
+      # integration tests all need packages/search/pkg to exist.
       - run: pnpm build:wasm
-      - run: pnpm build:wasm-node
 
       - run: pnpm lint
       - run: pnpm typecheck

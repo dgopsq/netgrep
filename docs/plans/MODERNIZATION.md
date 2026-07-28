@@ -36,16 +36,23 @@ of Rust**. Most of the weight in this plan is configuration, not code.
 
 ## Decisions
 
-### 1. The finish line is green CI, not a release
+### 1. The finish line is green CI, not a release — AMENDED 2026-07-28
 
 Everything builds, lints and tests on a current toolchain. **Nothing is republished** — npm keeps serving
 `@netgrep/netgrep@0.1.5` and `@netgrep/search@0.1.5` throughout.
 
+> **Amended.** PR 4 established that the published package does not work under Vite at all — it fails
+> silently, returning `false` for every search (backlog 16). "Do not release" stopped being the conservative
+> option at that point: it meant knowingly leaving a broken artefact on npm. The scope now ends with a
+> **0.2.0 release of both packages**, prepared by an agent and published by a human. The correctness bugs
+> (3a, 3b, 3c, 3f) remain out of scope and still ship.
+
 *Consequence, stated plainly:* the correctness bugs stay shipped. Users of 0.1.5 keep hitting the
 chunk-boundary false negative. That is an accepted, deliberate outcome of this scope, not an oversight.
 
-*Consequence:* consumer-facing ergonomics (an `exports` map, revisiting the wasm-pack target so consumers
-don't need `experiments.asyncWebAssembly`) are **out of scope**. They only pay off on release.
+*Consequence:* consumer-facing ergonomics were originally **out of scope** on the grounds that they only pay
+off on release. Revisiting the wasm-pack target came back into scope once it turned out not to be an
+ergonomic nicety but a correctness failure for most of the ecosystem.
 
 *This supersedes the "maintenance only, no feature work" stance* in `AGENTS.md` and `docs/BACKLOG.md`, written
 earlier the same day. Those documents are rewritten in PR 5.
@@ -405,7 +412,7 @@ Recorded so a future reader knows these were considered and rejected, not overlo
 
 | | why not |
 |---|---|
-| Publishing 0.2.0 | Decision 1 — the goal is a healthy repo, not a release. **Worth revisiting:** backlog 16 shows the published artifact is unusable under Vite. |
+| ~~Publishing 0.2.0~~ | **Now in scope** — see the amendment to decision 1. |
 | `exports` map; wasm-pack `--target web` | Consumer ergonomics; only pays off on release. |
 | Fixing bugs 3a / 3b / 3c | Decision 6 — would destroy attribution during a large migration. |
 | Node.js / Bun / Deno support | A feature. `fetch` + streams are now universal, so it is newly *possible* — worth its own conversation. |

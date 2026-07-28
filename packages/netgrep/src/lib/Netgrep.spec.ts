@@ -23,9 +23,13 @@ const { mockSearch } = vi.hoisted(() => ({ mockSearch: vi.fn() }));
 
 const mockFetch = vi.fn();
 
-// Mocking the `search_bytes` function.
+// Mocking the `search_bytes` function. `default` stands in for the WASM
+// module's `init()`, which Netgrep awaits before every search.
 vi.mock('@netgrep/search', () => {
-  return { search_bytes: () => mockSearch() };
+  return {
+    default: () => Promise.resolve(),
+    search_bytes: () => mockSearch(),
+  };
 });
 
 // Mocking `fetch` function.
