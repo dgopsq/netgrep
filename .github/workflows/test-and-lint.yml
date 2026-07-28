@@ -60,3 +60,8 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm test:wasm
+
+      # Everything above inspects the working tree. This inspects the tarballs
+      # that would actually reach npm — the only artefact users ever see, and
+      # previously the only one nothing checked.
+      - run: pnpm verify:pack

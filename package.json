@@ -13,6 +13,7 @@
     "build:wasm": "pnpm --filter @netgrep/search build",
     "test": "vitest run",
     "test:wasm": "pnpm --filter @netgrep/search test",
+    "verify:pack": "node scripts/verify-pack.mjs",
     "lint": "biome check . && pnpm --filter @netgrep/search lint",
     "format": "biome check --write .",
     "typecheck": "tsc -p packages/netgrep/tsconfig.json",
