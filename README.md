@@ -17,31 +17,27 @@ At the moment Netgrep is just going to tell whether a pattern is present on a re
 ## Usage
 
 > **Note**
-> This short tutorial assumes that **Webpack 5** is the bundler used in the application where `netgrep` will be integrated. A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example).
+> A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example).
 
 First of all install the module:
 
 ```bash
-# Using yarn
-yarn add @netgrep/netgrep
+# Using pnpm
+pnpm add @netgrep/netgrep
 
 # Using npm
 npm install @netgrep/netgrep
 ```
 
-The [`asyncWebAssembbly` experiment flag](https://webpack.js.org/configuration/experiments/) should be enabled inside the `webpack.config.js`:
+No bundler configuration is required. `netgrep` loads its WebAssembly through a standard
+`new URL('…', import.meta.url)` reference, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
+understand out of the box.
 
-```js
-module.exports = {
-  //...
-  experiments: {
-    // ...
-    asyncWebAssembly: true,
-  },
-};
-```
+> **Upgrading from 0.1.x?** Delete the `experiments.asyncWebAssembly` flag from your webpack config — it is
+> no longer needed. Nothing else changes; the API is identical.
 
-Then it will be possible to execute `netgrep` directly while the bundled WASM file will be loaded asynchronously in the background:
+The WASM file is fetched in the background as soon as the module is imported, and the first search waits for
+it automatically:
 
 ```ts
 import { Netgrep } from '@netgrep/netgrep';

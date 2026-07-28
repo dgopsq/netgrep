@@ -10,7 +10,7 @@ Canonical source — `CLAUDE.md` points here. Keep this file authoritative; do n
 >
 > | this file says | reality |
 > |---|---|
-> | Nx + yarn (`yarn nx test netgrep`) | Nx and yarn are gone. Use pnpm: `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm test:wasm`, `pnpm build:wasm`, `pnpm build:wasm-node` |
+> | Nx + yarn (`yarn nx test netgrep`) | Nx and yarn are gone. Use pnpm: `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm test:wasm`, `pnpm build:wasm` |
 > | Node 18.7.0 | Node 24 LTS, pinned in `.node-version` |
 > | jest / ESLint / Prettier | Vitest + Biome |
 > | §2: local edits never reach the TS package or the example | **Fixed.** pnpm workspaces link them; the example bundles local source |

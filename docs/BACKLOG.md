@@ -26,9 +26,15 @@ permanent fix: a version move is now a deliberate commit rather than something t
 installed Chrome. Observed: ChromeDriver 151 vs Chrome 150 → `invalid session id`, driver killed (signal 9).
 With a version-matched driver the suite passes (2 tests).
 
-*Fix:* pin `CHROMEDRIVER`, sourced from
-[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/). CI is unaffected — its Chrome
-and driver are in step — so this only bites locally.
+*Fix:* pin `CHROMEDRIVER` locally, sourced from
+[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/). **This is a local-machine
+problem only** — it happens when the installed Chrome is *older* than the driver wasm-pack fetches.
+
+Do **not** try to pin it in CI. That was attempted with `browser-actions/setup-chrome` and reverted: the
+action installs a driver into the tool cache, but the browser ChromeDriver actually launches is the runner's
+*system* Chrome, so pinning one half of the pair creates the very mismatch it was meant to prevent
+(ChromeDriver 151 against the system browser -> SIGKILL). Letting wasm-pack manage the driver keeps both
+halves current together.
 
 Note `wasm-pack` **overrides** `CHROMEDRIVER` with its own cached copy, so exporting it and running
 `wasm-pack test` does nothing. The harness has to be invoked directly:
@@ -194,6 +200,32 @@ The bulk is upstream and not really reducible without giving up the modern crate
 taken: `opt-level = 'z'` (a further ~27 KB, at some throughput cost in a regex-scanning hot path);
 `wasm-opt -Oz`; and disabling `grep-regex`'s Unicode support, which would change matching behaviour and is
 therefore out of scope.
+
+### 16. ~~The published package does not work under Vite~~ — FIXED
+
+`@netgrep/search` shipped wasm-pack's **bundler** target, whose entry does
+`import * as wasm from './index_bg.wasm'`. webpack supported that behind `experiments.asyncWebAssembly`;
+Vite did not, and failed **silently** — `vite build` emitted the `.wasm`, kept the glue, never assigned the
+exports object, and every search returned `false` with no error. `searchBatch` folds per-URL failures into
+`{result: false}`, so a completely broken build was indistinguishable from "no matches".
+
+**Fixed by shipping `--target web` instead** (`@netgrep/search` 0.2.0). The binary is now loaded through a
+standard `new URL('index_bg.wasm', import.meta.url)`, which every current bundler understands.
+
+Verified 2026-07-28, each in real headless Chrome:
+
+| consumer | before | after |
+|---|---|---|
+| Vite 8, no plugins | silently returned `false` for everything | correct results |
+| webpack 5 | required `experiments.asyncWebAssembly` | works with **no config at all** |
+| Rollup / esbuild / Parcel / Bun | unsupported | standard `new URL` semantics |
+
+Costs, for the record: `init()` must be awaited before `search_bytes`, which is a breaking change to
+`@netgrep/search` — absorbed inside `Netgrep`, so `@netgrep/netgrep`'s public API is untouched. The glue grew
+3,136 bytes; the `.wasm` is byte-identical.
+
+Dropping the bundler target also removed the need for a separate `--target nodejs` build: the integration
+tests now load the artefact that actually ships.
 
 ### 15. `memmap2` is compiled into a browser binary
 

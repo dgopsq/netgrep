@@ -44,8 +44,8 @@ Install the toolchain if missing:
 
 ```bash
 pnpm install
-pnpm build:wasm        # must run first: pkg/index.d.ts is what the TS package compiles against
-pnpm build:wasm-node   # needed by the integration tests
+pnpm build:wasm        # must run first: the TS package compiles against pkg/index.d.ts,
+                       # and the integration tests load pkg/index_bg.wasm
 pnpm lint              # Biome + clippy
 pnpm typecheck
 pnpm build

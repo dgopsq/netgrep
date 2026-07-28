@@ -14,33 +14,54 @@ jobs:
     name: Test and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+
+      # `actions-rs/toolchain` is archived and unmaintained. dtolnay's action
+      # reads rust-toolchain.toml, so the version, target and components are
+      # declared in exactly one place.
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
-          toolchain: 1.97.1
-          target: wasm32-unknown-unknown
+          toolchain: '1.97.1'
+          targets: wasm32-unknown-unknown
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-      # The WASM builds come first: `@netgrep/netgrep` resolves
-      # `@netgrep/search` to this workspace, so typecheck and build both need
-      # packages/search/pkg/index.d.ts to exist.
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'v0.13.1'
+
+      # NOTE: ChromeDriver is deliberately NOT pinned here.
       #
-      # `pkg` is the published bundler-target build; `pkg-node` is the same Rust
-      # compiled for Node, which the integration tests load because the bundler
-      # target cannot be required directly.
+      # Pinning it via browser-actions/setup-chrome was tried and reverted: it
+      # installs a driver into the tool cache, but the browser ChromeDriver
+      # actually launches is the runner's system Chrome, so pinning one half of
+      # the pair CREATES the version mismatch it was meant to prevent
+      # (ChromeDriver 151 vs the system browser -> SIGKILL).
+      #
+      # Letting `wasm-pack` manage the driver keeps both halves current
+      # together. docs/BACKLOG.md item 2 is a local-machine problem, where the
+      # installed Chrome is older than the driver wasm-pack fetches; CI does
+      # not have that problem.
+
+      # The WASM build comes first: `@netgrep/netgrep` resolves
+      # `@netgrep/search` to this workspace, so typecheck, build and the
+      # integration tests all need packages/search/pkg to exist.
       - run: pnpm build:wasm
-      - run: pnpm build:wasm-node
 
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
       - run: pnpm test:wasm
+
+      # Everything above inspects the working tree. This inspects the tarballs
+      # that would actually reach npm — the only artefact users ever see, and
+      # previously the only one nothing checked.
+      - run: pnpm verify:pack

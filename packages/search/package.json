@@ -1,6 +1,6 @@
 {
   "name": "@netgrep/search",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "The power of ripgrep over HTTP",
   "license": "MIT",
   "repository": {
@@ -15,8 +15,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "wasm-pack build --scope netgrep --out-name index --release && node scripts/post_build.js",
-    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node --out-name index --release",
+    "build": "wasm-pack build --scope netgrep --out-name index --target web --release && node scripts/post_build.js",
     "test": "wasm-pack test --chrome --headless",
     "lint": "cargo clippy -p search -- -D warnings --no-deps"
   }
