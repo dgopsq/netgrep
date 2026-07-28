@@ -13,7 +13,7 @@
  *     without this the two drift silently and a release ships the wrong number.
  *     See docs/BACKLOG.md item 9.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,6 +29,18 @@ const generated = readJson(generatedPath);
 
 generated.type = 'module';
 writeJson(generatedPath, generated);
+
+// 1b. Delete the `.gitignore` wasm-pack drops into pkg/. It contains `*`, and
+// npm honours a package-internal .gitignore when there is no .npmignore — so
+// with `"files": ["pkg"]` in the wrapper manifest it silently excludes the
+// entire directory and publishes a tarball containing no WASM at all.
+//
+// Nothing is lost: packages/search/.gitignore already ignores pkg/.
+const generatedGitignore = join(packageRoot, 'pkg', '.gitignore');
+
+if (existsSync(generatedGitignore)) {
+  rmSync(generatedGitignore);
+}
 
 // 2. Cargo.toml -> package.json version sync.
 const cargoToml = readFileSync(join(packageRoot, 'Cargo.toml'), 'utf8');
