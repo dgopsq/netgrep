@@ -345,6 +345,13 @@ larger tables. Full accounting in [`../BACKLOG.md`](../BACKLOG.md) items 14 and 
 
 **Acceptance:** `pnpm dev` in the example searches a real URL against locally built WASM. All workflows green.
 
+*Outcome: the Vite port failed and was reverted; the CI half shipped.* `vite dev` worked (67/67 fixtures
+matched in real Chrome) but `vite build` silently emitted a bundle that never loads the wasm, on both Vite 8
+and Vite 7. The example stays on webpack, which supports the bundler-target import natively. Full write-up in
+[`../BACKLOG.md`](../BACKLOG.md) item 16 — including the consequence that matters more than the demo: **every
+Vite consumer of the published package hits this**, which is a direct argument for revisiting decision 1 and
+shipping a `--target web` build.
+
 ### PR 5 — Docs
 
 - Rewrite `AGENTS.md`: §2's dev-loop gotcha is **deleted** (fixed in PR 2, and a stale warning about a
@@ -398,7 +405,7 @@ Recorded so a future reader knows these were considered and rejected, not overlo
 
 | | why not |
 |---|---|
-| Publishing 0.2.0 | Decision 1 — the goal is a healthy repo, not a release. |
+| Publishing 0.2.0 | Decision 1 — the goal is a healthy repo, not a release. **Worth revisiting:** backlog 16 shows the published artifact is unusable under Vite. |
 | `exports` map; wasm-pack `--target web` | Consumer ergonomics; only pays off on release. |
 | Fixing bugs 3a / 3b / 3c | Decision 6 — would destroy attribution during a large migration. |
 | Node.js / Bun / Deno support | A feature. `fetch` + streams are now universal, so it is newly *possible* — worth its own conversation. |

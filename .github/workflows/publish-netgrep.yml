@@ -11,21 +11,21 @@ jobs:
     needs: test-and-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
-          toolchain: 1.97.1
-          target: wasm32-unknown-unknown
+          toolchain: '1.97.1'
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-      # `@netgrep/search` is now a workspace dependency, so its types must exist
-      # before `@netgrep/netgrep` will compile.
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'v0.13.1'
       - run: pnpm build:wasm
       - run: pnpm build
       - uses: JS-DevTools/npm-publish@v1
@@ -33,6 +33,6 @@ jobs:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
           greater-version-only: true
-          # The manifest is hand-written now rather than synthesised into dist/
-          # by the Nx tsc executor.
+          # Hand-written manifest; the Nx tsc executor used to synthesise one
+          # into dist/.
           package: ./packages/netgrep/package.json

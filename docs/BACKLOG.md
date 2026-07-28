@@ -195,6 +195,41 @@ taken: `opt-level = 'z'` (a further ~27 KB, at some throughput cost in a regex-s
 `wasm-opt -Oz`; and disabling `grep-regex`'s Unicode support, which would change matching behaviour and is
 therefore out of scope.
 
+### 16. The example cannot move to Vite — the published wasm target only bundles under webpack
+
+Attempted 2026-07-28 and **reverted**. Recording the exact failure so it is not re-attempted blind.
+
+`@netgrep/search` is built with wasm-pack's **bundler** target, whose entry does:
+
+```js
+import * as wasm from './index_bg.wasm';
+```
+
+That is an ESM-integration wasm import. webpack supports it natively behind `experiments.asyncWebAssembly`
+— which is why `packages/example/webpack.config.js` has exactly one non-default setting. Vite has no native
+equivalent and needs `vite-plugin-wasm`.
+
+**With the plugin installed and loaded, `vite build` silently produces a broken bundle:**
+
+- `vite dev` works — 67/67 fixtures match, verified in real Chrome.
+- `vite build` emits `index_bg-<hash>.wasm` as an asset, but **nothing in the JS bundle references it**. The
+  glue survives (`g.search_bytes`, `g.__wbindgen_malloc`, `g.memory`) while `g` is never assigned, so every
+  search returns `false`.
+- **No error is reported anywhere.** `searchBatch` folds per-URL failures into `{result: false, error}` and
+  the demo only renders successes, so a broken build looks exactly like "no matches".
+
+Reproduced on Vite **8.1.5** and **7.3.6**, with and without `optimizeDeps.exclude`. The plugin is loaded and
+well-formed (`enforce`/`resolveId`/`load` hooks present) and declares `vite: ^2 || ... || ^8`, so this is a
+silent incompatibility rather than a declared one. Root cause not established within the timebox.
+
+*Consequence beyond the demo:* this is a **consumer-facing limitation of the published package**. Anyone on
+Vite — most of the current ecosystem — hits it. The real fix is to stop shipping the bundler target: build
+with `--target web`, or ship both behind conditional `exports`. That changes the published artifact, so it
+was ruled out under [`plans/MODERNIZATION.md`](plans/MODERNIZATION.md) decision 1 (no release), and it is the
+strongest argument yet for revisiting that.
+
+Until then the example stays on webpack, which works.
+
 ### 15. `memmap2` is compiled into a browser binary
 
 `grep-searcher 0.1.17` depends on `memmap2` unconditionally — it is not feature-gated, and the crate's only

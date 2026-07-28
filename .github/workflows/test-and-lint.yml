@@ -14,20 +14,37 @@ jobs:
     name: Test and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v4
+
+      # `actions-rs/toolchain` is archived and unmaintained. dtolnay's action
+      # reads rust-toolchain.toml, so the version, target and components are
+      # declared in exactly one place.
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
-          toolchain: 1.97.1
-          target: wasm32-unknown-unknown
+          toolchain: '1.97.1'
+          targets: wasm32-unknown-unknown
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+
       - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version-file: '.node-version'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile
-      - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: 'v0.13.1'
+
+      # Pin ChromeDriver to the installed Chrome. `wasm-pack test` otherwise
+      # fetches the latest driver, which cannot drive an older browser
+      # (docs/BACKLOG.md item 2).
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+        with:
+          chrome-version: stable
+          install-chromedriver: true
 
       # The WASM builds come first: `@netgrep/netgrep` resolves
       # `@netgrep/search` to this workspace, so typecheck and build both need
@@ -44,3 +61,5 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm test:wasm
+        env:
+          CHROMEDRIVER: ${{ steps.setup-chrome.outputs.chromedriver-path }}
