@@ -37,14 +37,18 @@ jobs:
         with:
           version: 'v0.13.1'
 
-      # Pin ChromeDriver to the installed Chrome. `wasm-pack test` otherwise
-      # fetches the latest driver, which cannot drive an older browser
-      # (docs/BACKLOG.md item 2).
-      - uses: browser-actions/setup-chrome@v1
-        id: setup-chrome
-        with:
-          chrome-version: stable
-          install-chromedriver: true
+      # NOTE: ChromeDriver is deliberately NOT pinned here.
+      #
+      # Pinning it via browser-actions/setup-chrome was tried and reverted: it
+      # installs a driver into the tool cache, but the browser ChromeDriver
+      # actually launches is the runner's system Chrome, so pinning one half of
+      # the pair CREATES the version mismatch it was meant to prevent
+      # (ChromeDriver 151 vs the system browser -> SIGKILL).
+      #
+      # Letting `wasm-pack` manage the driver keeps both halves current
+      # together. docs/BACKLOG.md item 2 is a local-machine problem, where the
+      # installed Chrome is older than the driver wasm-pack fetches; CI does
+      # not have that problem.
 
       # The WASM builds come first: `@netgrep/netgrep` resolves
       # `@netgrep/search` to this workspace, so typecheck and build both need
@@ -61,5 +65,3 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm test:wasm
-        env:
-          CHROMEDRIVER: ${{ steps.setup-chrome.outputs.chromedriver-path }}

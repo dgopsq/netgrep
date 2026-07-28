@@ -26,9 +26,15 @@ permanent fix: a version move is now a deliberate commit rather than something t
 installed Chrome. Observed: ChromeDriver 151 vs Chrome 150 → `invalid session id`, driver killed (signal 9).
 With a version-matched driver the suite passes (2 tests).
 
-*Fix:* pin `CHROMEDRIVER`, sourced from
-[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/). CI is unaffected — its Chrome
-and driver are in step — so this only bites locally.
+*Fix:* pin `CHROMEDRIVER` locally, sourced from
+[Chrome for Testing](https://googlechromelabs.github.io/chrome-for-testing/). **This is a local-machine
+problem only** — it happens when the installed Chrome is *older* than the driver wasm-pack fetches.
+
+Do **not** try to pin it in CI. That was attempted with `browser-actions/setup-chrome` and reverted: the
+action installs a driver into the tool cache, but the browser ChromeDriver actually launches is the runner's
+*system* Chrome, so pinning one half of the pair creates the very mismatch it was meant to prevent
+(ChromeDriver 151 against the system browser -> SIGKILL). Letting wasm-pack manage the driver keeps both
+halves current together.
 
 Note `wasm-pack` **overrides** `CHROMEDRIVER` with its own cached copy, so exporting it and running
 `wasm-pack test` does nothing. The harness has to be invoked directly:
