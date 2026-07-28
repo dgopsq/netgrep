@@ -17,7 +17,10 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          # Must match rust-toolchain.toml. See docs/plans/MODERNIZATION.md.
+          toolchain: 1.81.0
+          target: wasm32-unknown-unknown
+          components: clippy
       - uses: actions/setup-node@v3
         with:
           node-version: '18.7.0'
@@ -25,4 +28,8 @@ jobs:
       - run: yarn
       - run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - run: yarn nx run-many --target=lint
+      # The netgrep integration tests drive the real WASM engine, which needs a
+      # Node-loadable build. The published `pkg/` uses wasm-pack's bundler
+      # target and cannot be required directly.
+      - run: yarn nx build-node search
       - run: yarn nx run-many --target=test

@@ -26,9 +26,10 @@ error: older versions of the `wasm-bindgen` crate are incompatible with current 
 
 Rust 1.82 changed the wasm C ABI; `wasm-bindgen 0.2.82` predates it. **Every push touching Rust fails today.**
 
-*Smallest correct fix:* pin `rust-toolchain.toml` to `channel = "1.81.0"` and pin the CI action to the same.
-That stops the bleeding without a dependency bump, and makes the build reproducible instead of drifting with
-whatever stable happens to be. The real fix is item 4.
+*Stopgap applied.* `rust-toolchain.toml` and both Rust workflows are now pinned to `1.81.0`, so the build is
+reproducible instead of drifting with whatever `stable` happens to be. This does not remove the constraint —
+`wasm-bindgen 0.2.82` still caps the toolchain at 1.81. The real fix is item 4, which lifts both together and
+moves the pin forward.
 
 ### 2. `nx test search` fails on a fresh machine
 
@@ -68,11 +69,45 @@ of the project — see [decision 0002](decisions/0002-search-while-downloading.m
 come straight from a user's search box, so a stray `(` kills the module instead of surfacing a catchable
 error. Return a `Result`/`Option` across the boundary, or validate before calling.
 
-### 3d. No test exercises the real engine through the TypeScript API
+### 3d. ~~No test exercises the real engine through the TypeScript API~~ — DONE
 
-`Netgrep.spec.ts` mocks both `fetch` and `@netgrep/search`, so nothing in CI runs the actual WASM through the
-streaming layer. Bug 3a is invisible to both suites by construction. An integration test would need the
-packages linked — see item 6.
+`Netgrep.integration.spec.ts` now drives the real WASM through the real streaming loop, mocking only `fetch`.
+Every defect in this section is pinned there as a test asserting current (wrong) behaviour — when one is
+fixed, the corresponding assertion must be inverted in the same PR.
+
+### 3e. `^` anchors to the chunk, not the line — `packages/search/src/lib.rs:13-17`
+
+`RegexMatcherBuilder` is built without `.multi_line(true)`. When `case_smart` leaves a pattern
+case-sensitive — i.e. it contains any uppercase letter — the searcher takes a whole-buffer path where `^`
+means "start of chunk" rather than "start of line". An all-lowercase pattern takes the line-by-line path and
+behaves correctly. `$` is unaffected.
+
+```
+"a\nNeedle x\n"  ~  "^Needle"   ->  false   # wrong
+"Needle x\n"     ~  "^Needle"   ->  true    # only because it is line 1
+"a\nneedle x\n"  ~  "^needle"   ->  true    # lowercase, so correct
+```
+
+*Fix:* add `.multi_line(true)`. Verified 2026-07-28 against `grep @ 13.0.0-wasm`: it corrects every failing
+case with no regression in the others. **One line.** Not applied yet only because the modernization is
+scoped toolchain-only — see [`plans/MODERNIZATION.md`](plans/MODERNIZATION.md) decision 6.
+
+### 3f. A single NUL byte discards the whole chunk — `packages/search/src/lib.rs:19`
+
+`BinaryDetection::quit(b'\x00')` does not merely stop at the NUL; it abandons the entire chunk. A match is
+dropped even when it occurs *before* the NUL, and even on an earlier line. Any remote file containing a stray
+NUL therefore reports "no match" for content that is demonstrably present.
+
+```
+"needle here"              ~  "needle"  ->  true
+"needle here\0tail"        ~  "needle"  ->  false   # match precedes the NUL
+"needle here\n\0tail"      ~  "needle"  ->  false   # and is on an earlier line
+```
+
+Whether this is wrong depends on intent — quitting on binary input is a reasonable ripgrep default — but it
+is currently undocumented and surprising for a tool whose entire API surface is a boolean. Consider
+`BinaryDetection::none()`, or surfacing "binary, not searched" as distinct from "no match", which would be an
+API change and therefore out of scope today.
 
 ---
 

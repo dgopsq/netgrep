@@ -1,1 +1,5 @@
 pkg
+
+# Node-target build consumed by the netgrep integration tests.
+# `nx build-node search`
+pkg-node

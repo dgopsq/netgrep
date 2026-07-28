@@ -47,7 +47,6 @@
       "Bash(wasm-pack publish:*)",
       "Bash(wasm-pack pack:*)",
       "Bash(cargo publish:*)",
-      "Bash(git push:*)",
       "Bash(git tag:*)",
       "Bash(npx nx publish:*)"
     ]
