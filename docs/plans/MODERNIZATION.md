@@ -1,6 +1,7 @@
 # Modernization plan
 
-**Status:** Agreed 2026-07-28. Not yet started.
+**Status:** Complete as of 2026-07-28, with two amendments recorded below (decision 1 and the PR
+sequence). Kept as the record of why the repository changed shape.
 **Goal:** a repository that builds, lints and tests green on a current toolchain.
 **Explicit non-goal:** shipping anything to npm. See [Decision 1](#1-the-finish-line-is-green-ci-not-a-release).
 
@@ -272,7 +273,11 @@ point.
 
 Closes backlog item 3d.
 
-### 13. Five PRs
+### 13. Five PRs — AMENDED
+
+> The sequence held, but PR 4 grew: the Vite port failed and, rather than shipping a broken demo, that PR
+> also carried the `--target web` fix, the packaging fix it exposed, and the packaging guard. The docs
+> rewrite stayed separate. What follows is the plan as agreed; see each PR's *Outcome* for what happened.
 
 Each must leave `main` green. Sequence and contents in [The PRs](#the-prs).
 

@@ -1,6 +1,6 @@
 # 0007 — Nx orchestrating both JS and Cargo
 
-**Status:** Accepted.
+**Status: SUPERSEDED (2026-07-28).** Nx was removed; see *Outcome* at the end.
 
 ## Context
 
@@ -30,3 +30,23 @@ Result: `nx run-many --target=lint` and `--target=test` cover both languages, wh
 - `nx.json` sets `"defaultProject": "example"` — a bare `nx build` targets the demo, not a shipped package.
 - Nx does **not** link the packages to each other. Orchestration is not workspace linking; see
   [`../../AGENTS.md` §2](../../AGENTS.md#2--read-this-before-you-edit-anything).
+
+
+---
+
+## Outcome (2026-07-28)
+
+**Nx was removed rather than upgraded**, along with `@nxrs/cargo`, and replaced by pnpm workspaces plus a
+handful of npm scripts.
+
+It was nine majors and a package-scope rename behind (`@nrwl/*` → `@nx/*`), and earning none of it: CI only
+ever ran `run-many`, never `nx affected`, so the dependency graph and cache did nothing across three packages
+and ~450 lines of source. What it actually wrapped was a `tsc` call, an eslint call, a jest call, a clippy
+call and two passthroughs to `wasm-pack`.
+
+Removing it deleted nine packages and, with them, the bulk of the repository's dependency-vulnerability
+count. `@nxrs/cargo` — third-party, last released May 2024, installed with an unmet peer dependency — went
+with it.
+
+The Rust/JS split this record describes is now expressed directly: `packages/search/package.json` has
+`build`/`test`/`lint` scripts that shell out to `wasm-pack` and `cargo`, and pnpm runs them.
