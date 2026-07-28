@@ -4,7 +4,19 @@
 
 # netgrep
 
-Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to provide a viable alternative to index-based search engines for applications with a small files-based database. It is built on the `grep-matcher`, `grep-regex` and `grep-searcher` crates published from the `ripgrep` repository, used unmodified from crates.io. 
+> **Note**
+> **This is an experiment, not a recommendation.** Netgrep is almost certainly not the best way to add search
+> to your site. A prebuilt index — [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
+> [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service — will usually be smaller,
+> faster and far more capable: it can rank results, show snippets and tell you *where* a term appears, none
+> of which netgrep does.
+>
+> What this project explores is a narrower question: what happens if you take ripgrep's actual search engine,
+> compile it to WebAssembly, and run it over HTTP against files *while they are still downloading*? The
+> answer turns out to be "it works, and it is genuinely fast on a small corpus" — but it is a demonstration
+> of that idea, not infrastructure. Read the [known limitations](#known-limitations) before building on it.
+
+Netgrep is an **experimental** porting of [ripgrep](https://github.com/BurntSushi/ripgrep) on WASM using the HTTP protocol. The scope of this project is to explore an alternative to index-based search engines for applications with a small files-based database. It is built on the `grep-matcher`, `grep-regex` and `grep-searcher` crates published from the `ripgrep` repository, used unmodified from crates.io. 
 
 At the moment Netgrep is just going to tell whether a pattern is present on a remote file leveraging the `ripgrep` core search engine. This happens **while the file is being downloaded** in order to maximize the performance. 
 
