@@ -77,6 +77,26 @@ the published package works under webpack, but [backlog 16](../BACKLOG.md) recor
 exercised. What the published package does under other bundlers is established by
 [decision 0005](0005-esm-only-distribution.md) and by `verify:pack`, not by this app.
 
+### The site leads with the result; the caveats sit below it
+
+The first version of the page opened with a badge reading "An experiment, not a recommendation" and a
+paragraph recommending Pagefind, Lunr and FlexSearch — **three hedges before the reader reached the search
+box**, on a page whose job is to show the thing working. That is not what
+[`AGENTS.md` §1](../../AGENTS.md#1-what-this-project-is) asks for. It asks that user-facing text describe what
+netgrep does and what it costs, and not sell it; it does not ask the demo to argue against itself above the
+fold.
+
+So the hero states the capability plainly and the honesty moved down into a **Scope** section, which is still
+on the page and still names every live defect — including chunk-boundary false negatives, which affect this
+very demo. The costs are still stated: the stats bar reports the corpus size and the 1.15 MB WebAssembly
+download on every query. The competitor comparison survives too, repositioned from self-deprecation to
+routing: "if you need ranking and snippets, an index is the right tool."
+
+**The README's voice is deliberately still more cautious than the site's**, and that is not drift. Its
+audience is a developer deciding whether to depend on the package, who needs the caveat first. The site's
+audience is someone finding out what this is, who needs to see it work first. Both are truthful about the
+same facts.
+
 ## Consequences
 
 **The demo is now a maintained dependency surface.** React, Vite, Tailwind and the shadcn helpers will need

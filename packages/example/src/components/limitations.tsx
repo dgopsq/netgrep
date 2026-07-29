@@ -1,21 +1,21 @@
-import { TriangleAlert } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 const CAVEATS = [
   {
-    title: 'A match spanning two network chunks is missed',
-    body: 'Each fetch chunk is searched on its own, so a pattern that straddles the seam between two of them is never found. It is silent, and it depends on how the network split the response rather than on anything you typed — so the same query can behave differently twice. This one is live on this page.',
+    title: 'One boolean per file',
+    body: 'netgrep tells you whether a pattern occurs in a file, not where. No line numbers, match positions, snippets or ranking. If you need those, a prebuilt index — Pagefind, Lunr, FlexSearch — is the right tool.',
   },
   {
-    title: 'The result is a boolean, and nothing more',
-    body: 'No line numbers, no match positions, no snippets, no ranking. The cards above can tell you that a story contains your pattern; they cannot tell you where, how often, or show you the line.',
+    title: 'Matches spanning two network chunks are missed',
+    body: 'Each fetch chunk is searched on its own, so a pattern straddling the seam between two of them is not found. Which chunk a match lands in depends on how the network split the response, so the same query can behave differently twice. Live on this page.',
   },
   {
-    title: 'The in-memory cache is switched off here',
-    body: 'Leaving it on would make this page answer wrongly. Resolving early leaves the cache holding only the prefix that was read, so a later query for a term further down the same file gets a confident false; and two searches of one file started together append it to itself. Both are documented defects, so the demo runs with the cache disabled and re-reads the corpus each time.',
+    title: 'This demo runs with the cache off',
+    body: 'netgrep can hold downloaded bytes in memory, and does by default. Two open defects make that unsafe for a page taking one query after another, so the demo disables it and re-reads the corpus each time — 2.6 MB, served from the browser cache on repeats.',
   },
   {
-    title: 'A NUL byte discards the rest of its chunk',
-    body: "ripgrep's binary detection quits on a NUL, and the boolean API cannot distinguish “binary, not searched” from “no match”. The plain-text corpus here never triggers it; your files might.",
+    title: 'Binary files stop at the first NUL',
+    body: "ripgrep's binary detection quits on a NUL byte, and a boolean cannot distinguish “binary, not searched” from “no match”. Plain text — the intended use — is unaffected.",
   },
 ];
 
@@ -25,7 +25,7 @@ export function Limitations() {
       <div className="hairline-top h-px w-full" />
 
       <div className="flex items-start gap-3 pt-10">
-        <TriangleAlert
+        <Info
           className="text-primary/80 mt-1 size-5 shrink-0"
           aria-hidden="true"
         />
@@ -34,13 +34,11 @@ export function Limitations() {
             id="limitations-heading"
             className="text-xl font-medium tracking-tight"
           >
-            Known limitations
+            Scope
           </h2>
           <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-            These are real, present in the published package, and documented
-            rather than fixed. They are listed here for the same reason they are
-            listed in the README: this is a demonstration of an idea, not
-            infrastructure.
+            What netgrep does, and what it deliberately does not. Worth knowing
+            before you build on it.
           </p>
         </div>
       </div>
@@ -59,7 +57,7 @@ export function Limitations() {
       </dl>
 
       <p className="text-muted-foreground/70 mt-9 text-sm">
-        The full list, with the tests that pin each one, is in{' '}
+        Every known defect is tracked and pinned by a test, in{' '}
         <a
           className="text-primary/90 hover:text-primary underline underline-offset-4"
           href="https://github.com/dgopsq/netgrep/blob/main/docs/BACKLOG.md"
