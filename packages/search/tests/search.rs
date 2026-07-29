@@ -47,6 +47,7 @@ fn matches(haystack: &[u8], pattern: &str) -> bool {
 #[cfg(test)]
 mod search {
     use super::matches;
+    use ::search::try_search_bytes;
 
     const POEM: &str = "One Wiseman came to Jhaampe-town.\n\
                         He set aside both Queen and Crown\n\
@@ -227,6 +228,47 @@ mod search {
     #[test]
     fn test_a_utf8_bom_does_not_hide_the_first_line() {
         assert!(matches(&[0xef, 0xbb, 0xbf, b'n', b'e', b'e', b'd'], "need"));
+    }
+
+    // ---------------------------------------------------------------
+    // Compiled-matcher reuse
+    //
+    // The engine keeps the last compiled pattern and reuses it, because
+    // netgrep calls it once per chunk with the same pattern every time. That
+    // cache is the only piece of state in `lib.rs`, and its failure mode is
+    // the worst one this library has: answering with the previous pattern's
+    // matcher is a wrong boolean, silently, rather than a crash.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_a_changed_pattern_is_not_answered_by_the_previous_matcher() {
+        assert!(matches(b"alpha only", "alpha"));
+        assert!(!matches(b"alpha only", "beta"));
+        assert!(matches(b"alpha only", "alpha"));
+    }
+
+    #[test]
+    fn test_two_patterns_differing_only_in_case_are_not_confused() {
+        // Sharper than the test above: smart case is decided when the pattern
+        // is COMPILED, so these two need genuinely different matchers even
+        // though they are the same length and differ by one bit.
+        assert!(matches(b"one wiseman", "wiseman"));
+        assert!(!matches(b"one wiseman", "Wiseman"));
+        assert!(matches(b"one wiseman", "wiseman"));
+    }
+
+    #[test]
+    fn test_a_failed_compile_does_not_wedge_the_next_pattern() {
+        // A search box produces invalid patterns constantly on the way to a
+        // valid one. The failure is cached — otherwise it would be recompiled
+        // once per chunk per url — so what matters is that the cache is
+        // replaced, not consulted, when the pattern changes.
+        let first = try_search_bytes(b"anything", "(").expect_err("`(` is not valid regex");
+        let second = try_search_bytes(b"anything", "(").expect_err("and still is not");
+
+        assert_eq!(first, second);
+
+        assert!(matches(b"anything", "any"));
     }
 
     #[test]
