@@ -66,6 +66,8 @@ pnpm build:wasm
 `pnpm install` works without it, and so do the unit tests (they mock the engine). Everything else does not.
 This is the first thing to try when something fails inexplicably on a clean checkout.
 
+`pnpm bootstrap` does this step for you, along with the install and the shared Cargo cache — see §4.1.
+
 ---
 
 ## 3. Toolchain
@@ -94,12 +96,17 @@ shipped artefact is a browser-targeted ESM library, so the Node version only eve
 All run from the repository root.
 
 ```bash
+pnpm bootstrap         # fresh clone or fresh worktree: does both of the below
+```
+```bash
 pnpm install           # once
 pnpm build:wasm        # REQUIRED FIRST — see §2.2
 ```
 
 | Task | Command | Notes |
 |---|---|---|
+| Prepare a checkout | `pnpm bootstrap` | Shared Cargo cache + install + WASM. Idempotent — see §4.1 |
+| New worktree | `pnpm worktree <branch>` | `git worktree add` beside this checkout, then bootstrap it |
 | Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.15 MB `index_bg.wasm` |
 | Build TS | `pnpm build` | → `packages/netgrep/dist/` |
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`) |
@@ -107,8 +114,38 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
 | Test TS | `pnpm test` | Vitest — **24 tests** (7 unit, 17 integration) |
 | Test Rust | `pnpm test:wasm` | wasm-bindgen in headless Chrome — **2 tests** |
-| Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs |
+| Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
+
+### 4.1 Working in a git worktree
+
+```bash
+pnpm worktree fix/chunk-boundary     # → ../netgrep-fix-chunk-boundary, ready to build
+```
+
+Creates the branch if it does not exist, places the worktree **beside** this checkout (never inside it — a
+nested checkout would be picked up by the workspace glob, Biome and Vitest alike), and bootstraps it.
+
+`pnpm bootstrap` inside an existing worktree does the same preparation. Both accept `--no-install` and
+`--no-build` to skip a step.
+
+**The repository configures no build cache, on purpose.** Cargo keeps `target/` inside each worktree, so each
+one recompiles the ripgrep dependency tree and keeps its own copy (~8s release, ~5s more for clippy, up to
+1.2 GB). Sharing that is a line in the developer's shell profile, not a file in this repo:
+
+```bash
+export CARGO_TARGET_DIR="$HOME/.cache/cargo-shared"
+```
+
+A new worktree then compiles only the `search` crate — under half a second measured, against ~8s cold. Cargo
+**locks** the target directory,
+so simultaneous builds in two worktrees serialize, and the directory grows unbounded. `bootstrap.mjs` reports
+which cache it found and suggests the variable once a second worktree exists.
+
+Do not commit this as `build.target-dir`: it is an absolute path, and CI's caching actions assume the default
+`target/`. [Decision 0012](docs/decisions/0012-worktree-bootstrap.md) records the generated-config approach
+that was built first, measured, and dropped — and what comparable JS+Rust repositories do instead.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is the human-facing version of this section.
 
 ### `pnpm test:wasm` may fail on your machine
 
@@ -146,11 +183,14 @@ packages/
                      Not published. Runs against local workspace source.
 
 scripts/verify-pack.mjs   Packaging guard, run in CI.
+scripts/bootstrap.mjs     Prepares a checkout: shared Cargo cache, install, WASM (§4.1).
+scripts/worktree.mjs      `git worktree add` + bootstrap, in one command.
 ```
 
 Root config: `pnpm-workspace.yaml`, `Cargo.toml` (Rust workspace **and** the release profile — Cargo ignores
 `[profile.*]` in member packages), `tsconfig.base.json`, `biome.jsonc`, `vitest.config.ts`,
-`rust-toolchain.toml`, `.node-version`, `.github/workflows/`.
+`rust-toolchain.toml`, `.node-version`, `.github/workflows/`. There is deliberately **no `.cargo/config.toml`**
+— see §4.1.
 
 ### Two things about `packages/search` that surprise people
 
@@ -243,3 +283,4 @@ property that is the whole point of the project. See
 | [`docs/decisions/`](docs/decisions/) | Why the system is shaped this way — one record per decision |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | Sanctioned maintenance work, prioritised |
 | [`README.md`](README.md) | Public-facing usage docs. Audience is consumers, not contributors. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human on-ramp: prerequisites, first run, worktrees, PR checklist. Points here for depth. |

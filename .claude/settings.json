@@ -4,6 +4,11 @@
     "allow": [
       "Bash(pnpm install)",
       "Bash(pnpm install --frozen-lockfile)",
+      "Bash(pnpm bootstrap:*)",
+      "Bash(pnpm worktree:*)",
+      "Bash(node scripts/bootstrap.mjs:*)",
+      "Bash(node scripts/worktree.mjs:*)",
+      "Bash(git worktree list:*)",
       "Bash(pnpm build)",
       "Bash(pnpm build:wasm)",
       "Bash(pnpm lint)",

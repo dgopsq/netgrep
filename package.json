@@ -9,6 +9,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "worktree": "node scripts/worktree.mjs",
     "build": "pnpm --filter @netgrep/netgrep build",
     "build:wasm": "pnpm --filter @netgrep/search build",
     "test": "vitest run",
