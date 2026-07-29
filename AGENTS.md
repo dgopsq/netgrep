@@ -188,7 +188,7 @@ involved and the step list inside it names the command:
 | `wasm` | — | `pnpm build:wasm`, then uploads `packages/search/pkg` as an artefact |
 | `rust` | — | `pnpm lint:rust`, `pnpm test:rust` |
 | `js` | — | `pnpm lint:js`, `pnpm test:unit` |
-| `browser` | `wasm` | `pnpm test:browser` |
+| `browser` | `wasm` | `pnpm exec playwright install chromium`, `pnpm test:browser` |
 | `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack` |
 | `ci` | all | Aggregate — **this is the check to require on the branch** |
 
@@ -241,9 +241,11 @@ packages/
 scripts/verify-pack.mjs   Packaging guard, run in CI.
 scripts/bootstrap.mjs     Prepares a checkout: install, browser, WASM (§4.1).
 scripts/worktree.mjs      `git worktree add` + bootstrap, in one command.
-scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one target dir (§4.1).
+scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one COMPILER cache,
+                          via sccache. Each keeps its own target/ — sharing that is unsafe,
+                          see §4.1 and decision 0014.
 
-.github/workflows/        One job per failure mode (§4.3).
+.github/workflows/        Five jobs grouped by toolchain (§4.3).
 .github/actions/          Composite setup actions, `node` and `rust`, shared by those jobs.
 ```
 

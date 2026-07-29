@@ -460,25 +460,6 @@ describe('Netgrep integration (real WASM)', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('reassembles the chunks it cached', async () => {
-      // Chunked on the way in, one buffer on the way out — so a pattern that
-      // straddled a chunk boundary and was missed on the first pass (BACKLOG
-      // 3a) is found on the second, from cache. The same defect, arriving at
-      // two different answers depending on when you ask.
-      serve(chunked(POEM, 7));
-
-      const NG = new Netgrep({ enableMemoryCache: true });
-
-      await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
-        result: false,
-      });
-
-      await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
-        result: true,
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
     it('re-fetches every time when the cache is disabled', async () => {
       serve([encoder.encode(POEM)]);
 
@@ -525,6 +506,29 @@ describe('Netgrep integration (real WASM)', () => {
       await expect(
         new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: false });
+    });
+
+    it('BACKLOG 3a: the same search answers differently once the cache is warm', async () => {
+      // The cache reassembles the chunks, so the second search sees one buffer
+      // where the first saw fragments — and 3a's false negative disappears.
+      // The same url and the same pattern, two different answers, decided by
+      // whether anyone asked before.
+      //
+      // This lives here rather than under `in-memory cache` because the first
+      // assertion IS 3a: a fix that retains a tail buffer makes it `true` and
+      // turns this red, and §2.1 says that must happen somewhere labelled.
+      serve(chunked(POEM, 7));
+
+      const NG = new Netgrep({ enableMemoryCache: true });
+
+      await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
+        result: false,
+      });
+
+      await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
+        result: true,
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('BACKLOG 3b: a cache poisoned by early resolution answers later searches wrongly', async () => {

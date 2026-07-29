@@ -18,9 +18,10 @@
  * WHY NOT CARGO_TARGET_DIR — READ THIS BEFORE "SIMPLIFYING" IT
  * -----------------------------------------------------------
  * Pointing `CARGO_TARGET_DIR` at one directory shared by all worktrees is
- * faster than what this does — 0.5s rather than 3.8s, measured — and it is
- * **wrong**. Two worktrees of one clone hold the same package at the same
- * version, and Cargo's unit hash does not include the worktree path, so they
+ * faster than what this does — the wasm32 release build 0.7s rather than 3.8s,
+ * measured — and it is **wrong**. Two worktrees of one clone hold the same
+ * package at the same version, and Cargo's unit hash does not include the
+ * worktree path, so they
  * produce the same output filenames and the same fingerprint keys. Build in
  * worktree B, then test in worktree A, and Cargo reports everything fresh and
  * **runs B's binary**. Reproduced here on 2026-07-29: worktree A's 25-test
