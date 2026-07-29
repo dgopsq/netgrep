@@ -25,6 +25,11 @@ directory that reaches 1.2 GB once `wasm-pack test` artefacts land in it — per
 **`pnpm bootstrap`** prepares a checkout: `pnpm install --frozen-lockfile`, then `pnpm build:wasm`. It is
 idempotent. **`pnpm worktree <branch>`** adds a worktree beside the main checkout and bootstraps it.
 
+> **Amended (2026-07-29):** bootstrap also runs `pnpm exec playwright install chromium`, since the
+> integration suite moved into a real browser — see [0013](0013-playwright-for-browser-tests.md). The browser
+> lives in a shared per-user cache, so unlike `target/` it is not duplicated per worktree, and the third
+> skip flag `--no-browser` was added alongside `--no-install` and `--no-build`.
+
 **The repository configures no build cache.** Sharing Cargo artefacts across worktrees is a one-line
 environment variable in the developer's shell (`CARGO_TARGET_DIR`, or `RUSTC_WRAPPER=sccache`), documented in
 [`CONTRIBUTING.md`](../../CONTRIBUTING.md). `bootstrap.mjs` reports what it finds and suggests the variable

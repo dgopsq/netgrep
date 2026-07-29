@@ -242,7 +242,7 @@ that only webpack supported, and that failed *silently* under Vite — see
 
 | Workflow | Trigger | Action |
 |---|---|---|
-| `test-and-lint.yml` | push/PR to `main`, or called | `build:wasm` → `lint` → `typecheck` → `build` → `test` → `test:wasm` → `verify:pack` |
+| `test-and-lint.yml` | push/PR to `main`, or called | `playwright install chromium` → `build:wasm` → `lint` → `typecheck` → `build` → `test` → `test:rust` → `verify:pack` |
 | `publish-search.yml` | tag `search-**` | test-and-lint → `build:wasm` → npm publish `packages/search/package.json` |
 | `publish-netgrep.yml` | tag `netgrep-**` | test-and-lint → `build:wasm` → `build` → npm publish `packages/netgrep/package.json` |
 
@@ -261,14 +261,19 @@ so local and CI cannot drift the way they once did.
 
 | Suite | Runner | What it covers |
 |---|---|---|
-| `Netgrep.spec.ts` | Vitest, 7 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, error capture, and that a cache hit avoids a second `fetch`. |
-| `Netgrep.integration.spec.ts` | Vitest, 17 tests | **The real engine through the real streaming loop.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `wasm-bindgen-test` in headless Chrome, 2 tests | The engine in a real browser. |
+| `Netgrep.spec.ts` | Vitest in **Node**, 7 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, error capture, and that a cache hit avoids a second `fetch`. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 17 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 2 tests | `search_bytes` as pure Rust — bytes in, bool out. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
-The integration suite loads **the artefact that actually ships** (`packages/search/pkg`), handing the bytes to
-`initSync` because `import.meta.url` has no meaning under Node. There is no separate Node-target build to
-drift from what consumers receive.
+The integration suite loads **the artefact that actually ships** (`packages/search/pkg`) and instantiates it
+through its own real, fetch-based `init()` — the same loader a consumer gets, resolving `index_bg.wasm`
+relative to `import.meta.url` over HTTP. There is no separate Node-target build to drift from what consumers
+receive, and no `initSync`-from-disk accommodation either: that was a Node limitation, and the loader it hid
+is precisely the part that failed silently under Vite in [decision 0005](decisions/0005-esm-only-distribution.md).
+
+Why a browser at all, and why Playwright rather than ChromeDriver:
+[decision 0013](decisions/0013-playwright-for-browser-tests.md).
 
 Its last block deliberately asserts **incorrect** behaviour, pinning the caveats above so that an unintended
 change is caught. Read

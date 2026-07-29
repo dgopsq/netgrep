@@ -14,7 +14,7 @@
     "build": "pnpm --filter @netgrep/netgrep build",
     "build:wasm": "pnpm --filter @netgrep/search build",
     "test": "vitest run",
-    "test:wasm": "pnpm --filter @netgrep/search test",
+    "test:rust": "pnpm --filter @netgrep/search test",
     "verify:pack": "node scripts/verify-pack.mjs",
     "lint": "biome check . && pnpm --filter @netgrep/search lint",
     "format": "biome check --write .",
@@ -24,6 +24,8 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
     "@types/node": "^26.1.2",
+    "@vitest/browser-playwright": "4.1.10",
+    "playwright": "1.62.0",
     "typescript": "7.0.2",
     "vitest": "4.1.10"
   }

@@ -25,6 +25,7 @@ reasoning got wrong.
 | [0010](0010-vitest-and-biome.md) | Vitest and Biome replace jest, ts-jest, ESLint and Prettier | Accepted |
 | [0011](0011-tests-that-assert-known-bugs.md) | Tests that deliberately assert incorrect behaviour | Accepted |
 | [0012](0012-worktree-bootstrap.md) | A bootstrap script, and no build-cache configuration in the repository | Accepted |
+| [0013](0013-playwright-for-browser-tests.md) | Playwright runs the browser tests; ChromeDriver is gone | Accepted |
 
 ## Format
 

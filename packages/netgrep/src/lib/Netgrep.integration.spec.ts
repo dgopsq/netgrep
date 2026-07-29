@@ -1,4 +1,3 @@
-import { ReadableStream } from 'node:stream/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Netgrep } from './Netgrep.js';
 
@@ -25,48 +24,34 @@ import { Netgrep } from './Netgrep.js';
  * always what it should do. The `documented defects` block at the bottom pins
  * known-wrong behaviour on purpose. See the comment there before "fixing" it.
  *
- * IT RUNS THE ARTEFACT THAT SHIPS
- * -------------------------------
- * `pkg/` is exactly what gets published — wasm-pack's `web` target. The only
- * accommodation is instantiation: the real `init()` fetches the `.wasm` over
- * HTTP relative to `import.meta.url`, which has no meaning under Node, so the
- * bytes are handed to `initSync` from disk instead. Same module, same binary,
- * same marshalling glue; only the loader differs.
+ * IT RUNS THE ARTEFACT THAT SHIPS, THE WAY IT SHIPS
+ * -------------------------------------------------
+ * This suite runs in a real headless Chromium (see `vitest.config.ts`), so
+ * there is no longer any accommodation at all: `pkg/` is exactly what gets
+ * published — wasm-pack's `web` target — and it is instantiated by its own
+ * real `init()`, which fetches `index_bg.wasm` over HTTP relative to
+ * `import.meta.url`. Same module, same binary, same marshalling glue, same
+ * loader a consumer gets.
  *
- * This used to load a separate `--target nodejs` build. That build no longer
- * exists — the test is now one step closer to what consumers actually get.
+ * Under Node this was impossible: `import.meta.url` has no HTTP meaning there,
+ * so the bytes had to be read off disk and handed to `initSync`, leaving the
+ * loader — the part that has actually broken before, see decision 0005 — the
+ * one thing nothing exercised.
  *
  * Build it with: pnpm build:wasm
  */
-vi.mock('@netgrep/search', async () => {
-  const { existsSync, readFileSync } = await import('node:fs');
-  const { dirname, resolve } = await import('node:path');
-  const { fileURLToPath } = await import('node:url');
+vi.mock('@netgrep/search', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@netgrep/search')>();
 
-  const here = dirname(fileURLToPath(import.meta.url));
-  const pkg = resolve(here, '../../../search/pkg');
-  const wasmPath = resolve(pkg, 'index_bg.wasm');
+  // Instantiate through the REAL, fetch-based `init()` — the point of running
+  // in a browser. It happens here, at mock-factory time, because the factory
+  // runs while `Netgrep.ts` is being imported, which is before this file's
+  // body replaces `globalThis.fetch` with a spy. Doing it any later would send
+  // the engine's own `.wasm` request into the spy.
+  await mod.default();
 
-  if (!existsSync(wasmPath)) {
-    throw new Error(
-      [
-        '',
-        'The WASM build is missing, so the integration tests cannot run',
-        'against the real engine.',
-        '',
-        'Build it with:  pnpm build:wasm',
-        '',
-        `Expected at: ${wasmPath}`,
-        '',
-      ].join('\n'),
-    );
-  }
-
-  const mod = await import(resolve(pkg, 'index.js'));
-  mod.initSync({ module: readFileSync(wasmPath) });
-
-  // `default` is the real `init()`; it is already instantiated, so awaiting it
-  // must be a no-op rather than a second (fetch-based) instantiation.
+  // Already instantiated, so `Netgrep.ts`'s module-level `init()` must be a
+  // no-op rather than a second instantiation.
   return { ...mod, default: () => Promise.resolve() };
 });
 
@@ -141,7 +126,7 @@ function bytes(...parts: Array<string | number>): Uint8Array {
 }
 
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 /**
  * Serve the given chunks for any URL, and expose the read counter.

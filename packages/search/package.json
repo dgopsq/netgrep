@@ -16,7 +16,7 @@
   "sideEffects": false,
   "scripts": {
     "build": "wasm-pack build --scope netgrep --out-name index --target web --release && node scripts/post_build.js",
-    "test": "wasm-pack test --chrome --headless",
+    "test": "cargo test -p search",
     "lint": "cargo clippy -p search -- -D warnings --no-deps"
   }
 }

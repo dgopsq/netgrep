@@ -8,6 +8,11 @@
  * integration tests all fail in ways that point anywhere but at a missing WASM
  * build, and the fix is a command you have to already know about.
  *
+ * The third is Playwright's Chromium, which the integration suite runs in.
+ * It lives in a shared per-user cache rather than in the checkout, so it is
+ * usually already there and this step costs nothing; on a new machine it is a
+ * ~180 MB download. It is here so that the closing "try `pnpm test`" is true.
+ *
  * What this script deliberately does NOT do is configure a build cache.
  *
  * An earlier version wrote a `.cargo/config.toml` pointing `build.target-dir`
@@ -24,7 +29,7 @@
  * reports what it found. See CONTRIBUTING.md.
  *
  * Usage:
- *   node scripts/bootstrap.mjs [--no-install] [--no-build]
+ *   node scripts/bootstrap.mjs [--no-install] [--no-build] [--no-browser]
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -32,11 +37,13 @@ import { join } from 'node:path';
 
 const args = new Set(process.argv.slice(2));
 
+const known = new Set(['--no-install', '--no-build', '--no-browser']);
+
 for (const arg of args) {
-  if (arg !== '--no-install' && arg !== '--no-build') {
+  if (!known.has(arg)) {
     console.error(`bootstrap: unknown option ${arg}`);
     console.error(
-      'usage: node scripts/bootstrap.mjs [--no-install] [--no-build]',
+      'usage: node scripts/bootstrap.mjs [--no-install] [--no-build] [--no-browser]',
     );
     process.exit(2);
   }
@@ -88,6 +95,17 @@ if (args.has('--no-install')) {
 } else {
   console.log('\n> pnpm install --frozen-lockfile');
   run('pnpm', ['install', '--frozen-lockfile'], repoRoot);
+}
+
+// Before the --no-build exit: skipping the WASM build is not a reason to skip
+// the browser, and the download is the slow part to get out of the way.
+if (args.has('--no-browser')) {
+  console.log('\nskipping browser download (--no-browser)');
+  console.log('`pnpm test` will fail until you run');
+  console.log('`pnpm exec playwright install chromium` — see AGENTS.md §4.2.');
+} else {
+  console.log('\n> pnpm exec playwright install chromium');
+  run('pnpm', ['exec', 'playwright', 'install', 'chromium'], repoRoot);
 }
 
 if (args.has('--no-build')) {

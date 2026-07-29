@@ -36,8 +36,10 @@ grep-regex = "0.1.14"
 # exactly the fork this PR is deleting. Left alone on purpose.
 grep-searcher = "0.1.17"
 
-[dev-dependencies]
-wasm-bindgen-test = "0.3.76"
+# NOTE: there are deliberately no [dev-dependencies]. `tests/search.rs` used to
+# need `wasm-bindgen-test` to run in a browser through wasm-pack/ChromeDriver;
+# it is now a plain native `cargo test`, and the browser is covered by the
+# TypeScript integration suite under Playwright. See docs/decisions/0013.
 
 # NOTE: profile settings live in the WORKSPACE ROOT Cargo.toml. Cargo ignores
 # `[profile.*]` in a member package, so the `lto`/`opt-level` that used to sit
