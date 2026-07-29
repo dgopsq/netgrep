@@ -29,6 +29,11 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  resolveRustCache,
+  SCCACHE_SUGGESTION,
+  worktreeCount,
+} from './cargo-cache.mjs';
 
 const args = new Set(process.argv.slice(2));
 
@@ -58,37 +63,21 @@ const repoRoot = capture('git', ['rev-parse', '--show-toplevel']);
 
 /**
  * Say what the Rust builds in this checkout will be cached by, so that a build
- * going through a wrapper nobody configured is never a mystery. The wrapper
- * itself is `scripts/cargo-cache.mjs`; this reports the same decision it will
- * make.
+ * going through a wrapper nobody configured is never a mystery.
+ *
+ * The decision itself belongs to `cargo-cache.mjs`, which is what actually
+ * applies it — this only reports it. It is imported rather than reimplemented
+ * because the two copies this replaced disagreed within a day of being
+ * written: one had no `CI` branch, and they labelled the same state
+ * differently.
  */
 function reportBuildCache() {
-  if (process.env.NETGREP_CARGO_CACHE === '0') {
-    console.log('rust cache: none (NETGREP_CARGO_CACHE=0)');
-    return;
-  }
+  const cache = resolveRustCache();
 
-  if (process.env.RUSTC_WRAPPER) {
-    console.log(`rust cache: ${process.env.RUSTC_WRAPPER} (from the env)`);
-    return;
-  }
+  console.log(`rust cache: ${cache.label}`);
 
-  try {
-    capture('sccache', ['--version']);
-    console.log('rust cache: sccache (shared across worktrees)');
-    return;
-  } catch {
-    // Falls through to the suggestion below.
-  }
-
-  const worktrees = capture('git', ['worktree', 'list']).split('\n').length;
-
-  if (worktrees > 1) {
-    console.log(
-      `rust cache: none — this worktree will recompile the dependency tree (${worktrees} worktrees exist)`,
-    );
-    console.log('`brew install sccache` (or `cargo install sccache`) shares');
-    console.log('the compilation across all of them. See CONTRIBUTING.md.');
+  if (cache.kind === 'absent' && worktreeCount() > 1) {
+    for (const line of SCCACHE_SUGGESTION) console.log(line);
   }
 
   // A shared CARGO_TARGET_DIR is the obvious-looking alternative and it is

@@ -195,10 +195,11 @@ involved and the step list inside it names the command:
 The WASM is built once and downloaded by the two jobs that need it. The two that need nothing from Rust do
 not wait for it.
 
-**Steps after the first in a job carry `if: '!cancelled()'`**, so a clippy nit does not cost you the Rust
-test results — the whole job runs and every failure in it shows up in one pass. Keep that when adding a step,
-unless it genuinely depends on its predecessor (`verify:pack` needs `build` to have produced `dist/`, and so
-does not have it).
+**Commands after a job's first carry `if: '!cancelled()'`**, so a clippy nit does not cost you the Rust test
+results — the whole job runs and every failure in it shows up in one pass. Two deliberate exceptions: the
+**first** command in a job is unguarded, so a broken checkout or a missing artefact stops there instead of
+cascading into three identical failures; and `verify:pack` is unguarded because it genuinely needs `build` to
+have produced `dist/`. Keep both when adding a step.
 
 Setup lives in two composite actions, `.github/actions/node` and `.github/actions/rust`; the second reads the
 channel, targets and components out of `rust-toolchain.toml`, so the version is pinned in that file and

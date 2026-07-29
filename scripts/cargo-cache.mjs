@@ -21,11 +21,11 @@
  * faster than what this does — the wasm32 release build 0.7s rather than 3.8s,
  * measured — and it is **wrong**. Two worktrees of one clone hold the same
  * package at the same version, and Cargo's unit hash does not include the
- * worktree path, so they
- * produce the same output filenames and the same fingerprint keys. Build in
- * worktree B, then test in worktree A, and Cargo reports everything fresh and
- * **runs B's binary**. Reproduced here on 2026-07-29: worktree A's 25-test
- * suite silently ran B's 2-test one, with no recompile and no warning.
+ * worktree path, so they produce the same output filenames and the same
+ * fingerprint keys. Build in worktree B, then test in worktree A, and Cargo
+ * reports everything fresh and **runs B's binary**. Reproduced here on
+ * 2026-07-29: worktree A's 25-test suite silently ran B's 2-test one, with no
+ * recompile and no warning.
  *
  * A wrong answer that fast is worse than a slow correct one, and it is
  * invisible — which is exactly the failure mode CI exists to catch and would
@@ -46,28 +46,16 @@
  * first-party crate is ~45 lines, and incremental never applied to the
  * dependencies that make up the whole cost.
  *
- * It stands aside, leaving the command untouched, whenever:
- *
- *   - `sccache` is not on PATH — it is an external binary this repository
- *     cannot pin, so it is an optimisation, never a requirement;
- *   - `RUSTC_WRAPPER` is already set — the developer has chosen their wrapper,
- *     and this must not argue;
- *   - `CI` is set — `Swatinem/rust-cache` already caches there, keyed on
- *     `target/`, and a second unpinned cache would only add variance;
- *   - `NETGREP_CARGO_CACHE=0` — the escape hatch, for reproducing something
- *     against a genuinely cold build.
+ * `resolveRustCache` is exported because `bootstrap.mjs` reports the same
+ * decision before any build runs. Two copies of this cascade drifted apart
+ * within a day of being written, so there is one.
  *
  * Usage:
  *   node scripts/cargo-cache.mjs <command> [args...]
  */
 import { execFileSync, spawn } from 'node:child_process';
-
-const [command, ...args] = process.argv.slice(2);
-
-if (!command) {
-  console.error('usage: node scripts/cargo-cache.mjs <command> [args...]');
-  process.exit(2);
-}
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /** Whether `sccache` can be run, as opposed to merely existing on PATH. */
 function hasSccache() {
@@ -82,7 +70,7 @@ function hasSccache() {
 }
 
 /** How many worktrees this clone has, or 1 if that cannot be determined. */
-function worktreeCount() {
+export function worktreeCount() {
   try {
     return execFileSync('git', ['worktree', 'list'], {
       encoding: 'utf8',
@@ -95,45 +83,97 @@ function worktreeCount() {
   }
 }
 
-const env = { ...process.env };
+/** What to say when there is a cache to be had and nobody has installed it. */
+export const SCCACHE_SUGGESTION = [
+  '`brew install sccache` (or `cargo install sccache`) shares the',
+  'compilation across every worktree. See CONTRIBUTING.md.',
+];
 
-if (
-  process.env.NETGREP_CARGO_CACHE === '0' ||
-  process.env.RUSTC_WRAPPER ||
-  process.env.CI
-) {
-  // Deliberately silent. Each of these means somebody has already decided, and
-  // a line of output per cargo invocation saying so would be noise.
-} else if (hasSccache()) {
-  env.RUSTC_WRAPPER = 'sccache';
-  env.CARGO_INCREMENTAL = '0';
+/**
+ * Decide what caches this repository's Rust builds, without doing it.
+ *
+ * `kind` is for branching; `label` is the one-line human form both callers
+ * print. Only `sccache` means this script will change the environment — every
+ * other answer is a reason to leave the command exactly as it was found.
+ */
+export function resolveRustCache(env = process.env) {
+  // Each of the first three means somebody has already decided.
+  if (env.NETGREP_CARGO_CACHE === '0') {
+    return { kind: 'disabled', label: 'none (NETGREP_CARGO_CACHE=0)' };
+  }
 
-  // Said out loud, because a build going through a wrapper you did not
-  // configure should not be a mystery when it behaves oddly.
-  console.log('compiler cache: sccache (shared across worktrees)');
-} else if (worktreeCount() > 1) {
-  // Only once a second worktree exists. Before that there is nothing to share
-  // with, and suggesting an install would be nagging.
-  console.log(
-    'No sccache on PATH — this worktree will recompile the dependency tree.',
-  );
-  console.log('`brew install sccache` (or `cargo install sccache`) shares it.');
+  if (env.RUSTC_WRAPPER) {
+    return { kind: 'inherited', label: `${env.RUSTC_WRAPPER} (from the env)` };
+  }
+
+  // `Swatinem/rust-cache` already caches in CI, keyed on the default
+  // `target/`; a second unpinned cache would only add variance.
+  if (env.CI) {
+    return { kind: 'ci', label: 'none (CI — Swatinem/rust-cache handles it)' };
+  }
+
+  if (hasSccache()) {
+    return { kind: 'sccache', label: 'sccache (shared across worktrees)' };
+  }
+
+  return {
+    kind: 'absent',
+    label: 'none — this worktree will recompile the dependency tree',
+  };
 }
 
-// `spawn` rather than `execFileSync` so signals reach the child and its exit
-// code — including one from a signal — is reproduced faithfully. `shell: true`
-// on Windows because npm-installed binaries are `.cmd` shims there.
-const child = spawn(command, args, {
-  env,
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-});
+/** True when this file was run as a script rather than imported. */
+function isMain() {
+  try {
+    return (
+      realpathSync(process.argv[1]) ===
+      realpathSync(fileURLToPath(import.meta.url))
+    );
+  } catch {
+    return false;
+  }
+}
 
-child.on('error', (error) => {
-  console.error(`cargo-cache: could not run ${command}: ${error.message}`);
-  process.exit(1);
-});
+if (isMain()) {
+  const [command, ...args] = process.argv.slice(2);
 
-child.on('exit', (code, signal) => {
-  process.exit(signal ? 1 : (code ?? 1));
-});
+  if (!command) {
+    console.error('usage: node scripts/cargo-cache.mjs <command> [args...]');
+    process.exit(2);
+  }
+
+  const cache = resolveRustCache();
+  const env = { ...process.env };
+
+  if (cache.kind === 'sccache') {
+    env.RUSTC_WRAPPER = 'sccache';
+    env.CARGO_INCREMENTAL = '0';
+
+    // Said out loud, because a build going through a wrapper you did not
+    // configure should not be a mystery when it behaves oddly.
+    console.log(`compiler cache: ${cache.label}`);
+  } else if (cache.kind === 'absent' && worktreeCount() > 1) {
+    // Only once a second worktree exists. Before that there is nothing to
+    // share with, and suggesting an install would be nagging.
+    console.log(`compiler cache: ${cache.label}`);
+    for (const line of SCCACHE_SUGGESTION) console.log(line);
+  }
+
+  // `spawn` rather than `execFileSync` so signals reach the child and its exit
+  // code — including one from a signal — is reproduced faithfully.
+  // `shell: true` on Windows because npm-installed binaries are `.cmd` shims.
+  const child = spawn(command, args, {
+    env,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
+
+  child.on('error', (error) => {
+    console.error(`cargo-cache: could not run ${command}: ${error.message}`);
+    process.exit(1);
+  });
+
+  child.on('exit', (code, signal) => {
+    process.exit(signal ? 1 : (code ?? 1));
+  });
+}

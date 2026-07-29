@@ -57,9 +57,14 @@ instead of nine.
 ### Buying back the thing grouping costs
 
 A grouped job can hide failures the same way the original single job did — `lint:rust` failing would skip
-`test:rust`. **`if: '!cancelled()'` on every step after the first** removes that: the whole job runs, every
-failure in it is visible in one pass, and the job still fails. It is not on `verify:pack`, which genuinely
-needs `build` to have produced `dist/` first and is meaningless without it.
+`test:rust`. **`if: '!cancelled()'` on every command after a job's first** removes that: the whole job runs,
+every failure in it is visible in one pass, and the job still fails.
+
+Two commands are deliberately left unguarded. The **first** in each job, so that a failure in setup — a
+broken checkout, a missing `wasm-pkg` artefact — stops the job where it broke rather than cascading into
+three more failures that all describe the same cause; `!cancelled()` is for stopping one *command* hiding the
+next, not for running commands whose inputs never arrived. And `verify:pack`, which genuinely needs `build`
+to have produced `dist/` first and is meaningless without it.
 
 So the "one early failure hides the rest" problem is solved at the *step* level, where it was always a step
 problem, and the job count is free to follow what actually costs money.

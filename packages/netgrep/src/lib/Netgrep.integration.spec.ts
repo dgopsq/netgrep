@@ -145,6 +145,26 @@ function serve(chunks: Array<Uint8Array>) {
   return state;
 }
 
+/**
+ * Serve the given chunks, unless the caller's signal has been aborted — in
+ * which case reject the way a real `fetch` does.
+ *
+ * Returns the controller, so the test decides when to abort. `Netgrep` never
+ * inspects the signal itself; it hands it to `fetch`, so honouring it here is
+ * the only way to exercise the path a consumer actually gets.
+ */
+function serveUnlessAborted(chunks: Array<Uint8Array>) {
+  const controller = new AbortController();
+
+  mockFetch.mockImplementation((_url: string, init?: RequestInit) =>
+    init?.signal?.aborted
+      ? Promise.reject(new DOMException('Aborted', 'AbortError'))
+      : Promise.resolve({ body: streamOfChunks(chunks) }),
+  );
+
+  return controller;
+}
+
 const POEM =
   'One Wiseman came to Jhaampe-town.\n' +
   'He set aside both Queen and Crown\n' +
@@ -397,13 +417,7 @@ describe('Netgrep integration (real WASM)', () => {
       // `Netgrep` does not watch the signal itself — it hands it to `fetch`
       // and lets the rejection travel back out — so this pins that the
       // rejection is not swallowed somewhere in the streaming loop.
-      mockFetch.mockImplementation((_url: string, init?: RequestInit) =>
-        init?.signal?.aborted
-          ? Promise.reject(new DOMException('Aborted', 'AbortError'))
-          : Promise.resolve({ body: streamOfChunks([encoder.encode(POEM)]) }),
-      );
-
-      const controller = new AbortController();
+      const controller = serveUnlessAborted([encoder.encode(POEM)]);
       controller.abort();
 
       await expect(
@@ -419,13 +433,7 @@ describe('Netgrep integration (real WASM)', () => {
     });
 
     it('turns an abort into a per-url error in a batch', async () => {
-      mockFetch.mockImplementation((_url: string, init?: RequestInit) =>
-        init?.signal?.aborted
-          ? Promise.reject(new DOMException('Aborted', 'AbortError'))
-          : Promise.resolve({ body: streamOfChunks([encoder.encode(POEM)]) }),
-      );
-
-      const controller = new AbortController();
+      const controller = serveUnlessAborted([encoder.encode(POEM)]);
       controller.abort();
 
       const results = await new Netgrep({

@@ -78,6 +78,21 @@ function collectCallbacks<T extends object>(expected: number) {
 /** Let every already-scheduled promise callback run. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/**
+ * Serve every url but one, which rejects.
+ *
+ * The partial-failure shape is what a real corpus search produces — most files
+ * answer, one is a 404 or a dropped connection — and three tests below need it
+ * with a different url each time.
+ */
+function serveExcept(failing: string, message = 'nope') {
+  mockFetch.mockImplementation((url: string) =>
+    url === failing
+      ? Promise.reject(new Error(message))
+      : Promise.resolve({ body: genReadableStreamFromString('test') }),
+  );
+}
+
 // `vi.hoisted` is required, not stylistic: `vi.mock` is lifted above the module
 // body, and its factory runs while `./Netgrep.js` is being imported — before a
 // plain `const` here would have been initialised.
@@ -267,7 +282,7 @@ describe('Netgrep', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('caches per url, not per instance', async () => {
+    it('keys the cache by url', async () => {
       mockSearch.mockReturnValue(true);
 
       const instance = new Netgrep({ enableMemoryCache: true });
@@ -407,11 +422,7 @@ describe('Netgrep', () => {
     it('keeps the metadata of each input, including on the error path', async () => {
       mockSearch.mockReturnValue(true);
 
-      mockFetch.mockImplementation((url: string) =>
-        url === 'bad'
-          ? Promise.reject(new Error('nope'))
-          : Promise.resolve({ body: genReadableStreamFromString('test') }),
-      );
+      serveExcept('bad');
 
       const results = await NG.searchBatch(
         [
@@ -430,11 +441,7 @@ describe('Netgrep', () => {
     it('does not let one failing url fail the others', async () => {
       mockSearch.mockReturnValue(true);
 
-      mockFetch.mockImplementation((url: string) =>
-        url === 'url2'
-          ? Promise.reject(new Error('nope'))
-          : Promise.resolve({ body: genReadableStreamFromString('test') }),
-      );
+      serveExcept('url2');
 
       const results = await NG.searchBatch(urls, pattern);
 
@@ -535,11 +542,7 @@ describe('Netgrep', () => {
     it('passes the metadata through both paths', async () => {
       mockSearch.mockReturnValue(true);
 
-      mockFetch.mockImplementation((url: string) =>
-        url === 'bad'
-          ? Promise.reject(new Error('nope'))
-          : Promise.resolve({ body: genReadableStreamFromString('test') }),
-      );
+      serveExcept('bad');
 
       const { results, settled, callback } = collectCallbacks<{ id: number }>(
         2,

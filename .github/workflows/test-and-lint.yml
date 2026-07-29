@@ -35,9 +35,11 @@ permissions:
 # and the packaging. Five jobs install five sets of tools instead of nine.
 #
 # The one cost of grouping is that a failing step could hide the ones after it,
-# which is half of what the split was for. `if: '!cancelled()'` on every step
-# after the first buys that back: the whole job runs, every failure is visible
-# in one pass, and the job still fails. See decision 0015.
+# which is half of what the split was for. `if: '!cancelled()'` on every
+# COMMAND after a job's first buys that back: the whole job runs, every failure
+# is visible in one pass, and the job still fails. The first command is left
+# unguarded on purpose, so that a broken checkout or a missing artefact takes
+# the job down where it broke instead of cascading. See decision 0015.
 jobs:
   # Built first because two jobs need `packages/search/pkg`, which is a
   # gitignored build output: `@netgrep/netgrep` resolves `@netgrep/search` to
@@ -143,12 +145,15 @@ jobs:
           name: wasm-pkg
           path: packages/search/pkg
 
+      # No guard on the first command, so a failed artefact download stops here
+      # rather than producing three more failures that all say the same thing.
+      # `!cancelled()` is for not letting one COMMAND hide the next; setup
+      # failing should still take the job down at the point it broke.
       - run: pnpm typecheck
-        if: '!cancelled()'
       - run: pnpm build
         if: '!cancelled()'
-      # Needs `pnpm build` to have produced dist/, so unlike the two above this
-      # one has a real dependency on its predecessor and is skipped if it fails.
+      # Needs `pnpm build` to have produced dist/, so unlike the one above this
+      # has a real dependency on its predecessor and is skipped if it fails.
       - run: pnpm verify:pack
 
   # One check to require on the branch, and one for `workflow_call` callers to
