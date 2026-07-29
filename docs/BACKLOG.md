@@ -48,14 +48,6 @@ Needs a completeness flag per entry: partial entries may resume a download, neve
 A naive fix for either 3a or 3b — always draining the stream — destroys the early-resolution property that is
 the entire point of the project. See [decision 0002](decisions/0002-search-while-downloading.md).
 
-### 3c. Panic on invalid pattern — `packages/search/src/lib.rs`
-
-`.build(pattern).unwrap()` traps the WASM instance when the pattern is not valid regex. Patterns normally
-come straight from a user's search box, so a stray `(` surfaces as `RuntimeError: unreachable` instead of a
-catchable domain error. The instance does remain usable afterwards.
-
-Return a `Result`/`Option` across the boundary, or validate before calling.
-
 ### 3f. A single NUL byte discards the whole chunk — `packages/search/src/lib.rs`
 
 `BinaryDetection::quit(b'\x00')` does not merely stop at the NUL; it abandons the entire chunk. A match is
@@ -154,17 +146,6 @@ Removing it means patching `grep-searcher`, i.e. reintroducing the fork that was
 Reallocates and copies the whole accumulated buffer per chunk. Collect chunks in an array and join once. The
 cache also has no eviction, size cap or TTL — it retains every file searched for the lifetime of the instance.
 
-### 12. Regex recompiled per chunk — `packages/search/src/lib.rs`
-
-`search_bytes` builds a fresh `RegexMatcher` on every call, i.e. once per chunk per file, discarding the most
-expensive part of the work each time. Fixing it needs a compiled-matcher handle across the WASM boundary — a
-real interface change, so weigh it against the conservative scope.
-
-### 13. `MemSink` does not short-circuit
-
-`Sink::matched` returns `Ok(true)` (keep searching) when the result is only ever `count > 0`. Returning
-`Ok(false)` stops at the first match within a chunk. One line, small win.
-
 ---
 
 # Done
@@ -174,6 +155,9 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 3c | Panic on invalid pattern | **Fixed.** `search_bytes` returns `Result<bool, JsError>`, so a stray `(` — or a literal newline, which the `\n` line terminator forbids — is a rejected promise carrying the regex crate's own diagnostic instead of `RuntimeError: unreachable`. The generated TypeScript signature did not change, so `Netgrep.ts` needed no edit. The engine is now split into a plain-Rust `try_search_bytes` and a two-line wasm wrapper, because `JsError` cannot be constructed on a native target and the Rust suite runs natively. Three assertions inverted. See [0016](decisions/0016-compiled-matcher-memo.md). |
+| 12 | Regex recompiled per chunk | **Fixed, and it was not a papercut.** A one-entry `thread_local` cache of the last compiled pattern; compile failures cached alongside successes. Over 800 16 KB chunks: a literal 91.2ms → 2.2ms, a Unicode class 2.9s → 20.6ms. Compilation was **97–99% of the total cost**, not the P3 nuisance this entry called it. The compiled-matcher *handle* this entry recommended was considered and rejected — it puts `.free()` on four exit paths of a promise executor and breaks a package whose whole surface is one function. See [0016](decisions/0016-compiled-matcher-memo.md). |
+| 13 | `MemSink` does not short-circuit | **Fixed.** `Ok(false)` stops at the first match; `match_count: u64` became `found: bool`. On chunks where every line matches, 16.4ms → 1.3ms at 16 KB and 61.9ms → 1.8ms at 64 KB; neutral on a single late match. Behaviourally unobservable — all 59 tests pass either way — so measurement is the only evidence it does anything. |
 | 2 | `pnpm test:wasm` fails on a fresh machine | **Fixed by removing the harness.** ChromeDriver was versioned independently of the browser it drove, by a mechanism this repo did not control, so the mismatch was structural. Playwright now runs the browser tests with a Chromium pinned to its own package version, the Rust tests became a native `cargo test` (`pnpm test:rust`), and browser coverage went *up* — 2 assertions about pure byte logic replaced by the 17-test integration suite, which now also exercises the fetch-based loader. See [0013](decisions/0013-playwright-for-browser-tests.md). |
 | 16 | Published package did not work under Vite | **Fixed.** Shipped wasm-pack's `web` target; the `bundler` target failed *silently* under Vite, returning `false` for every search. Verified in real Chrome against Vite (no plugins), webpack (no config), and a fresh app installed from the actual tarballs. See [0005](decisions/0005-esm-only-distribution.md). |
 | 10 | Root depended on its own published packages | **Fixed** by pnpm workspaces. The example now bundles local source. This was the repository's headline gotcha. See [0009](decisions/0009-pnpm-workspaces.md). |

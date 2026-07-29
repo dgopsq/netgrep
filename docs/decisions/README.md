@@ -28,6 +28,7 @@ reasoning got wrong.
 | [0013](0013-playwright-for-browser-tests.md) | Playwright runs the browser tests; ChromeDriver is gone | Accepted |
 | [0014](0014-sccache-not-a-shared-target-dir.md) | Cache Rust builds with sccache, and never with a shared target directory | Accepted |
 | [0015](0015-ci-jobs-grouped-by-toolchain.md) | Five CI jobs, grouped by toolchain, with the WASM built once | Accepted |
+| [0016](0016-compiled-matcher-memo.md) | Cache the compiled matcher inside Rust, rather than hand a handle to JavaScript | Accepted |
 
 ## Format
 
