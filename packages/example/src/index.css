@@ -15,9 +15,12 @@
  * assume the variant exists — resolves the same values instead of falling
  * through to an undefined light palette.
  *
- * The hues come from `assets/header.jpg`, which is the project's existing
- * identity: near-black, monospace, one teal accent. Nothing here introduces a
- * second accent colour.
+ * The hues came from the hand-made `assets/header.jpg` that was the project's
+ * identity when this page was built: near-black, monospace, one teal accent.
+ * Nothing here introduces a second accent colour.
+ *
+ * That dependency now runs the other way: header.jpg is gone, and
+ * `assets/header.png` is a screenshot of this page.
  *
  * The token set below is shadcn's COMPLETE one, and deliberately so, even
  * though this page never draws a popover or a secondary badge. It is the
@@ -39,7 +42,7 @@
   --popover: oklch(0.185 0.005 240);
   --popover-foreground: oklch(0.96 0.002 240);
 
-  /* teal-400-ish: the colour of the `()` in the README header */
+  /* teal-400-ish: the colour of the `()` in the old README header */
   --primary: oklch(0.812 0.128 181);
   --primary-foreground: oklch(0.17 0.02 181);
 
@@ -87,9 +90,10 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   /*
-   * No webfont is loaded. `header.jpg` is set in a plain monospace, and a
-   * self-hosted or Google-hosted face would add a render-blocking request to a
-   * page whose entire subject is how much it costs to download things.
+   * No webfont is loaded. The original header image was set in a plain
+   * monospace, and a self-hosted or Google-hosted face would add a
+   * render-blocking request to a page whose entire subject is how much it costs
+   * to download things.
    */
   --font-mono:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
@@ -114,7 +118,8 @@
 }
 
 @utility text-gradient {
-  /* Wordmark treatment: white falling off to teal, as in the README header. */
+  /* Wordmark treatment: white falling off to teal. The README banner is a
+     screenshot of it, so this rule is the wordmark rather than a copy of one. */
   background-image: linear-gradient(
     100deg,
     oklch(0.99 0 0) 20%,

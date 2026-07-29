@@ -1,3 +1,6 @@
+<!-- Absolute: npm renders this README off GitHub, where a relative path resolves to nothing. -->
+![new Netgrep(); — search remote files while they're downloading](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
+
 # @netgrep/netgrep
 
 The main `netgrep` package. See the [main README](https://github.com/dgopsq/netgrep) for more information.
