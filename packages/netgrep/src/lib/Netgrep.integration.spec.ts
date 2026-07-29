@@ -276,6 +276,57 @@ describe('Netgrep integration (real WASM)', () => {
     });
   });
 
+  describe('stream shapes', () => {
+    it('reports false for a body that closes without emitting anything', async () => {
+      const state = serve([]);
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'Wiseman',
+      );
+
+      expect(result).toMatchObject({ result: false });
+      // The single read that reports `done`.
+      expect(state.reads).toBe(1);
+    });
+
+    it('keeps reading past a zero-length chunk', async () => {
+      // A zero-length chunk is not `done`, and the engine answers `false` for
+      // it. Treating either as end-of-stream would silently truncate the
+      // search, and real bodies do emit empty chunks.
+      serve([
+        encoder.encode('nothing here'),
+        new Uint8Array(0),
+        encoder.encode('Wiseman arrives'),
+      ]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search('url', 'Wiseman'),
+      ).resolves.toMatchObject({ result: true });
+    });
+
+    it('matches in a final chunk that has no trailing newline', async () => {
+      // Chunk boundaries almost never land on a line terminator, so the last
+      // line the engine sees is usually unterminated.
+      serve([encoder.encode('first line\n'), encoder.encode('Wiseman')]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search('url', 'Wiseman$'),
+      ).resolves.toMatchObject({ result: true });
+    });
+
+    it('matches non-ASCII text across the WASM boundary', async () => {
+      // The bytes cross into WASM as a `Uint8Array` and the pattern as a
+      // string, so a multi-byte character exercises the marshalling on both
+      // sides at once.
+      serve(chunked('il a bu un café noir\n', 8));
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search('url', 'café'),
+      ).resolves.toMatchObject({ result: true });
+    });
+  });
+
   describe('searchBatch', () => {
     it('resolves a result per input against the real engine', async () => {
       serve([encoder.encode(POEM)]);
@@ -288,6 +339,104 @@ describe('Netgrep integration (real WASM)', () => {
         { url: 'a', result: true, error: null },
         { url: 'b', result: true, error: null },
         { url: 'c', result: true, error: null },
+      ]);
+    });
+
+    it('reports hits, misses and failures side by side', async () => {
+      // The shape a real corpus search produces: most files answer, one is a
+      // 404 or a dropped connection, and none of it stops the rest.
+      mockFetch.mockImplementation((url: string) => {
+        if (url === 'broken') return Promise.reject(new Error('offline'));
+
+        const text = url === 'hit' ? POEM : 'nothing of interest\n';
+        return Promise.resolve({
+          body: streamOfChunks([encoder.encode(text)]),
+        });
+      });
+
+      const results = await new Netgrep({
+        enableMemoryCache: false,
+      }).searchBatch(
+        [{ url: 'hit' }, { url: 'miss' }, { url: 'broken' }],
+        'Wiseman',
+      );
+
+      expect(results).toMatchObject([
+        { url: 'hit', result: true, error: null },
+        { url: 'miss', result: false, error: null },
+        { url: 'broken', result: false, error: 'offline' },
+      ]);
+    });
+  });
+
+  describe('searchBatchWithCallback', () => {
+    it('calls back once per input, against the real engine', async () => {
+      serve([encoder.encode(POEM)]);
+
+      const results: Array<{ url: string; result: boolean }> = [];
+
+      await new Promise<void>((resolve) => {
+        new Netgrep({ enableMemoryCache: false }).searchBatchWithCallback(
+          [{ url: 'a' }, { url: 'b' }],
+          'Jhaampe',
+          (result) => {
+            results.push({ url: result.url, result: result.result });
+            if (results.length === 2) resolve();
+          },
+        );
+      });
+
+      // Each search resolves independently, so only the set is defined.
+      expect(results.map((r) => r.url).sort()).toEqual(['a', 'b']);
+      expect(results.every((r) => r.result)).toBe(true);
+    });
+  });
+
+  describe('abort', () => {
+    it('rejects the search when the signal aborts the fetch', async () => {
+      // `Netgrep` does not watch the signal itself — it hands it to `fetch`
+      // and lets the rejection travel back out — so this pins that the
+      // rejection is not swallowed somewhere in the streaming loop.
+      mockFetch.mockImplementation((_url: string, init?: RequestInit) =>
+        init?.signal?.aborted
+          ? Promise.reject(new DOMException('Aborted', 'AbortError'))
+          : Promise.resolve({ body: streamOfChunks([encoder.encode(POEM)]) }),
+      );
+
+      const controller = new AbortController();
+      controller.abort();
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          'Wiseman',
+          undefined,
+          {
+            signal: controller.signal,
+          },
+        ),
+      ).rejects.toThrow('Aborted');
+    });
+
+    it('turns an abort into a per-url error in a batch', async () => {
+      mockFetch.mockImplementation((_url: string, init?: RequestInit) =>
+        init?.signal?.aborted
+          ? Promise.reject(new DOMException('Aborted', 'AbortError'))
+          : Promise.resolve({ body: streamOfChunks([encoder.encode(POEM)]) }),
+      );
+
+      const controller = new AbortController();
+      controller.abort();
+
+      const results = await new Netgrep({
+        enableMemoryCache: false,
+      }).searchBatch([{ url: 'a' }, { url: 'b' }], 'Wiseman', {
+        signal: controller.signal,
+      });
+
+      expect(results).toMatchObject([
+        { url: 'a', result: false, error: 'Aborted' },
+        { url: 'b', result: false, error: 'Aborted' },
       ]);
     });
   });
@@ -309,6 +458,36 @@ describe('Netgrep integration (real WASM)', () => {
         result: true,
       });
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('reassembles the chunks it cached', async () => {
+      // Chunked on the way in, one buffer on the way out — so a pattern that
+      // straddled a chunk boundary and was missed on the first pass (BACKLOG
+      // 3a) is found on the second, from cache. The same defect, arriving at
+      // two different answers depending on when you ask.
+      serve(chunked(POEM, 7));
+
+      const NG = new Netgrep({ enableMemoryCache: true });
+
+      await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
+        result: false,
+      });
+
+      await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
+        result: true,
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-fetches every time when the cache is disabled', async () => {
+      serve([encoder.encode(POEM)]);
+
+      const NG = new Netgrep({ enableMemoryCache: false });
+
+      await NG.search('url', 'dragon');
+      await NG.search('url', 'dragon');
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -369,6 +548,33 @@ describe('Netgrep integration (real WASM)', () => {
         result: false,
       });
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('BACKLOG 18: concurrent searches of one url double its cache entry', async () => {
+      // Nothing tracks a download already in flight, so two searches started
+      // before either resolves both fetch, and both append what they read to
+      // the same cache entry.
+      //
+      // The waste is the obvious half. The sharp half is that the entry now
+      // holds bytes the file never contained: the two copies are joined with
+      // no separator, so the seam forms a line that exists nowhere, and a
+      // later search matches it.
+      //
+      // One chunk, so the assertion does not depend on how the two reads
+      // interleave.
+      serve([encoder.encode('needle')]);
+
+      const NG = new Netgrep({ enableMemoryCache: true });
+
+      await Promise.all([NG.search('url', 'zzz'), NG.search('url', 'zzz')]);
+
+      // No in-flight de-duplication.
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // The file is 'needle'. The cache says 'needleneedle'.
+      await expect(NG.search('url', '^needleneedle$')).resolves.toMatchObject({
+        result: true,
+      });
     });
 
     it('BACKLOG 3c: an invalid pattern traps the WASM instance', async () => {

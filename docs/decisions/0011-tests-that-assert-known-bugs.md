@@ -25,6 +25,12 @@ The integration suite ends with a block titled
 The rule that makes this safe: **when a defect is genuinely fixed, its assertion is inverted in the same PR**,
 with a note explaining what changed. A defect test may never be edited to make CI green.
 
+> **Amended (2026-07-29).** `packages/search/tests/search.rs` now has a `documented_defects` module under the
+> same rule, for the defects that live in `lib.rs` — the panic on an invalid pattern, the NUL that discards a
+> chunk, and `$` on CRLF input. Those are pure bytes-in/bool-out, so pinning them in Rust as well means a
+> failure names the engine directly, with no browser, stream or cache in the way. The integration assertions
+> stay: they are what proves the defect survives the whole path to a consumer.
+
 ## Consequences
 
 **Good:**

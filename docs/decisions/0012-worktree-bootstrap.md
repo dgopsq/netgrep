@@ -1,6 +1,27 @@
 # 0012 — A bootstrap script, and no build-cache configuration in the repository
 
-**Status:** Accepted (2026-07-29).
+**Status:** Accepted (2026-07-29). The **build-cache half is superseded** by
+[0014](0014-sccache-not-a-shared-target-dir.md); `pnpm bootstrap` and `pnpm worktree` stand as described.
+
+> ## ⚠️ The `CARGO_TARGET_DIR` advice below is unsafe. Do not follow it.
+>
+> **Retracted 2026-07-29.** Sharing one target directory between worktrees of this repository makes Cargo
+> **silently run another worktree's binary**. Two worktrees hold the same package at the same version, and
+> Cargo's unit hash does not include the worktree path, so they collide on both output filenames and
+> fingerprint keys. Reproduced: after building in one worktree, the other reported everything fresh in 0.03s
+> and ran the first one's test binary — its own 25-test suite replaced by a 2-test one, with no recompile and
+> no warning.
+>
+> This is inherent to sharing a target directory between checkouts of the same package, so no phrasing of the
+> advice is safe. [0014](0014-sccache-not-a-shared-target-dir.md) uses `RUSTC_WRAPPER=sccache` instead, which
+> caches by content and leaves each worktree its own `target/`.
+>
+> The rest of this record stands. In particular, everything below about *why not to commit an absolute
+> `build.target-dir`* still holds, and 0014 does not commit one. What it also got wrong is who creates
+> worktrees: it assumed a human running `pnpm worktree` in a shell whose profile they control, and worktrees
+> here are increasingly created by tooling that never runs bootstrap and never reads `CONTRIBUTING.md`. The
+> cost listed at the bottom — "the cache is opt-in, so it is invisible to anyone who clones and does not read
+> `CONTRIBUTING.md`" — described the common path, not the edge.
 
 ## Context
 

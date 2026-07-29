@@ -1,0 +1,55 @@
+name: 'Set up the Rust toolchain'
+
+description: >
+  Install the toolchain named in `rust-toolchain.toml` — channel, targets and
+  components — and restore the Cargo cache for this kind of job.
+
+inputs:
+  cache-key:
+    description: >
+      Names the Cargo cache to share. Jobs that compile the same way should pass
+      the same value; jobs that do not (a wasm32 release build, a native debug
+      test, a clippy check) should not, because they populate disjoint target
+      directories and pooling them would only make every cache larger.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # `rust-toolchain.toml` is the single pin (AGENTS.md §3), and a workflow
+    # that restated `1.97.1` would be a second one — quietly wrong the day the
+    # file moves. rustup would honour the file on its own, but only for `cargo`
+    # invocations; the toolchain still has to be installed first, with the wasm
+    # target and clippy, and this is where that list comes from.
+    - id: pin
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        channel=$(sed -n 's/^channel *= *"\(.*\)".*/\1/p' rust-toolchain.toml)
+        targets=$(sed -n 's/^targets *= *\[\(.*\)\].*/\1/p' rust-toolchain.toml | tr -d '" ')
+        components=$(sed -n 's/^components *= *\[\(.*\)\].*/\1/p' rust-toolchain.toml | tr -d '" ')
+
+        if [ -z "$channel" ]; then
+          echo "::error file=rust-toolchain.toml::no [toolchain] channel found"
+          exit 1
+        fi
+
+        echo "channel=$channel" >> "$GITHUB_OUTPUT"
+        echo "targets=$targets" >> "$GITHUB_OUTPUT"
+        echo "components=$components" >> "$GITHUB_OUTPUT"
+        echo "Toolchain $channel, targets [$targets], components [$components]"
+
+    # `actions-rs/toolchain` is archived and unmaintained; dtolnay's is the
+    # maintained replacement.
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ steps.pin.outputs.channel }}
+        targets: ${{ steps.pin.outputs.targets }}
+        components: ${{ steps.pin.outputs.components }}
+
+    # Keyed on the default `target/`, which is why `scripts/cargo-cache.mjs`
+    # leaves the environment alone when `CI` is set — see decision 0014.
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: ${{ inputs.cache-key }}
