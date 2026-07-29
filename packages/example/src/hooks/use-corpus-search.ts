@@ -125,13 +125,35 @@ export function useCorpusSearch(pattern: string): SearchState {
     const controller = new AbortController();
     const startedAt = performance.now();
 
-    setState({
-      ...idleState(alphabetical),
+    // Stale-while-revalidate: the previous run's verdicts stay on screen, and
+    // each card changes only when its own new answer arrives.
+    //
+    // Resetting every card to `searching` here instead — which this did — makes
+    // the grid flash: on each debounced keystroke all 56 cards drop their
+    // verdict, then re-acquire it milliseconds later. Only cards that have
+    // never been searched show the searching state; the running indicator in
+    // the field and the counter in the stats bar carry the in-flight signal for
+    // everything else.
+    setState((prev) => ({
+      ...prev,
       statuses: Object.fromEntries(
-        alphabetical.map((id) => [id, 'searching' as const]),
+        alphabetical.map((id) => [
+          id,
+          prev.statuses[id] ?? ('searching' as const),
+        ]),
       ),
+      // The order is deliberately NOT reset to alphabetical. Doing so reordered
+      // the grid twice per search — once back to alphabetical at the start and
+      // once to settled at the end — so cards visibly jumped in both
+      // directions. It now moves once, at the end, and `use-flip.ts` animates
+      // that move.
+      matched: 0,
+      resolved: 0,
+      firstMatchMs: null,
+      completedMs: null,
+      error: null,
       running: true,
-    });
+    }));
 
     netgrep.searchBatchWithCallback(
       inputs,

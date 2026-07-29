@@ -1,5 +1,5 @@
 import { CircleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Hero } from '@/components/hero';
 import { Limitations } from '@/components/limitations';
 import { SearchField } from '@/components/search-field';
@@ -8,6 +8,7 @@ import { StoryCard } from '@/components/story-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCorpusSearch, useOrderedStories } from '@/hooks/use-corpus-search';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useFlip } from '@/hooks/use-flip';
 
 /**
  * Every keystroke starts 56 downloads, so the field is debounced before it
@@ -20,6 +21,9 @@ export function App() {
   const pattern = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const state = useCorpusSearch(pattern);
   const ordered = useOrderedStories(state.order);
+  const gridRef = useRef<HTMLUListElement>(null);
+
+  useFlip(gridRef, state.order);
 
   return (
     <div className="relative pb-24">
@@ -81,9 +85,12 @@ export function App() {
 
         <StatsBar state={state} />
 
-        <ul className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul
+          ref={gridRef}
+          className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
+        >
           {ordered.map((story) => (
-            <li key={story.id}>
+            <li key={story.id} data-flip-id={story.id}>
               <StoryCard
                 story={story}
                 status={state.statuses[story.id] ?? 'idle'}

@@ -30,7 +30,10 @@ export const StoryCard = memo(function StoryCard({
   return (
     <Card
       className={cn(
-        'relative gap-0 overflow-hidden transition-all duration-300',
+        // Explicitly NOT `transition-all`: that includes `transform`, which the
+        // FLIP reorder animates directly, so the two fight and the glide stutters.
+        'relative gap-0 overflow-hidden duration-300',
+        'transition-[opacity,border-color,background-color,box-shadow]',
         isMatch &&
           'border-primary/40 bg-primary/[0.06] shadow-[0_0_0_1px_var(--color-primary)/10,0_8px_30px_-12px_var(--color-primary)]',
         // Misses recede rather than disappear: the point of the grid is that
