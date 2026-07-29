@@ -245,7 +245,9 @@ scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one target di
 Root config: `pnpm-workspace.yaml`, `Cargo.toml` (Rust workspace **and** the release profile — Cargo ignores
 `[profile.*]` in member packages), `tsconfig.base.json`, `biome.jsonc`, `vitest.config.ts`,
 `vitest.global-setup.ts` (the "run `pnpm build:wasm`" guard for the browser project), `rust-toolchain.toml`,
-`.node-version`, `.github/workflows/`. There is deliberately **no `.cargo/config.toml`** — see §4.1.
+`.node-version`, `.github/workflows/`, `paseo.json` (tells the paseo worktree tool to run `pnpm bootstrap` on
+a new worktree, so one class of tooling-created checkout arrives ready — §4.1). There is deliberately **no
+`.cargo/config.toml`** — see §4.1.
 
 ### Two things about `packages/search` that surprise people
 
