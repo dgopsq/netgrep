@@ -4,6 +4,9 @@
 
 # netgrep
 
+**[Try it →](https://dgopsq.github.io/netgrep/)** — a live demo searching 56 Sherlock Holmes stories, showing
+each file resolve as it downloads. Its known limitations are listed on the page, not hidden.
+
 > [!IMPORTANT]
 > **This is an experiment, not a recommendation.** Netgrep is almost certainly not the best way to add search
 > to your site. A prebuilt index — [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
@@ -36,7 +39,7 @@ Since `0.2.0` no bundler *configuration* is required.
 ## Usage
 
 > [!TIP]
-> A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example).
+> A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example), and running at [dgopsq.github.io/netgrep](https://dgopsq.github.io/netgrep/).
 
 First of all install the module:
 

@@ -12,6 +12,7 @@
     "bootstrap": "node scripts/bootstrap.mjs",
     "worktree": "node scripts/worktree.mjs",
     "build": "pnpm --filter @netgrep/netgrep build",
+    "build:example": "pnpm --filter @netgrep/example build",
     "build:wasm": "pnpm --filter @netgrep/search build",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
@@ -23,6 +24,7 @@
     "lint:rust": "pnpm --filter @netgrep/search lint",
     "format": "biome check --write .",
     "typecheck": "tsc -p packages/netgrep/tsconfig.json",
+    "typecheck:example": "tsc -p packages/example/tsconfig.json",
     "dev": "pnpm --filter @netgrep/example dev"
   },
   "devDependencies": {

@@ -1,0 +1,169 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * The site is dark-only, so the shadcn tokens are defined once on `:root`
+ * rather than as a light theme plus a `.dark` override. `<html>` still carries
+ * `class="dark"` so that any component copied in later — shadcn's sources all
+ * assume the variant exists — resolves the same values instead of falling
+ * through to an undefined light palette.
+ *
+ * The hues come from `assets/header.jpg`, which is the project's existing
+ * identity: near-black, monospace, one teal accent. Nothing here introduces a
+ * second accent colour.
+ */
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.75rem;
+
+  --background: oklch(0.145 0.004 240);
+  --foreground: oklch(0.96 0.002 240);
+
+  --card: oklch(0.185 0.005 240);
+  --card-foreground: oklch(0.96 0.002 240);
+  --popover: oklch(0.185 0.005 240);
+  --popover-foreground: oklch(0.96 0.002 240);
+
+  /* teal-400-ish: the colour of the `()` in the README header */
+  --primary: oklch(0.812 0.128 181);
+  --primary-foreground: oklch(0.17 0.02 181);
+
+  --secondary: oklch(0.235 0.006 240);
+  --secondary-foreground: oklch(0.96 0.002 240);
+
+  --muted: oklch(0.235 0.006 240);
+  --muted-foreground: oklch(0.68 0.008 240);
+
+  --accent: oklch(0.26 0.012 181);
+  --accent-foreground: oklch(0.96 0.002 240);
+
+  --destructive: oklch(0.66 0.19 24);
+  --destructive-foreground: oklch(0.98 0.005 24);
+
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.812 0.128 181 / 55%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * No webfont is loaded. `header.jpg` is set in a plain monospace, and a
+   * self-hosted or Google-hosted face would add a render-blocking request to a
+   * page whose entire subject is how much it costs to download things.
+   */
+  --font-mono:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-primary/30;
+  }
+}
+
+@utility text-gradient {
+  /* Wordmark treatment: white falling off to teal, as in the README header. */
+  background-image: linear-gradient(
+    100deg,
+    oklch(0.99 0 0) 20%,
+    oklch(0.812 0.128 181) 85%
+  );
+  background-clip: text;
+  color: transparent;
+}
+
+@utility hero-glow {
+  /*
+   * The teal wash behind the hero.
+   *
+   * This lives on an absolutely positioned element that SCROLLS WITH THE
+   * DOCUMENT. It used to be `background-attachment: fixed` on `body`, which
+   * pinned it to the viewport — so the sticky search bar, which is a flat
+   * near-black panel, painted a visible dark band straight through the glow
+   * every time you scrolled. Anchoring the glow to the top of the page instead
+   * means it has scrolled out of view by the time the bar reaches the top, and
+   * the two never overlap.
+   */
+  background-image:
+    radial-gradient(
+      60rem 40rem at 50% -10rem,
+      oklch(0.812 0.128 181 / 12%),
+      transparent 70%
+    ),
+    radial-gradient(
+      40rem 30rem at 85% 5rem,
+      oklch(0.7 0.1 220 / 7%),
+      transparent 70%
+    );
+  background-repeat: no-repeat;
+}
+
+@utility hairline-top {
+  /* Linear's signature: a 1px rule that fades out at both ends. */
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-border) 20%,
+    var(--color-border) 80%,
+    transparent
+  );
+}
+
+/*
+ * The searching state is conveyed by two pulsing elements and a spinner. Under
+ * a reduced-motion preference the state is still legible without them, so they
+ * are stopped rather than merely slowed.
+ *
+ * `!important` is load-bearing here: these have to beat the animation utilities
+ * Tailwind emits on the elements themselves, which is exactly the case the rule
+ * below is not written for.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore-start lint/complexity/noImportantStyles: must override Tailwind's animate-* utilities */
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    /* biome-ignore-end lint/complexity/noImportantStyles: must override Tailwind's animate-* utilities */
+  }
+}
