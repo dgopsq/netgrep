@@ -1,6 +1,6 @@
 
 
-![Header](https://github.com/dgopsq/netgrep/blob/main/assets/header.jpg)
+![new Netgrep(); — search remote files while they're downloading](assets/header.png)
 
 # netgrep
 
