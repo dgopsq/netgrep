@@ -24,31 +24,34 @@ export function Limitations() {
     <section className="mt-20" aria-labelledby="limitations-heading">
       <div className="hairline-top h-px w-full" />
 
-      <div className="flex items-start gap-3 pt-10">
-        <Info
-          className="text-primary/80 mt-1 size-5 shrink-0"
-          aria-hidden="true"
-        />
-        <div>
-          <h2
-            id="limitations-heading"
-            className="text-xl font-medium tracking-tight"
-          >
-            Scope
-          </h2>
-          <p className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-            What netgrep does, and what it deliberately does not. Worth knowing
-            before you build on it.
-          </p>
-        </div>
+      {/*
+        The heading is flush with the definition list below it, not indented
+        behind an icon: indented, it lined up with nothing and read as another
+        list item rather than as the start of a section. The eyebrow carries the
+        teal accent the icon used to, without pushing the title off the grid.
+      */}
+      <div className="pt-14">
+        <p className="text-primary/90 flex items-center gap-2 text-xs font-medium tracking-[0.2em] uppercase">
+          <Info className="size-3.5" aria-hidden="true" />
+          Scope
+        </p>
+
+        <h2
+          id="limitations-heading"
+          className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-balance"
+        >
+          What netgrep does, and what it deliberately does not
+        </h2>
+
+        <p className="text-muted-foreground mt-3 max-w-xl leading-relaxed">
+          Worth knowing before you build on it.
+        </p>
       </div>
 
-      <dl className="mt-8 grid gap-x-10 gap-y-7 sm:grid-cols-2">
+      <dl className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2">
         {CAVEATS.map((caveat) => (
           <div key={caveat.title}>
-            <dt className="text-foreground text-sm font-medium">
-              {caveat.title}
-            </dt>
+            <dt className="text-foreground font-medium">{caveat.title}</dt>
             <dd className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
               {caveat.body}
             </dd>
