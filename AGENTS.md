@@ -72,7 +72,7 @@ This is the first thing to try when something fails inexplicably on a clean chec
 
 ### 2.3 ⚠️ Fixing a defect is not finished until the DEMO SITE stops warning about it
 
-The example is a **published web page** — <https://dgopsq.github.io/netgrep/> — and its "Scope" section tells
+The example is a **published web page** — <https://netgrep.diegopasquali.com/> — and its "Scope" section tells
 visitors what netgrep cannot do. A fix that leaves that list alone puts the project in the worst possible
 position: a live site confidently warning the world about a bug that no longer exists. The site's only value
 is that it is accurate, so stale honesty is worse than none.
@@ -155,7 +155,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
-| Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/netgrep/>. **Needs `pnpm build` first** — see below |
+| Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
 | Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
 | Build the demo | `pnpm build:example` | → `packages/example/dist/`. **Needs `pnpm build` first** |
 | Regenerate the corpus manifest | `pnpm --filter @netgrep/example manifest` | After adding or removing a story file |
@@ -239,6 +239,11 @@ involved and the step list inside it names the command:
 A sixth workflow, `deploy-pages.yml`, publishes the demo to GitHub Pages on every push to `main`. It is not
 one of these jobs: it `uses:` this whole workflow and gates on it, the way the two publish workflows do.
 
+The demo's domain, `netgrep.diegopasquali.com`, is **not configured anywhere in this repository** — it is a
+repository setting (Settings → Pages → Custom domain) plus a DNS record, and a `CNAME` file in the deployed
+artefact would be ignored, because that mechanism is only for branch-based publishing. See
+[decision 0017](docs/decisions/0017-example-as-hosted-demo.md#amendment-the-site-moved-to-netgrepdiegopasqualicom).
+
 The WASM is built once and downloaded by the two jobs that need it. The two that need nothing from Rust do
 not wait for it.
 
@@ -285,12 +290,15 @@ packages/
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
-  example/           THE PUBLIC DEMO — https://dgopsq.github.io/netgrep/
+  example/           THE PUBLIC DEMO — https://netgrep.diegopasquali.com/
                      Vite + React + Tailwind v4 + shadcn, searching 56 Sherlock Holmes
                      .txt files. Not published to npm; deployed to Pages on push to main.
     src/hooks/use-corpus-search.ts   the whole netgrep integration. Runs with the
                                      memory cache OFF on purpose — read the comment
-    src/lib/story-url.ts             the ONLY module that knows the `/netgrep/` base path
+    src/lib/story-url.ts             the ONLY module that knows the base path
+    index.html                       canonical, Open Graph, JSON-LD — spells the
+                                     domain out in full; so do public/robots.txt
+                                     and public/sitemap.xml. Nothing checks them
     scripts/build-manifest.mjs       regenerates src/data/stories.ts from public/stories/
     public/stories/                  the corpus, 56 files, 2.6 MB
     → deployed by .github/workflows/deploy-pages.yml. See decision 0017
@@ -353,7 +361,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    than deliberate periodic review. Revisit only if the pinned versions start going stale in practice.
 
 3. **The example is the public demo, and its dependencies ARE maintained.** It is published to GitHub Pages
-   at <https://dgopsq.github.io/netgrep/> on every push to `main`, and CI typechecks and builds it. This
+   at <https://netgrep.diegopasquali.com/> on every push to `main`, and CI typechecks and builds it. This
    **reverses** the exemption the package used to carry — the note in its `package.json` saying its
    dependencies were deliberately frozen is gone, not overlooked. See
    [decision 0017](docs/decisions/0017-example-as-hosted-demo.md).

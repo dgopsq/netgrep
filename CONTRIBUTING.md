@@ -134,7 +134,7 @@ Then, in rough order of how likely each is to bite:
   one fails, something changed the engine; work out what, and if the new behaviour is right, **invert the
   assertion in the same PR** with a note. Do not quietly "fix" the test.
   [AGENTS.md §2.1](AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) has the full story.
-- **Fixing a defect also means updating the demo site.** <https://dgopsq.github.io/netgrep/> lists the
+- **Fixing a defect also means updating the demo site.** <https://netgrep.diegopasquali.com/> lists the
   defects that affect its visitors, so a fix that leaves the list alone ships a page warning about a bug
   that no longer exists. Remove the entry from the `CAVEATS` array in
   `packages/example/src/components/limitations.tsx` in the same PR — and if you fix both 3b and 18, re-enable

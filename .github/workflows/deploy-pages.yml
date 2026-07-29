@@ -8,6 +8,12 @@ on:
 
 name: Deploy demo to GitHub Pages
 
+# Serves https://netgrep.diegopasquali.com. That domain is configured in the
+# repository settings (Settings -> Pages -> Custom domain) and in DNS, NOT here:
+# a deployment driven by a workflow ignores a CNAME file in the artefact, so
+# there deliberately is not one in packages/example/public/. See
+# docs/decisions/0017-example-as-hosted-demo.md.
+
 permissions:
   contents: read
 

@@ -29,7 +29,7 @@ means inverting its assertion in the same PR.**
 
 > [!IMPORTANT]
 > **Moving an item to _Done_ is not finished until the demo site stops warning about it.** The published
-> page at <https://dgopsq.github.io/netgrep/> names the defects that affect its visitors, in the `CAVEATS`
+> page at <https://netgrep.diegopasquali.com/> names the defects that affect its visitors, in the `CAVEATS`
 > array of `packages/example/src/components/limitations.tsx`. Leave it alone and the site goes on warning
 > the world about a bug you just fixed.
 >

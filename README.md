@@ -4,7 +4,7 @@
 
 # netgrep
 
-**[Try it →](https://dgopsq.github.io/netgrep/)** — a live demo searching 56 Sherlock Holmes stories, showing
+**[Try it →](https://netgrep.diegopasquali.com/)** — a live demo searching 56 Sherlock Holmes stories, showing
 each file resolve as it downloads. Its known limitations are listed on the page, not hidden.
 
 > [!IMPORTANT]
@@ -39,7 +39,7 @@ Since `0.2.0` no bundler *configuration* is required.
 ## Usage
 
 > [!TIP]
-> A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example), and running at [dgopsq.github.io/netgrep](https://dgopsq.github.io/netgrep/).
+> A complete example is available [in the `example` package](https://github.com/dgopsq/netgrep/tree/main/packages/example), and running at [netgrep.diegopasquali.com](https://netgrep.diegopasquali.com/).
 
 First of all install the module:
 

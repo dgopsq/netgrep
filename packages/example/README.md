@@ -1,6 +1,6 @@
 # Netgrep demo
 
-The public demo for `@netgrep/netgrep`, live at **<https://dgopsq.github.io/netgrep/>**.
+The public demo for `@netgrep/netgrep`, live at **<https://netgrep.diegopasquali.com/>**.
 
 Vite + React + Tailwind v4 + shadcn/ui. It searches 56 Sherlock Holmes short stories (2.6 MB) and shows each
 file resolving individually, as it downloads. See the [main README](https://github.com/dgopsq/netgrep) for
@@ -25,13 +25,17 @@ pnpm dev
 resolves to the workspace package and points at the gitignored `packages/netgrep/dist/`. Without it Vite
 fails to resolve the import. `pnpm bootstrap` covers the install and the WASM, but not `pnpm build`.
 
-The dev server runs at <http://localhost:5173/netgrep/> — under the same base path as production,
-deliberately, so a base-path mistake fails here rather than only after deploying.
+The dev server runs at <http://localhost:5173/> — the same base path as production, deliberately, so a
+base-path mistake fails here rather than only after deploying.
 
 ## Deployment
 
 `.github/workflows/deploy-pages.yml`, on every push to `main`, gated on the full `test-and-lint.yml` graph.
 Nothing is deployed from a red build.
+
+The custom domain lives in **Settings → Pages → Custom domain**, not in this repository: a deploy driven by
+a GitHub Actions workflow ignores a `CNAME` file in the artifact, so there is deliberately none in `public/`.
+The DNS record itself is a CNAME in Cloudflare pointing at `dgopsq.github.io`.
 
 ## Things worth knowing before editing
 
@@ -39,9 +43,31 @@ Nothing is deployed from a red build.
 load-bearing: two of the library's documented P1 defects exist only when it is on, and both make this page
 return confidently wrong answers. The comment there explains it — do not "optimise" it back on.
 
-**`src/lib/story-url.ts` is the only module allowed to know the base path.** The site is served from
-`/netgrep/`, so a root-relative `/stories/x.txt` silently 404s and the page then looks like a corpus that
-simply matches nothing.
+**`src/lib/story-url.ts` is the only module allowed to know the base path.** It is `/` today, so the
+indirection buys nothing visible — but under the old `dgopsq.github.io/netgrep/` project page a root-relative
+`/stories/x.txt` silently 404d and the page then looked like a corpus that simply matched nothing. Keep story
+URLs going through it.
+
+**The domain is hard-coded in three files, and nothing checks them.** `index.html` (canonical, `og:url`,
+`og:image`, and the `@id`s in the JSON-LD), `public/sitemap.xml` and `public/robots.txt` all spell out
+`https://netgrep.diegopasquali.com` in full, because canonical and Open Graph URLs must be absolute and Vite's
+`base` carries no origin. If the domain moves, grep for it. A stale canonical is the worst of these to get
+wrong: it tells Google the real page is somewhere else.
+
+**`public/robots.txt` disallows `/stories/` on purpose.** They are 56 public-domain texts used as demo data,
+not pages, and indexing them would put 2.6 MB of duplicate content on the domain. It does not affect the demo
+— robots.txt binds crawlers, not the browser.
+
+**The icons are generated from `public/favicon.svg`.** After editing it:
+
+```bash
+cd packages/example/public
+rsvg-convert -w 192 -h 192 favicon.svg -o icon-192.png
+rsvg-convert -w 180 -h 180 favicon.svg -o apple-touch-icon.png
+```
+
+`public/og-image.jpg` is `assets/header.jpg` resampled to 1200px wide and padded to the 1200×630 that Open
+Graph wants: `sips --resampleWidth 1200 … | sips -p 630 1200 --padColor 000000`.
 
 **`src/data/stories.ts` is generated.** Titles are read out of each file's own header block. After adding or
 removing a file in `public/stories/`:

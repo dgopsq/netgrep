@@ -4,16 +4,178 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0a0b0c" />
 
-    <title>netgrep — ripgrep over HTTP, while the file downloads</title>
+    <!--
+      THE CANONICAL ORIGIN IS WRITTEN OUT IN FULL, SEVERAL TIMES, BELOW.
+
+      Everywhere else in this app a URL is composed from `import.meta.env.BASE_URL`
+      (see src/lib/story-url.ts). That cannot be done here: `canonical`, `og:url`
+      and `og:image` are required to be absolute, and Vite's `base` is a path with
+      no origin in it. So if the domain moves again, these have to be edited by
+      hand — grep this file for `netgrep.diegopasquali.com`, and do not forget
+      public/sitemap.xml and public/robots.txt, which have the same problem.
+    -->
+    <link rel="canonical" href="https://netgrep.diegopasquali.com/" />
+
+    <title>netgrep — in-browser file search with ripgrep and WebAssembly</title>
     <meta
       name="description"
-      content="An experiment: ripgrep's search engine compiled to WebAssembly, searching 56 remote files as they download. Not a recommendation — read the limitations."
+      content="Search remote text files from the browser while they download. ripgrep's engine compiled to WebAssembly — no search index to build, no backend to run. Live demo over 56 files."
     />
+
+    <!--
+      `max-snippet:-1` and `max-image-preview:large` opt into full-length
+      snippets and large image previews; without them Google is free to pick
+      something shorter. `index, follow` is the default and is stated anyway,
+      because a missing robots tag and a deliberate one look identical later.
+    -->
+    <meta
+      name="robots"
+      content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"
+    />
+
+    <!--
+      Google renders favicons in mobile results. It wants a square icon linked
+      from the home page's head, and recommends larger than 48x48 — hence the
+      192px PNG alongside the SVG, which is the one modern browsers prefer.
+      All three are generated from public/favicon.svg; regenerate with
+      `rsvg-convert -w 192 -h 192 public/favicon.svg -o public/icon-192.png`.
+    -->
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+
+    <!-- Open Graph: what Slack, Discord, LinkedIn and iMessage unfurl. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="netgrep" />
+    <meta property="og:url" content="https://netgrep.diegopasquali.com/" />
+    <meta
+      property="og:title"
+      content="netgrep — search remote files while they download"
+    />
+    <meta
+      property="og:description"
+      content="ripgrep's search engine, compiled to WebAssembly and pointed at plain static files. It answers the moment it sees a match, without reading the rest."
+    />
+    <meta
+      property="og:image"
+      content="https://netgrep.diegopasquali.com/og-image.jpg"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="The netgrep wordmark: new Netgrep(); set in monospace on black."
+    />
+    <meta property="og:locale" content="en_US" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="netgrep — search remote files while they download"
+    />
+    <meta
+      name="twitter:description"
+      content="ripgrep's search engine, compiled to WebAssembly and pointed at plain static files. It answers the moment it sees a match, without reading the rest."
+    />
+    <meta
+      name="twitter:image"
+      content="https://netgrep.diegopasquali.com/og-image.jpg"
+    />
+
+    <!--
+      Structured data. Three linked entities rather than one: the PAGE is a free
+      web application, the THING IT DEMONSTRATES is a source-code package, and
+      they are not the same object — collapsing them would claim the npm library
+      is a website.
+
+      There is deliberately no FAQPage block built out of the "Scope" section,
+      which is the obvious thing to do with a page that has four questions and
+      four answers on it. Google restricted FAQ rich results to authoritative
+      government and health sites in 2023, so on this domain the markup would
+      produce no rich result at all — only a maintenance burden that goes stale
+      in exactly the way limitations.tsx warns about.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://netgrep.diegopasquali.com/#website",
+            "url": "https://netgrep.diegopasquali.com/",
+            "name": "netgrep",
+            "description": "Search remote text files from the browser while they download, using ripgrep's engine compiled to WebAssembly.",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://netgrep.diegopasquali.com/#author" }
+          },
+          {
+            "@type": "Person",
+            "@id": "https://netgrep.diegopasquali.com/#author",
+            "name": "Diego Pasquali",
+            "url": "https://github.com/dgopsq"
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://netgrep.diegopasquali.com/#demo",
+            "name": "netgrep demo",
+            "url": "https://netgrep.diegopasquali.com/",
+            "applicationCategory": "DeveloperApplication",
+            "browserRequirements": "Requires JavaScript and WebAssembly",
+            "operatingSystem": "Any",
+            "isAccessibleForFree": true,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "description": "A live demo searching 56 Sherlock Holmes short stories over HTTP, showing each file resolve individually as it downloads.",
+            "author": { "@id": "https://netgrep.diegopasquali.com/#author" },
+            "about": { "@id": "https://netgrep.diegopasquali.com/#library" }
+          },
+          {
+            "@type": "SoftwareSourceCode",
+            "@id": "https://netgrep.diegopasquali.com/#library",
+            "name": "@netgrep/netgrep",
+            "description": "A JavaScript library that searches remote files while they download, by streaming each HTTP chunk through ripgrep's search engine compiled to WebAssembly. Returns a boolean per file; builds no index and needs no backend.",
+            "codeRepository": "https://github.com/dgopsq/netgrep",
+            "programmingLanguage": ["TypeScript", "Rust"],
+            "runtimePlatform": "WebAssembly",
+            "license": "https://opensource.org/licenses/MIT",
+            "author": { "@id": "https://netgrep.diegopasquali.com/#author" }
+          }
+        ]
+      }
+    </script>
   </head>
 
   <body>
     <div id="root"></div>
+
+    <!--
+      The page is client-rendered, so this element is the entire document to
+      anything that does not run JavaScript. Googlebot does render, but not
+      every crawler that matters does, and an empty body is indistinguishable
+      from a broken one. Kept to a plain statement of what the page is; it is
+      not a place to repeat keywords at a crawler while hiding them from
+      readers, which is what the search engines actually penalise.
+    -->
+    <noscript>
+      <h1>netgrep</h1>
+      <p>
+        netgrep searches remote text files from the browser while they are still
+        downloading, using ripgrep's search engine compiled to WebAssembly. It
+        builds no search index and needs no backend.
+      </p>
+      <p>
+        This demo needs JavaScript and WebAssembly to run. The library is on npm
+        as <code>@netgrep/netgrep</code>, and the source, including its known
+        limitations, is at
+        <a href="https://github.com/dgopsq/netgrep">github.com/dgopsq/netgrep</a>.
+      </p>
+    </noscript>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

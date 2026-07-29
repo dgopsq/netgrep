@@ -29,7 +29,7 @@ reasoning got wrong.
 | [0014](0014-sccache-not-a-shared-target-dir.md) | Cache Rust builds with sccache, and never with a shared target directory | Accepted |
 | [0015](0015-ci-jobs-grouped-by-toolchain.md) | Five CI jobs, grouped by toolchain, with the WASM built once | Accepted |
 | [0016](0016-compiled-matcher-memo.md) | Cache the compiled matcher inside Rust, rather than hand a handle to JavaScript | Accepted |
-| [0017](0017-example-as-hosted-demo.md) | The example becomes the hosted demo, and goes back on the maintenance path | Accepted — **reverses the example's frozen-dependency exemption** |
+| [0017](0017-example-as-hosted-demo.md) | The example becomes the hosted demo, and goes back on the maintenance path | Accepted — **reverses the example's frozen-dependency exemption**; amended — custom domain, base path now `/` |
 
 ## Format
 

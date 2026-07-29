@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "manifest": "node scripts/build-manifest.mjs"
   },
-  "//": "This app is the public demo at https://dgopsq.github.io/netgrep, so unlike the rest of the repository its dependencies ARE on the maintenance path — see docs/decisions/0017-example-as-hosted-demo.md. Typechecking lives in the root `pnpm typecheck` rather than in `build`, so the TypeScript version stays pinned in one place.",
+  "//": "This app is the public demo at https://netgrep.diegopasquali.com, so unlike the rest of the repository its dependencies ARE on the maintenance path — see docs/decisions/0017-example-as-hosted-demo.md. Typechecking lives in the root `pnpm typecheck` rather than in `build`, so the TypeScript version stays pinned in one place.",
   "dependencies": {
     "@netgrep/netgrep": "workspace:*",
     "class-variance-authority": "^0.7.1",

@@ -333,7 +333,7 @@ change is caught. Read
 That block has already earned its place: modernizing the ripgrep dependencies silently *fixed* the
 `^`-anchoring bug, and nothing else would have noticed.
 
-The example is the public demo at <https://dgopsq.github.io/netgrep/>. It runs against local workspace
+The example is the public demo at <https://netgrep.diegopasquali.com/>. It runs against local workspace
 source, so it is honest, and CI typechecks and builds it — but nothing asserts what it *renders*, so it
 establishes no correctness. It searches with the in-memory cache disabled, because two of the P1 defects
 below exist only when that cache is on; see [decision 0017](decisions/0017-example-as-hosted-demo.md).
