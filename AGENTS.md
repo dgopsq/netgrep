@@ -3,7 +3,7 @@
 Operating guide for AI agents working in the **netgrep** repository.
 Canonical source — `CLAUDE.md` points here. Keep this file authoritative; do not fork its content.
 
-Everything below was verified end-to-end on **2026-07-28** (macOS arm64, Node 24.18.0, Rust 1.97.1).
+Everything below was verified end-to-end on **2026-07-29** (macOS arm64, Node 24.18.0, Rust 1.97.1).
 
 ---
 
@@ -40,6 +40,8 @@ Two things will mislead you if you do not know them.
 `packages/netgrep/src/lib/Netgrep.integration.spec.ts` ends with a block titled
 **`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a pattern
 straddling a chunk boundary returning `false`, a NUL byte discarding a chunk, and so on.
+`packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
+the engine, where a failure names `lib.rs` without a browser and a stream in the way.
 
 They are not mistakes and they are not out of date. Their job is to detect *unintended* change during
 dependency work: a test asserting the correct-but-unimplemented behaviour would fail today and tell us
@@ -66,7 +68,7 @@ pnpm build:wasm
 `pnpm install` works without it, and so do the unit tests (they mock the engine). Everything else does not.
 This is the first thing to try when something fails inexplicably on a clean checkout.
 
-`pnpm bootstrap` does this step for you, along with the install and the shared Cargo cache — see §4.1.
+`pnpm bootstrap` does this step for you, along with the install and Playwright's Chromium — see §4.1.
 
 ---
 
@@ -106,17 +108,21 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 
 | Task | Command | Notes |
 |---|---|---|
-| Prepare a checkout | `pnpm bootstrap` | Shared Cargo cache + install + WASM. Idempotent — see §4.1 |
+| Prepare a checkout | `pnpm bootstrap` | Install + WASM + browser. Idempotent — see §4.1 |
 | New worktree | `pnpm worktree <branch>` | `git worktree add` beside this checkout, then bootstrap it |
 | Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.15 MB `index_bg.wasm` |
 | Build TS | `pnpm build` | → `packages/netgrep/dist/` |
-| Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`) |
+| Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **24 tests**: 7 unit in Node, 17 integration in headless Chromium |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **2 tests** |
+| Test TS | `pnpm test` | Vitest — **58 tests**: 30 unit in Node, 28 integration in headless Chromium |
+| — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **25 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
+
+CI groups these into five jobs by toolchain (§4.3). A red check names the group; the step list inside it
+names the command, and that command is one of the above.
 
 ### 4.1 Working in a git worktree
 
@@ -130,23 +136,31 @@ nested checkout would be picked up by the workspace glob, Biome and Vitest alike
 `pnpm bootstrap` inside an existing worktree does the same preparation. Both accept `--no-install`,
 `--no-build` and `--no-browser` to skip a step.
 
-**The repository configures no build cache, on purpose.** Cargo keeps `target/` inside each worktree, so each
-one recompiles the ripgrep dependency tree and keeps its own copy (~8s release, ~5s more for clippy, hundreds
-of MB). Sharing that is a line in the developer's shell profile, not a file in this repo:
+**Rust builds are cached across worktrees, and you do not have to set it up** — provided `sccache` is on the
+machine. Cargo otherwise keeps `target/` inside each worktree and recompiles the whole ripgrep dependency
+tree into every one (~9s for the wasm32 release build, ~10s for the native test build). So
+`scripts/cargo-cache.mjs` wraps the cargo and wasm-pack calls in `packages/search`'s scripts and sets
+`RUSTC_WRAPPER=sccache` (plus `CARGO_INCREMENTAL=0`, which sccache requires). Measured on a fresh worktree
+with a warm cache: wasm32 release **9.0s → 3.8s**, `cargo test --no-run` **10.1s → 4.4s**.
 
-```bash
-export CARGO_TARGET_DIR="$HOME/.cache/cargo-shared"
-```
+It works in a worktree created by `git worktree add` directly, which is the point — worktrees made by tooling
+never run `pnpm bootstrap`. It steps aside, leaving the command untouched, when sccache is not installed
+(then nothing changes and nothing is required of you), when `RUSTC_WRAPPER` is already set, when `CI` is set
+(`Swatinem/rust-cache` already caches there), or when `NETGREP_CARGO_CACHE=0`.
 
-A new worktree then compiles only the `search` crate — under half a second measured, against ~8s cold. Cargo
-**locks** the target directory,
-so simultaneous builds in two worktrees serialize, and the directory grows unbounded. `bootstrap.mjs` reports
-which cache it found and suggests the variable once a second worktree exists.
+> [!WARNING]
+> **Do not point `CARGO_TARGET_DIR` at a directory shared by two worktrees**, however tempting — it is much
+> faster (0.7s rather than 3.8s) and it silently runs the wrong binary. Both worktrees hold the same package
+> at the same version, and Cargo's unit hash does not include the worktree path, so they collide on output
+> filenames *and* fingerprint keys. Reproduced on 2026-07-29: after a build in one worktree, the other
+> reported everything fresh in 0.03s and ran the first one's test binary — a 25-test suite replaced by a
+> 2-test one, no recompile, no warning. CI cannot catch it; CI has one checkout. `CONTRIBUTING.md` and
+> [decision 0012](docs/decisions/0012-worktree-bootstrap.md) used to recommend exactly this, and the advice
+> has been retracted.
 
-Do not commit this as `build.target-dir`: it is an absolute path, and CI's caching actions assume the default
-`target/`. [Decision 0012](docs/decisions/0012-worktree-bootstrap.md) records the generated-config approach
-that was built first, measured, and dropped — and what comparable JS+Rust repositories do instead.
-[`CONTRIBUTING.md`](CONTRIBUTING.md) is the human-facing version of this section.
+`target/` is still per-worktree, so **disk is not saved, only time**. There is still deliberately no
+`.cargo/config.toml`. [Decision 0014](docs/decisions/0014-sccache-not-a-shared-target-dir.md) records all of
+this. [`CONTRIBUTING.md`](CONTRIBUTING.md) is the human-facing version of this section.
 
 ### 4.2 The browser the tests run in
 
@@ -164,6 +178,38 @@ which downloaded the newest ChromeDriver, could not drive an older local Chrome,
 `CHROMEDRIVER` so the mismatch was not fixable by hand. That whole failure mode is gone — browser and driver
 now ship as one pinned unit. See [decision 0013](docs/decisions/0013-playwright-for-browser-tests.md).
 
+### 4.3 What CI runs, and where a red check comes from
+
+`test-and-lint.yml` is **five jobs grouped by toolchain**, so the check that goes red names the tools
+involved and the step list inside it names the command:
+
+| Job | Waits for | Commands |
+|---|---|---|
+| `wasm` | — | `pnpm build:wasm`, then uploads `packages/search/pkg` as an artefact |
+| `rust` | — | `pnpm lint:rust`, `pnpm test:rust` |
+| `js` | — | `pnpm lint:js`, `pnpm test:unit` |
+| `browser` | `wasm` | `pnpm exec playwright install chromium`, `pnpm test:browser` |
+| `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack` |
+| `ci` | all | Aggregate — **this is the check to require on the branch** |
+
+The WASM is built once and downloaded by the two jobs that need it. The two that need nothing from Rust do
+not wait for it.
+
+**Commands after a job's first carry `if: '!cancelled()'`**, so a clippy nit does not cost you the Rust test
+results — the whole job runs and every failure in it shows up in one pass. Two deliberate exceptions: the
+**first** command in a job is unguarded, so a broken checkout or a missing artefact stops there instead of
+cascading into three identical failures; and `verify:pack` is unguarded because it genuinely needs `build` to
+have produced `dist/`. Keep both when adding a step.
+
+Setup lives in two composite actions, `.github/actions/node` and `.github/actions/rust`; the second reads the
+channel, targets and components out of `rust-toolchain.toml`, so the version is pinned in that file and
+nowhere else. **Adding a job means adding it to `ci`'s `needs` list**, or it gates nothing.
+
+Grouping by toolchain rather than one job per command is deliberate and measured: a job-per-command version
+ran in 108s against ~110s sequential, for twice the runner time. **Parallelising CI here does not make it
+faster** — read [decision 0015](docs/decisions/0015-ci-jobs-grouped-by-toolchain.md) before splitting it up
+again.
+
 ---
 
 ## 5. Repository map
@@ -174,7 +220,8 @@ Three packages, ~450 lines of first-party source. pnpm workspaces link them; the
 packages/
   search/            Rust → WASM core. The actual search engine.
     src/lib.rs         ~45 lines. Exports one function: search_bytes(&[u8], &str) -> bool
-    tests/search.rs    plain native `cargo test` — no browser, no WebDriver
+    tests/search.rs    plain native `cargo test` — no browser, no WebDriver.
+                       Ends with a `documented_defects` module; read §2.1 first
     scripts/post_build.js   fixes up the generated pkg/ (see below)
     package.json       hand-written wrapper; THIS is what gets published
     pkg/               BUILD OUTPUT, gitignored
@@ -193,14 +240,22 @@ packages/
                      Not published. Runs against local workspace source.
 
 scripts/verify-pack.mjs   Packaging guard, run in CI.
-scripts/bootstrap.mjs     Prepares a checkout: shared Cargo cache, install, WASM (§4.1).
+scripts/bootstrap.mjs     Prepares a checkout: install, browser, WASM (§4.1).
 scripts/worktree.mjs      `git worktree add` + bootstrap, in one command.
+scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one COMPILER cache,
+                          via sccache. Each keeps its own target/ — sharing that is unsafe,
+                          see §4.1 and decision 0014.
+
+.github/workflows/        Five jobs grouped by toolchain (§4.3).
+.github/actions/          Composite setup actions, `node` and `rust`, shared by those jobs.
 ```
 
 Root config: `pnpm-workspace.yaml`, `Cargo.toml` (Rust workspace **and** the release profile — Cargo ignores
 `[profile.*]` in member packages), `tsconfig.base.json`, `biome.jsonc`, `vitest.config.ts`,
 `vitest.global-setup.ts` (the "run `pnpm build:wasm`" guard for the browser project), `rust-toolchain.toml`,
-`.node-version`, `.github/workflows/`. There is deliberately **no `.cargo/config.toml`** — see §4.1.
+`.node-version`, `.github/workflows/`, `paseo.json` (tells the paseo worktree tool to run `pnpm bootstrap` on
+a new worktree, so one class of tooling-created checkout arrives ready — §4.1). There is deliberately **no
+`.cargo/config.toml`** — see §4.1.
 
 ### Two things about `packages/search` that surprise people
 
@@ -254,15 +309,20 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 
 ## 7. Known correctness caveats
 
-Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test in
-`Netgrep.integration.spec.ts` — read §2.1 before touching any of them.
+Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test that
+asserts the wrong behaviour — in `Netgrep.integration.spec.ts`, and for the two that live in the engine also
+in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|
 | Chunk-boundary false negatives | `Netgrep.ts` search loop | A match spanning two `fetch` chunks is never found. Silent, non-deterministic. |
 | Poisoned partial cache | `Netgrep.ts` cache paths | Early resolution caches a prefix; later searches answer `false` for text never downloaded. |
-| Panic on invalid pattern | `lib.rs`, `.build(pattern).unwrap()` | A stray `(` traps the WASM instance instead of surfacing a catchable error. |
+| Panic on invalid pattern | `lib.rs`, `.build(pattern).unwrap()` | A stray `(` traps the WASM instance instead of surfacing a catchable error. A literal newline in the pattern does the same. |
 | One NUL discards the chunk | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
+| `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
+| Concurrent searches double a cache entry | `Netgrep.ts`, no in-flight tracking | Two searches of one url started together both fetch and both append, so the entry holds the file twice — joined with no separator, forming a line the file never had. |
+
+The last two were found while broadening the test suite on 2026-07-29 and are backlog items 17 and 18.
 
 The first two **interact** — fixing either naively (by draining the stream) destroys the early-resolution
 property that is the whole point of the project. See

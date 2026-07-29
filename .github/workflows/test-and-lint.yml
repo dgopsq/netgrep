@@ -9,53 +9,178 @@ on:
 
 name: Test and lint workflow
 
+# A superseded run has nothing left to tell us, so cancel it — but only on pull
+# requests. A push to `main` and a release tag both arrive as `push`, and those
+# runs are gates rather than feedback; cancelling one would report a green
+# commit that was never fully checked.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+# FIVE JOBS, GROUPED BY WHAT THEY NEED INSTALLED
+# ----------------------------------------------
+# This was a single job running eight commands in sequence. A red build said
+# "Test and lint failed" and you opened the log to find out what, and a clippy
+# warning in the first minute hid every later result because nothing after it
+# ran.
+#
+# It was then split to one job per command, which fixed both — and measured at
+# 108s wall clock against ~110s for the sequential version, for roughly double
+# the runner time. At this repository's size the parallelism buys nothing; the
+# naming does. So the grouping is by *toolchain*, which is the thing a job
+# actually pays for: a Rust job, a Node-only job, the WASM build, the browser,
+# and the packaging. Five jobs install five sets of tools instead of nine.
+#
+# The one cost of grouping is that a failing step could hide the ones after it,
+# which is half of what the split was for. `if: '!cancelled()'` on every
+# COMMAND after a job's first buys that back: the whole job runs, every failure
+# is visible in one pass, and the job still fails. The first command is left
+# unguarded on purpose, so that a broken checkout or a missing artefact takes
+# the job down where it broke instead of cascading. See decision 0015.
 jobs:
-  test_and_lint:
-    name: Test and lint
+  # Built first because two jobs need `packages/search/pkg`, which is a
+  # gitignored build output: `@netgrep/netgrep` resolves `@netgrep/search` to
+  # this workspace, so typecheck, build and the integration tests all fail
+  # without it.
+  wasm:
+    name: Build WASM
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
-      # `actions-rs/toolchain` is archived and unmaintained. dtolnay's action
-      # reads rust-toolchain.toml, so the version, target and components are
-      # declared in exactly one place.
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/rust
         with:
-          toolchain: '1.97.1'
-          targets: wasm32-unknown-unknown
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: '.node-version'
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
-
+          cache-key: wasm
+      - uses: ./.github/actions/node
       - uses: jetli/wasm-pack-action@v0.4.0
         with:
           version: 'v0.13.1'
 
-      # The browser `pnpm test` runs in is Playwright's own Chromium, pinned to
-      # the `playwright` version in the lockfile. Nothing here depends on the
-      # runner's system Chrome, so the browser and the thing driving it cannot
-      # drift apart — which is exactly what ChromeDriver used to do. Only
-      # chromium is downloaded; firefox and webkit are not used.
-      - run: pnpm exec playwright install --with-deps chromium
-
-      # The WASM build comes first: `@netgrep/netgrep` resolves
-      # `@netgrep/search` to this workspace, so typecheck, build and the
-      # integration tests all need packages/search/pkg to exist.
       - run: pnpm build:wasm
 
-      - run: pnpm lint
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: packages/search/pkg
+          # A hand-off between jobs in one run, not something to keep.
+          retention-days: 1
+          # An empty upload here would otherwise surface as a confusing failure
+          # two jobs later, when the download produced nothing.
+          if-no-files-found: error
+
+  # Everything needing the Rust toolchain but not the WASM: clippy checks the
+  # crate, `cargo test` links it for the host. Neither touches `pkg/`.
+  rust:
+    name: Rust (clippy + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/rust
+        with:
+          cache-key: rust
+      - uses: ./.github/actions/node
+
+      - run: pnpm lint:rust
+      # `-D warnings` means clippy fails on a nit. Running the tests anyway is
+      # the point of this line: a formatting-grade complaint must not cost you
+      # the test results.
+      - run: pnpm test:rust
+        if: '!cancelled()'
+
+  # Everything needing neither Rust nor a browser. The unit suite mocks `fetch`
+  # AND the engine (AGENTS.md §2.2), so it never touches `pkg/` — which is why
+  # this does not wait for the WASM and is usually the first check to report.
+  js:
+    name: JS (Biome + unit tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node
+
+      - run: pnpm lint:js
+      - run: pnpm test:unit
+        if: '!cancelled()'
+
+  browser:
+    name: Browser tests
+    needs: wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: packages/search/pkg
+
+      # The browser is Playwright's own Chromium, pinned to the `playwright`
+      # version in the lockfile, so it cannot drift from the thing driving it —
+      # which is exactly what ChromeDriver used to do. Only chromium is
+      # downloaded; firefox and webkit are not used.
+      - run: pnpm exec playwright install --with-deps chromium
+
+      - run: pnpm test:browser
+
+  # The three things that consume the compiled TypeScript. `typecheck` is not
+  # redundant with `build`: it uses the wider tsconfig, so it covers the spec
+  # files, which `tsconfig.lib.json` excludes. `verify:pack` then inspects the
+  # tarballs that would actually reach npm — the only artefact users ever see,
+  # and once the only one nothing checked.
+  bundle:
+    name: Typecheck, build & package
+    needs: wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: packages/search/pkg
+
+      # No guard on the first command, so a failed artefact download stops here
+      # rather than producing three more failures that all say the same thing.
+      # `!cancelled()` is for not letting one COMMAND hide the next; setup
+      # failing should still take the job down at the point it broke.
       - run: pnpm typecheck
       - run: pnpm build
-      - run: pnpm test
-      - run: pnpm test:rust
-
-      # Everything above inspects the working tree. This inspects the tarballs
-      # that would actually reach npm — the only artefact users ever see, and
-      # previously the only one nothing checked.
+        if: '!cancelled()'
+      # Needs `pnpm build` to have produced dist/, so unlike the one above this
+      # has a real dependency on its predecessor and is skipped if it fails.
       - run: pnpm verify:pack
+
+  # One check to require on the branch, and one for `workflow_call` callers to
+  # depend on, so that neither has to be edited when a job is added above.
+  ci:
+    name: CI
+    if: always()
+    needs:
+      - wasm
+      - rust
+      - js
+      - browser
+      - bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        run: echo '${{ toJSON(needs) }}'
+
+      # `always()` means this job runs even when a dependency failed, so it has
+      # to inspect the results rather than rely on being skipped. `skipped`
+      # counts as a failure: a job is skipped here only because something it
+      # needed — the WASM build — did not succeed.
+      - name: Fail if any job did not succeed
+        if: >-
+          contains(needs.*.result, 'failure')
+          || contains(needs.*.result, 'cancelled')
+          || contains(needs.*.result, 'skipped')
+        run: |
+          echo '::error::At least one job did not succeed.'
+          exit 1

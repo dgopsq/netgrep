@@ -204,9 +204,16 @@ rather than fixed**. They are pinned by tests so they cannot change unnoticed; t
   incomplete. A later search on the same URL for a *different* pattern reads that partial copy and can
   return `false` for text further down the file. Set `enableMemoryCache: false` if this matters more than
   the network savings.
-- **An invalid regex traps the WASM instance**, as described above.
+- **An invalid regex traps the WASM instance**, as described above. A pattern containing a literal newline
+  does the same, so guard against pasted multi-line input.
 - **A file containing a NUL byte reports no match** for the chunk containing it, even when the match came
   earlier. Binary detection abandons the whole chunk rather than stopping at the NUL.
+- **`$` does not match on CRLF files.** The line terminator is `\n`, so on Windows-authored text the `\r`
+  sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
+- **Two concurrent searches of the same URL are not de-duplicated.** Both download, and both append to the
+  same cache entry, so it ends up holding the file twice with no separator between the copies — which can
+  make a later search match a line the file never contained. Await one search of a URL before starting
+  another, or set `enableMemoryCache: false`.
 
 The first two exist because searching *while downloading* is the entire point of the project — the naive
 fixes for both are to wait for the full file, which is the thing netgrep is built not to do.

@@ -24,8 +24,10 @@ reasoning got wrong.
 | [0009](0009-pnpm-workspaces.md) | pnpm workspaces, and a hand-written manifest for the WASM package | Accepted |
 | [0010](0010-vitest-and-biome.md) | Vitest and Biome replace jest, ts-jest, ESLint and Prettier | Accepted |
 | [0011](0011-tests-that-assert-known-bugs.md) | Tests that deliberately assert incorrect behaviour | Accepted |
-| [0012](0012-worktree-bootstrap.md) | A bootstrap script, and no build-cache configuration in the repository | Accepted |
+| [0012](0012-worktree-bootstrap.md) | A bootstrap script, and no build-cache configuration in the repository | Accepted — **build-cache half superseded** by 0014, which **retracts this record's `CARGO_TARGET_DIR` advice as unsafe** |
 | [0013](0013-playwright-for-browser-tests.md) | Playwright runs the browser tests; ChromeDriver is gone | Accepted |
+| [0014](0014-sccache-not-a-shared-target-dir.md) | Cache Rust builds with sccache, and never with a shared target directory | Accepted |
+| [0015](0015-ci-jobs-grouped-by-toolchain.md) | Five CI jobs, grouped by toolchain, with the WASM built once | Accepted |
 
 ## Format
 

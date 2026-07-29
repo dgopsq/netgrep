@@ -10,7 +10,7 @@ items move to the bottom rather than disappearing.
 Rules that apply to all of it: dependency changes are never a side effect of other work, and releases are
 human-triggered only. See [`../AGENTS.md` §6](../AGENTS.md#6-hard-rules).
 
-Verified against the repository on **2026-07-28** (macOS arm64, Node 24.18.0, Rust 1.97.1).
+Verified against the repository on **2026-07-29** (macOS arm64, Node 24.18.0, Rust 1.97.1).
 
 ---
 
@@ -20,12 +20,15 @@ Verified against the repository on **2026-07-28** (macOS arm64, Node 24.18.0, Ru
 
 Full analysis in [`ARCHITECTURE.md`](ARCHITECTURE.md#known-limitations--correctness-caveats).
 
-Every item below is **pinned by a test** in `Netgrep.integration.spec.ts` that asserts the current, wrong
-behaviour. Read [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose)
+Every item below is **pinned by a test that asserts the current, wrong behaviour** — in
+`Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the `documented_defects`
+module of `packages/search/tests/search.rs`. Read
+[`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose)
 and [decision 0011](decisions/0011-tests-that-assert-known-bugs.md) before touching any of them: **fixing one
 means inverting its assertion in the same PR.**
 
-**3a and 3b interact — do not fix either in isolation.**
+**3a and 3b interact — do not fix either in isolation**, and 3b and 18 want the same per-url promise
+registry.
 
 ### 3a. Chunk-boundary false negatives — `packages/netgrep/src/lib/Netgrep.ts`
 
@@ -67,6 +70,47 @@ dropped even when it occurs *before* the NUL, and even on an earlier line.
 Quitting on binary input is a reasonable ripgrep default; the surprise is that a boolean API cannot
 distinguish "binary, not searched" from "no match". Options: `BinaryDetection::none()`, or surfacing the
 distinction — which is an API change and therefore out of scope today.
+
+### 17. `$` never matches on CRLF input — `packages/search/src/lib.rs`
+
+The matcher is built without `.crlf(true)`, and the searcher's line terminator is `\n`, so on a
+Windows-authored file the `\r` is the last character of the line and sits between the text and `$`.
+
+```
+"needle\n"     ~  "needle$"  ->  true
+"needle\r\n"   ~  "needle$"  ->  false   # same text, different line endings
+"needle\r\n"   ~  "needle"   ->  true    # unanchored is fine
+"a\r\nneedle\r\n" ~ "^needle" -> true    # ^ is unaffected
+```
+
+Silent, and it depends on who authored the file rather than on anything the caller did — which makes it
+harder to notice than 3f. `RegexMatcherBuilder::crlf(true)` is the fix, but it is a matching-semantics
+change, so it wants its own tested commit.
+
+Found on 2026-07-29 while broadening the test suite. Pinned in the `documented_defects` module of
+`packages/search/tests/search.rs`.
+
+### 18. Concurrent searches of one url double its cache entry — `packages/netgrep/src/lib/Netgrep.ts`
+
+Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
+`fetch`, and both `upsertMemoryCache` what they read into the same entry.
+
+The duplicate request is the cheap half. The expensive half is that the entry then holds bytes the file never
+contained: the copies are joined with no separator, so the seam forms a line that exists nowhere.
+
+```
+file:   "needle"
+cache:  "needleneedle"        after two concurrent searches
+        ~ "^needleneedle$"  ->  true
+```
+
+`searchBatchWithCallback` makes this easy to hit — it starts every search eagerly with no concurrency limit,
+so a corpus listing one url twice reaches it immediately.
+
+A per-url promise registry fixes both halves: the second caller awaits the first instead of fetching. That is
+the same registry a fix for 3b would want, so the two are worth doing together.
+
+Found on 2026-07-29 while broadening the test suite. Pinned in `Netgrep.integration.spec.ts`.
 
 ---
 

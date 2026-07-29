@@ -140,8 +140,9 @@ non-`Error` throws.
 
 ## Known limitations & correctness caveats
 
-All verified against the source in this repository, and each is **pinned by a test** in
-`Netgrep.integration.spec.ts` that asserts the current, wrong behaviour — see
+All verified against the source in this repository, and each is **pinned by a test that asserts the current,
+wrong behaviour** — in `Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the
+`documented_defects` module of `packages/search/tests/search.rs`. See
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) before touching
 any of them.
 
@@ -207,6 +208,28 @@ NUL therefore reports "no match" for content that is demonstrably present.
 Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
 "binary, not searched" from "no match", because the API is a boolean.
 
+### 8. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
+
+The searcher is given `line_terminator(Some(b'\n'))`, so on a Windows-authored file the `\r` is the last
+character of the line and `$` sits behind it. `needle$` matches `"needle\n"` and does **not** match
+`"needle\r\n"`, while plain `needle` matches both. `^` is unaffected — the CR is at the other end.
+
+Silent, and it depends on who wrote the file rather than on anything the caller did.
+`RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
+deliberate task rather than a drive-by.
+
+### 9. Concurrent searches of one url double its cache entry — `Netgrep.ts`, `search`
+
+Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
+`fetch`, and both append what they read to the same cache entry.
+
+The waste is the obvious half. The sharp half is that the entry then holds bytes the file never contained:
+the copies are joined with no separator, so the seam forms a line that exists nowhere and a later search
+matches it. A file of `needle` caches as `needleneedle`, and `^needleneedle$` answers `true`.
+
+*A fix needs a per-url promise registry so the second caller awaits the first, which also removes the
+duplicate request.*
+
 ---
 
 ## Build & release pipeline
@@ -242,18 +265,40 @@ that only webpack supported, and that failed *silently* under Vite — see
 
 | Workflow | Trigger | Action |
 |---|---|---|
-| `test-and-lint.yml` | push/PR to `main`, or called | `playwright install chromium` → `build:wasm` → `lint` → `typecheck` → `build` → `test` → `test:rust` → `verify:pack` |
+| `test-and-lint.yml` | push/PR to `main`, or called | Five jobs plus an aggregate — see below |
 | `publish-search.yml` | tag `search-**` | test-and-lint → `build:wasm` → npm publish `packages/search/package.json` |
 | `publish-netgrep.yml` | tag `netgrep-**` | test-and-lint → `build:wasm` → `build` → npm publish `packages/netgrep/package.json` |
 
+`test-and-lint.yml` groups its work **by toolchain**, which is what a job actually pays to install:
+
+```
+wasm ──┬── browser  (test:browser) ──────────────────┐
+       └── bundle   (typecheck, build, verify:pack) ─┤
+                                                     ├── ci  (aggregate; the check to require)
+rust  (lint:rust, test:rust) ────────────────────────┤
+js    (lint:js, test:unit) ──────────────────────────┘
+```
+
+`wasm` runs `build:wasm` and uploads `packages/search/pkg` as an artefact, so the two jobs that need it
+download it instead of recompiling the ripgrep tree. `rust` and `js` need nothing from it — the unit suite
+mocks the engine — so they do not wait. Setup is shared through the composite actions in `.github/actions/`.
+
+Steps after the first in a job carry `if: '!cancelled()'`, so one failing command does not hide the ones
+after it; that was the original single job's worst property, and it is a step-level problem rather than a
+reason to have more jobs. A job-per-command version was built and measured first: 108s wall clock against
+~110s sequential, at twice the runner time. See
+[decision 0015](decisions/0015-ci-jobs-grouped-by-toolchain.md).
+
 Both publish workflows use `greater-version-only: true`, so a forgotten version bump makes the publish a
-silent no-op rather than a loud failure.
+silent no-op rather than a loud failure. They rebuild the WASM rather than take the tested artefact, on
+purpose — the trade-off is noted in `publish-search.yml`.
 
 `verify:pack` exists because every other check inspects the working tree, while the tarball is the only
 artefact a consumer ever receives. That gap is how a published package containing no WASM became possible.
 
 Workflows read the pinned versions from `rust-toolchain.toml` and `.node-version` rather than restating them,
-so local and CI cannot drift the way they once did.
+so local and CI cannot drift the way they once did. `.github/actions/rust` parses the channel, targets and
+components straight out of `rust-toolchain.toml`.
 
 ---
 
@@ -261,10 +306,15 @@ so local and CI cannot drift the way they once did.
 
 | Suite | Runner | What it covers |
 |---|---|---|
-| `Netgrep.spec.ts` | Vitest in **Node**, 7 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, error capture, and that a cache hit avoids a second `fetch`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 17 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 2 tests | `search_bytes` as pure Rust — bytes in, bool out. No browser involved. |
+| `Netgrep.spec.ts` | Vitest in **Node**, 30 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 28 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 25 tests | `search_bytes` as pure Rust — bytes in, bool out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
+
+The split between the first three is deliberate: anything that depends only on the bytes is cheapest to pin
+in Rust, where a failure names the engine; anything about streaming, batching or caching belongs in the
+TypeScript suites. They overlap at exactly one point — smart case — because it is the behaviour most likely
+to move silently under a dependency bump, and knowing *which* layer moved is worth one duplicated assertion.
 
 The integration suite loads **the artefact that actually ships** (`packages/search/pkg`) and instantiates it
 through its own real, fetch-based `init()` — the same loader a consumer gets, resolving `index_bg.wasm`

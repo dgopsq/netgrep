@@ -15,8 +15,8 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "wasm-pack build --scope netgrep --out-name index --target web --release && node scripts/post_build.js",
-    "test": "cargo test -p search",
-    "lint": "cargo clippy -p search -- -D warnings --no-deps"
+    "build": "node ../../scripts/cargo-cache.mjs wasm-pack build --scope netgrep --out-name index --target web --release && node scripts/post_build.js",
+    "test": "node ../../scripts/cargo-cache.mjs cargo test -p search",
+    "lint": "node ../../scripts/cargo-cache.mjs cargo clippy -p search -- -D warnings --no-deps"
   }
 }

@@ -3,31 +3,39 @@ on:
     tags:
       - netgrep-**
 
+name: Publish @netgrep/netgrep
+
+permissions:
+  contents: read
+
 jobs:
+  # Runs the whole split job graph. `needs` below gates on the called workflow
+  # as a whole, so a job added there gates this one too, with nothing to change
+  # here.
   test-and-lint:
     uses: ./.github/workflows/test-and-lint.yml
 
   publish:
     needs: test-and-lint
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+
+      # Rebuilt rather than taken from the test workflow's `wasm-pkg` artefact —
+      # see the note in publish-search.yml. The WASM is needed even though this
+      # publishes the TypeScript package: `pnpm build` compiles against
+      # `@netgrep/search`, which resolves to this workspace.
+      - uses: ./.github/actions/rust
         with:
-          toolchain: '1.97.1'
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: '.node-version'
-          cache: 'pnpm'
-      - run: pnpm install --frozen-lockfile
+          cache-key: wasm
+      - uses: ./.github/actions/node
       - uses: jetli/wasm-pack-action@v0.4.0
         with:
           version: 'v0.13.1'
       - run: pnpm build:wasm
       - run: pnpm build
+
       - uses: JS-DevTools/npm-publish@v1
         with:
           token: ${{ secrets.NPM_TOKEN }}

@@ -13,20 +13,15 @@
  * usually already there and this step costs nothing; on a new machine it is a
  * ~180 MB download. It is here so that the closing "try `pnpm test`" is true.
  *
- * What this script deliberately does NOT do is configure a build cache.
+ * What this script does NOT do is set up the Rust build cache, because it no
+ * longer has to: `scripts/cargo-cache.mjs` routes every cargo and wasm-pack
+ * invocation in this repository through sccache when it is installed. That
+ * happens whether or not anybody ran this script — which is the point, since
+ * worktrees created by tooling never do. See decision 0014, and read it before
+ * reaching for a shared CARGO_TARGET_DIR: that is faster and it silently runs
+ * the wrong binary.
  *
- * An earlier version wrote a `.cargo/config.toml` pointing `build.target-dir`
- * at a directory shared by every worktree, because Cargo otherwise keeps a
- * private `target/` per worktree and recompiles the whole ripgrep dependency
- * tree into each one. It worked — measurably — but a survey of comparable
- * JS+Rust repositories (oxc, rolldown, rspack, biome, swc) found that all of
- * them commit `.cargo/config.toml` for machine-agnostic settings such as
- * rustflags, and *none* of them set `build.target-dir` or a `rustc-wrapper`.
- * Machine-specific caching lives in the developer's environment there, and CI
- * caching actions assume the default `target/`.
- *
- * So the cache is an environment variable you set once, and this script only
- * reports what it found. See CONTRIBUTING.md.
+ * All that is left here is to say what the next build will use.
  *
  * Usage:
  *   node scripts/bootstrap.mjs [--no-install] [--no-build] [--no-browser]
@@ -34,6 +29,11 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  resolveRustCache,
+  SCCACHE_SUGGESTION,
+  worktreeCount,
+} from './cargo-cache.mjs';
 
 const args = new Set(process.argv.slice(2));
 
@@ -62,29 +62,34 @@ const run = (file, argv, cwd) =>
 const repoRoot = capture('git', ['rev-parse', '--show-toplevel']);
 
 /**
- * Say what Cargo will do with its build artefacts, and suggest sharing them
- * when — and only when — more than one worktree exists. A single-checkout
- * clone has nothing to share with, and nagging it would be noise.
+ * Say what the Rust builds in this checkout will be cached by, so that a build
+ * going through a wrapper nobody configured is never a mystery.
+ *
+ * The decision itself belongs to `cargo-cache.mjs`, which is what actually
+ * applies it — this only reports it. It is imported rather than reimplemented
+ * because the two copies this replaced disagreed within a day of being
+ * written: one had no `CI` branch, and they labelled the same state
+ * differently.
  */
 function reportBuildCache() {
+  const cache = resolveRustCache();
+
+  console.log(`rust cache: ${cache.label}`);
+
+  if (cache.kind === 'absent' && worktreeCount() > 1) {
+    for (const line of SCCACHE_SUGGESTION) console.log(line);
+  }
+
+  // A shared CARGO_TARGET_DIR is the obvious-looking alternative and it is
+  // unsafe — see decision 0014 — so say so where somebody might be about to
+  // try it.
   if (process.env.CARGO_TARGET_DIR) {
-    console.log(`cargo target: ${process.env.CARGO_TARGET_DIR}`);
-    return;
-  }
-
-  if (process.env.RUSTC_WRAPPER) {
-    console.log(`compiler cache: ${process.env.RUSTC_WRAPPER}`);
-    return;
-  }
-
-  const worktrees = capture('git', ['worktree', 'list']).split('\n').length;
-
-  if (worktrees > 1) {
     console.log(
-      `cargo target: ./target (private to this checkout, ${worktrees} exist)`,
+      `\nWARNING: CARGO_TARGET_DIR is set (${process.env.CARGO_TARGET_DIR}).`,
     );
-    console.log('Share one across worktrees with CARGO_TARGET_DIR — see');
-    console.log('CONTRIBUTING.md, "Sharing a build cache".');
+    console.log('If it is shared with another worktree of this repository,');
+    console.log("Cargo can silently run that worktree's binary instead of");
+    console.log("this one's. See docs/decisions/0014.");
   }
 }
 
@@ -129,9 +134,10 @@ try {
 console.log('\n> pnpm build:wasm');
 run('pnpm', ['build:wasm'], repoRoot);
 
-// A leftover from the generated-config approach described above. Harmless, but
-// it silently redirects every build, which is exactly the confusion that
-// approach was dropped for.
+// The repository commits no `.cargo/config.toml` (decision 0012), so one here
+// is a local file — possibly a leftover from the generated-config approach that
+// was tried and dropped. It takes precedence over nothing this repo does, but
+// it can redirect a build silently, which is worth one line.
 if (existsSync(join(repoRoot, '.cargo', 'config.toml'))) {
   console.log('\nNote: .cargo/config.toml exists and may redirect builds.');
 }

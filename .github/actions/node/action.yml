@@ -1,0 +1,22 @@
+name: 'Set up Node and pnpm'
+
+description: >
+  Install pnpm and the Node version pinned in `.node-version`, then install the
+  workspace. Every job needs this, including the Rust-only ones: the commands
+  they run are defined once in package.json and reached through `pnpm --filter`,
+  so the version pins stay in one place per AGENTS.md §3.
+
+runs:
+  using: composite
+  steps:
+    # Reads `packageManager` from the root package.json, so the pnpm version is
+    # not restated here either.
+    - uses: pnpm/action-setup@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version-file: '.node-version'
+        cache: 'pnpm'
+
+    - run: pnpm install --frozen-lockfile
+      shell: bash
