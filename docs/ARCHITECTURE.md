@@ -31,8 +31,9 @@ below are documented rather than hidden, and why the API has stayed a boolean.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│ packages/example  — webpack 5 demo, not published                │
-│   plain JS, 67 .txt files, debounced input → searchBatch         │
+│ packages/example  — the public demo, deployed to GitHub Pages     │
+│   Vite + React + Tailwind, 56 .txt files, debounced input →      │
+│   searchBatchWithCallback, memory cache OFF (decision 0017)      │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
@@ -332,5 +333,7 @@ change is caught. Read
 That block has already earned its place: modernizing the ripgrep dependencies silently *fixed* the
 `^`-anchoring bug, and nothing else would have noticed.
 
-The example is a manual smoke test. It runs against local workspace source, so it is honest — but it is not
-automated and does not run in CI.
+The example is the public demo at <https://dgopsq.github.io/netgrep/>. It runs against local workspace
+source, so it is honest, and CI typechecks and builds it — but nothing asserts what it *renders*, so it
+establishes no correctness. It searches with the in-memory cache disabled, because two of the P1 defects
+below exist only when that cache is on; see [decision 0017](decisions/0017-example-as-hosted-demo.md).

@@ -12,7 +12,8 @@
       "!**/pkg",
       "!**/pkg-node",
       "!**/coverage",
-      "!packages/example/assets"
+      // The demo corpus: 56 public-domain text files, not source.
+      "!packages/example/public"
     ]
   },
   "formatter": {
@@ -24,6 +25,14 @@
   "javascript": {
     "formatter": {
       "quoteStyle": "single"
+    }
+  },
+  "css": {
+    "parser": {
+      // The demo's stylesheet is Tailwind v4, which is configured in CSS rather
+      // than in a JS config file: `@theme`, `@utility` and `@custom-variant` are
+      // real syntax there, and Biome rejects them as parse errors otherwise.
+      "tailwindDirectives": true
     }
   },
   "linter": {
@@ -42,26 +51,13 @@
   },
   "overrides": [
     {
-      // scripts/ holds CLI tools whose entire interface is stdout.
-      "includes": ["scripts/**"],
+      // scripts/ holds CLI tools whose entire interface is stdout — both the
+      // root ones and the demo's manifest generator.
+      "includes": ["scripts/**", "packages/*/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {
             "noConsole": "off"
-          }
-        }
-      }
-    },
-    {
-      // The example is a single-purpose demo whose only interactive element is
-      // the search box, so autofocusing it steals focus from nothing. Biome's
-      // HTML suppression comments cannot target an attribute on its own line,
-      // hence an override rather than an inline ignore.
-      "includes": ["packages/example/src/index.html"],
-      "linter": {
-        "rules": {
-          "a11y": {
-            "noAutofocus": "off"
           }
         }
       }

@@ -33,7 +33,7 @@ sanctioned work.
 
 ## 2. ⚠️ Read this before you edit anything
 
-Two things will mislead you if you do not know them.
+Three things will mislead you if you do not know them.
 
 ### 2.1 Some tests assert behaviour that is WRONG, on purpose
 
@@ -69,6 +69,42 @@ pnpm build:wasm
 This is the first thing to try when something fails inexplicably on a clean checkout.
 
 `pnpm bootstrap` does this step for you, along with the install and Playwright's Chromium — see §4.1.
+
+### 2.3 ⚠️ Fixing a defect is not finished until the DEMO SITE stops warning about it
+
+The example is a **published web page** — <https://dgopsq.github.io/netgrep/> — and its "Scope" section tells
+visitors what netgrep cannot do. A fix that leaves that list alone puts the project in the worst possible
+position: a live site confidently warning the world about a bug that no longer exists. The site's only value
+is that it is accurate, so stale honesty is worse than none.
+
+**So a change to library behaviour is incomplete until the site agrees with it.** This is the same rule as
+§2.1 and it fires on the same commits: fixing a defect means inverting its test *and* updating the site, both
+in the PR that fixes it.
+
+**Nothing enforces this.** No test fails, CI stays green, and the site keeps lying until a human notices. That
+is exactly why it is in this section rather than in a comment somewhere.
+
+| If you… | Then, in the same PR… |
+|---|---|
+| Fix 3a, 3b, 3f, 17 or 18 | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) |
+| Fix **both** 3b and 18 | Also re-enable the cache in `packages/example/src/hooks/use-corpus-search.ts` and delete the "This demo runs with the cache off" caveat — the workaround exists only because of those two |
+| Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
+| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state "one boolean per file" and the 1.15 MB WebAssembly download |
+
+**The four caveats currently on the site map to backlog items like this**, so you can find yours quickly:
+
+| Caveat on the site | Backlog |
+|---|---|
+| One boolean per file | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md). Will never be "fixed" |
+| Matches spanning two network chunks are missed | **3a** |
+| This demo runs with the cache off | **3b** and **18** |
+| Binary files stop at the first NUL | **3f** |
+
+Item **17** (`$` on CRLF input) is deliberately *not* on the site: every file in the demo corpus is LF, so it
+cannot be triggered there. If the corpus ever gains a CRLF file, it needs a caveat.
+
+**Do not delete a caveat to tidy the page.** The list is short because the defects are few, not because the
+page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
 
 ---
 
@@ -119,7 +155,15 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
-| Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
+| Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/netgrep/>. **Needs `pnpm build` first** — see below |
+| Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
+| Build the demo | `pnpm build:example` | → `packages/example/dist/`. **Needs `pnpm build` first** |
+| Regenerate the corpus manifest | `pnpm --filter @netgrep/example manifest` | After adding or removing a story file |
+
+The three demo commands need `pnpm build`, not just `pnpm build:wasm`: the app imports `@netgrep/netgrep`,
+which resolves to this workspace and points at the gitignored `packages/netgrep/dist/`. This is why
+`typecheck:example` is a separate script rather than part of `pnpm typecheck` — that one runs *before*
+`pnpm build` in CI's `bundle` job.
 
 CI groups these into five jobs by toolchain (§4.3). A red check names the group; the step list inside it
 names the command, and that command is one of the above.
@@ -189,8 +233,11 @@ involved and the step list inside it names the command:
 | `rust` | — | `pnpm lint:rust`, `pnpm test:rust` |
 | `js` | — | `pnpm lint:js`, `pnpm test:unit` |
 | `browser` | `wasm` | `pnpm exec playwright install chromium`, `pnpm test:browser` |
-| `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack` |
+| `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack`, `pnpm typecheck:example`, `pnpm build:example` |
 | `ci` | all | Aggregate — **this is the check to require on the branch** |
+
+A sixth workflow, `deploy-pages.yml`, publishes the demo to GitHub Pages on every push to `main`. It is not
+one of these jobs: it `uses:` this whole workflow and gates on it, the way the two publish workflows do.
 
 The WASM is built once and downloaded by the two jobs that need it. The two that need nothing from Rust do
 not wait for it.
@@ -198,8 +245,8 @@ not wait for it.
 **Commands after a job's first carry `if: '!cancelled()'`**, so a clippy nit does not cost you the Rust test
 results — the whole job runs and every failure in it shows up in one pass. Two deliberate exceptions: the
 **first** command in a job is unguarded, so a broken checkout or a missing artefact stops there instead of
-cascading into three identical failures; and `verify:pack` is unguarded because it genuinely needs `build` to
-have produced `dist/`. Keep both when adding a step.
+cascading into three identical failures; and `verify:pack`, `typecheck:example` and `build:example` are
+unguarded because all three genuinely need `build` to have produced `dist/`. Keep both when adding a step.
 
 Setup lives in two composite actions, `.github/actions/node` and `.github/actions/rust`; the second reads the
 channel, targets and components out of `rust-toolchain.toml`, so the version is pinned in that file and
@@ -238,8 +285,15 @@ packages/
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
-  example/           Webpack 5 demo searching 67 Sherlock Holmes .txt files.
-                     Not published. Runs against local workspace source.
+  example/           THE PUBLIC DEMO — https://dgopsq.github.io/netgrep/
+                     Vite + React + Tailwind v4 + shadcn, searching 56 Sherlock Holmes
+                     .txt files. Not published to npm; deployed to Pages on push to main.
+    src/hooks/use-corpus-search.ts   the whole netgrep integration. Runs with the
+                                     memory cache OFF on purpose — read the comment
+    src/lib/story-url.ts             the ONLY module that knows the `/netgrep/` base path
+    scripts/build-manifest.mjs       regenerates src/data/stories.ts from public/stories/
+    public/stories/                  the corpus, 56 files, 2.6 MB
+    → deployed by .github/workflows/deploy-pages.yml. See decision 0017
 
 scripts/verify-pack.mjs   Packaging guard, run in CI.
 scripts/bootstrap.mjs     Prepares a checkout: install, browser, WASM (§4.1).
@@ -248,7 +302,8 @@ scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one COMPILER 
                           via sccache. Each keeps its own target/ — sharing that is unsafe,
                           see §4.1 and decision 0014.
 
-.github/workflows/        Five jobs grouped by toolchain (§4.3).
+.github/workflows/        Five jobs grouped by toolchain (§4.3), two npm publishes,
+                          and deploy-pages.yml for the demo site.
 .github/actions/          Composite setup actions, `node` and `rust`, shared by those jobs.
 ```
 
@@ -297,9 +352,15 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    On a repository maintained in bursts, per-dependency PRs become noise that gets ignored, which is worse
    than deliberate periodic review. Revisit only if the pinned versions start going stale in practice.
 
-3. **The example is a demo.** It now runs against local workspace source, so it is a legitimate manual smoke
-   test — but it is not automated and does not run in CI. Correctness is established by `pnpm test`,
-   `pnpm test:rust` and `pnpm verify:pack`.
+3. **The example is the public demo, and its dependencies ARE maintained.** It is published to GitHub Pages
+   at <https://dgopsq.github.io/netgrep/> on every push to `main`, and CI typechecks and builds it. This
+   **reverses** the exemption the package used to carry — the note in its `package.json` saying its
+   dependencies were deliberately frozen is gone, not overlooked. See
+   [decision 0017](docs/decisions/0017-example-as-hosted-demo.md).
+
+   It is still not a *correctness* check: nothing asserts what it renders. Correctness is established by
+   `pnpm test`, `pnpm test:rust` and `pnpm verify:pack`. Rule 2 still applies to it — a version change is its
+   own deliberate task.
 
 4. **Do not commit build outputs or lockfile churn.** `packages/netgrep/dist/` and `packages/search/pkg/` are
    gitignored. If a command rewrites a lockfile as a side effect of something unrelated, revert it.

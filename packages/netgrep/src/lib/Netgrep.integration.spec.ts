@@ -497,6 +497,12 @@ describe('Netgrep integration (real WASM)', () => {
    * inverted IN THE SAME PR. That is the point: the fix cannot land quietly.
    *
    * Tracked in `docs/BACKLOG.md`.
+   *
+   * AND the published demo tells its visitors about these defects, so the fix
+   * is not finished until it stops. Remove the caveat from the `CAVEATS` array
+   * in `packages/example/src/components/limitations.tsx` in the same PR.
+   * Nothing tests that — inverting the assertion below turns this suite green
+   * and the site keeps warning about a bug you just fixed. See AGENTS.md §2.3.
    */
   describe('documented defects (asserting current, incorrect behaviour)', () => {
     it('BACKLOG 3a: misses a pattern straddling a chunk boundary', async () => {

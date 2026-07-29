@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+
+    // The rest of the repository is `nodenext`, because the published package
+    // is ESM with explicit `.js` extensions on its relative imports. This app
+    // is bundled by Vite instead, which is what makes the `@/` alias and
+    // extensionless imports resolve — so it overrides both settings rather
+    // than inheriting them.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  // `vite.config.ts` is deliberately absent: it imports `node:url`, and pulling
+  // `@types/node` into this package would duplicate a dependency the root
+  // already owns. Vite typechecks its own config when it loads it.
+  "include": ["src"]
+}
