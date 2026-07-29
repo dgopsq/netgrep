@@ -26,9 +26,27 @@
 //! likely to change silently under a dependency bump, and knowing *which*
 //! layer moved is worth one duplicated assertion.
 
+/// Assert-friendly wrapper: bytes in, bool out, exactly as the module comment
+/// above describes.
+///
+/// The engine itself returns `Result<bool, String>` — an invalid pattern is a
+/// domain error, not a panic. Tests that are *about* a valid pattern say so by
+/// using this and letting a compile failure surface as a test failure; the two
+/// in `documented_defects` that are about the error itself call
+/// `try_search_bytes` directly.
+///
+/// These call `try_search_bytes` rather than the `#[wasm_bindgen]` export
+/// `search_bytes`, because the latter's error type cannot be constructed on a
+/// native target. See the comment on `try_search_bytes` in `lib.rs`.
+#[cfg(test)]
+fn matches(haystack: &[u8], pattern: &str) -> bool {
+    // Leading `::` because the test module below is also called `search`.
+    ::search::try_search_bytes(haystack, pattern).expect("the pattern should compile")
+}
+
 #[cfg(test)]
 mod search {
-    use search::search_bytes;
+    use super::matches;
 
     const POEM: &str = "One Wiseman came to Jhaampe-town.\n\
                         He set aside both Queen and Crown\n\
@@ -41,21 +59,21 @@ mod search {
 
     #[test]
     fn test_search_bytes() {
-        assert!(search_bytes(POEM.as_bytes(), "set aside"));
+        assert!(matches(POEM.as_bytes(), "set aside"));
     }
 
     #[test]
     fn test_absent_pattern_does_not_match() {
-        assert!(!search_bytes(POEM.as_bytes(), "dragon"));
+        assert!(!matches(POEM.as_bytes(), "dragon"));
     }
 
     #[test]
     fn test_empty_haystack_never_matches() {
-        assert!(!search_bytes(b"", "anything"));
+        assert!(!matches(b"", "anything"));
 
         // Not even the empty pattern, which matches every line of anything
         // else: there are no lines here to match.
-        assert!(!search_bytes(b"", ""));
+        assert!(!matches(b"", ""));
     }
 
     #[test]
@@ -63,19 +81,19 @@ mod search {
         // Worth pinning because it is the shape of a search box on its first
         // keystroke, and "matches everything" is a defensible answer only as
         // long as it is the deliberate one.
-        assert!(search_bytes(b"anything at all", ""));
+        assert!(matches(b"anything at all", ""));
     }
 
     #[test]
     fn test_pattern_longer_than_the_haystack() {
-        assert!(!search_bytes(b"ab", "abcdef"));
+        assert!(!matches(b"ab", "abcdef"));
     }
 
     #[test]
     fn test_matches_on_the_final_line_without_a_trailing_newline() {
         // A chunk boundary lands mid-file far more often than on a line
         // terminator, so the last line handed to the engine usually has none.
-        assert!(search_bytes(b"first\nneedle", "needle"));
+        assert!(matches(b"first\nneedle", "needle"));
     }
 
     #[test]
@@ -85,7 +103,7 @@ mod search {
         let mut haystack = vec![b'x'; 200_000];
         haystack.extend_from_slice(b"needle");
 
-        assert!(search_bytes(&haystack, "needle"));
+        assert!(matches(&haystack, "needle"));
     }
 
     // ---------------------------------------------------------------
@@ -94,20 +112,20 @@ mod search {
 
     #[test]
     fn test_search_bytes_smart_case() {
-        assert!(search_bytes(POEM.as_bytes(), "both queen and crown"));
+        assert!(matches(POEM.as_bytes(), "both queen and crown"));
     }
 
     #[test]
     fn test_smart_case_an_uppercased_pattern_is_case_sensitive() {
         // The other half of `case_smart(true)`: a capital anywhere in the
         // pattern is read as intent, and the search stops being lenient.
-        assert!(!search_bytes(b"one wiseman came", "Wiseman"));
-        assert!(search_bytes(b"One Wiseman came", "Wiseman"));
+        assert!(!matches(b"one wiseman came", "Wiseman"));
+        assert!(matches(b"One Wiseman came", "Wiseman"));
     }
 
     #[test]
     fn test_an_explicit_case_insensitive_flag_still_wins() {
-        assert!(search_bytes(b"ONE WISEMAN", "(?i)Wiseman"));
+        assert!(matches(b"ONE WISEMAN", "(?i)Wiseman"));
     }
 
     // ---------------------------------------------------------------
@@ -120,20 +138,20 @@ mod search {
 
     #[test]
     fn test_alternation_and_character_classes() {
-        assert!(search_bytes(POEM.as_bytes(), "Queen (and|or) Crown"));
-        assert!(search_bytes(POEM.as_bytes(), r"Jhaampe-\w+"));
-        assert!(search_bytes(b"order 1138 shipped", r"\d{4}"));
+        assert!(matches(POEM.as_bytes(), "Queen (and|or) Crown"));
+        assert!(matches(POEM.as_bytes(), r"Jhaampe-\w+"));
+        assert!(matches(b"order 1138 shipped", r"\d{4}"));
     }
 
     #[test]
     fn test_word_boundaries() {
-        assert!(search_bytes(b"a needle b", r"\bneedle\b"));
-        assert!(!search_bytes(b"needlepoint", r"\bneedle\b"));
+        assert!(matches(b"a needle b", r"\bneedle\b"));
+        assert!(!matches(b"needlepoint", r"\bneedle\b"));
     }
 
     #[test]
     fn test_repetition_and_anchoring_together() {
-        assert!(search_bytes(b"aaaa\nbbbb\n", "^a{4}$"));
+        assert!(matches(b"aaaa\nbbbb\n", "^a{4}$"));
     }
 
     // ---------------------------------------------------------------
@@ -147,16 +165,16 @@ mod search {
 
     #[test]
     fn test_caret_anchors_to_any_line_not_just_the_first() {
-        assert!(search_bytes(b"Needle x\nother\n", "^Needle"));
-        assert!(search_bytes(b"other\nNeedle x\n", "^Needle"));
-        assert!(search_bytes(b"a\nb\nNeedle x\n", "^Needle"));
-        assert!(!search_bytes(b"x Needle\n", "^Needle"));
+        assert!(matches(b"Needle x\nother\n", "^Needle"));
+        assert!(matches(b"other\nNeedle x\n", "^Needle"));
+        assert!(matches(b"a\nb\nNeedle x\n", "^Needle"));
+        assert!(!matches(b"x Needle\n", "^Needle"));
     }
 
     #[test]
     fn test_dollar_anchors_to_the_end_of_any_line() {
-        assert!(search_bytes(b"other\nxx Needle\n", "Needle$"));
-        assert!(!search_bytes(b"Needle xx\n", "Needle$"));
+        assert!(matches(b"other\nxx Needle\n", "Needle$"));
+        assert!(!matches(b"Needle xx\n", "Needle$"));
     }
 
     #[test]
@@ -164,8 +182,8 @@ mod search {
         // `.` excludes the line terminator, and no multiline mode is enabled,
         // so a pattern can never straddle two lines. This is the engine-level
         // half of why netgrep answers "does this pattern occur on some line".
-        assert!(!search_bytes(b"alpha\nbeta", "alpha.beta"));
-        assert!(!search_bytes(b"alpha\nbeta", "(?s)alpha.beta"));
+        assert!(!matches(b"alpha\nbeta", "alpha.beta"));
+        assert!(!matches(b"alpha\nbeta", "(?s)alpha.beta"));
     }
 
     // ---------------------------------------------------------------
@@ -174,14 +192,14 @@ mod search {
 
     #[test]
     fn test_matches_non_ascii_text() {
-        assert!(search_bytes("un café noir".as_bytes(), "café"));
-        assert!(search_bytes("naïve".as_bytes(), r"na\w+ve"));
+        assert!(matches("un café noir".as_bytes(), "café"));
+        assert!(matches("naïve".as_bytes(), r"na\w+ve"));
     }
 
     #[test]
     fn test_smart_case_applies_to_non_ascii_text() {
-        assert!(search_bytes("un CAFÉ noir".as_bytes(), "café"));
-        assert!(!search_bytes("un café noir".as_bytes(), "CAFÉ"));
+        assert!(matches("un CAFÉ noir".as_bytes(), "café"));
+        assert!(!matches("un café noir".as_bytes(), "CAFÉ"));
     }
 
     #[test]
@@ -199,16 +217,16 @@ mod search {
             utf16.extend_from_slice(&unit.to_le_bytes());
         }
 
-        assert!(search_bytes(&utf16, "needle"));
+        assert!(matches(&utf16, "needle"));
 
         // Without the BOM there is nothing to sniff, and the same text reads
         // as NUL-separated bytes.
-        assert!(!search_bytes(&utf16[2..], "needle"));
+        assert!(!matches(&utf16[2..], "needle"));
     }
 
     #[test]
     fn test_a_utf8_bom_does_not_hide_the_first_line() {
-        assert!(search_bytes(&[0xef, 0xbb, 0xbf, b'n', b'e', b'e', b'd'], "need"));
+        assert!(matches(&[0xef, 0xbb, 0xbf, b'n', b'e', b'e', b'd'], "need"));
     }
 
     #[test]
@@ -218,7 +236,7 @@ mod search {
         // because the two behaviours that DO blank a line (BOM sniffing above,
         // binary detection below) make it reasonable to assume this one does
         // too.
-        assert!(search_bytes(&[0xff, b' ', b'x', b'y'], "xy"));
+        assert!(matches(&[0xff, b' ', b'x', b'y'], "xy"));
     }
 }
 
@@ -243,25 +261,44 @@ mod search {
 /// Tracked in `docs/BACKLOG.md`.
 #[cfg(test)]
 mod documented_defects {
-    use search::search_bytes;
+    use super::matches;
+    use search::try_search_bytes;
 
     #[test]
-    #[should_panic(expected = "unclosed group")]
-    fn backlog_3c_an_invalid_pattern_panics() {
-        // `.build(pattern).unwrap()`. Patterns come straight from a user's
-        // search box, so a stray `(` traps the WASM instance — surfacing in
-        // the browser as `RuntimeError: unreachable` — instead of a catchable
-        // domain error.
-        search_bytes(b"anything", "(");
+    fn backlog_3c_fixed_an_invalid_pattern_is_an_error() {
+        // This assertion used to sit here as `#[should_panic]`, pinning a real
+        // bug: `.build(pattern).unwrap()` trapped the WASM instance —
+        // surfacing in the browser as `RuntimeError: unreachable` — for input
+        // that arrives routinely from a user's search box.
+        //
+        // `search_bytes` now returns a `Result`, so per the block comment above
+        // the assertion is inverted in the same PR that changed it. It asserts
+        // the message too: a bare `is_err()` would also pass if the pattern had
+        // failed to compile for some entirely different reason.
+        let error = try_search_bytes(b"anything", "(").expect_err("`(` is not valid regex");
+
+        assert!(
+            error.contains("unclosed group"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
-    #[should_panic(expected = "NotAllowed")]
-    fn backlog_3c_a_pattern_containing_a_newline_panics() {
-        // The same defect by a different route, and a likelier one: the
-        // pattern is valid regex, but `line_terminator(Some(b'\n'))` forbids a
-        // literal newline in it. Pasting two lines into a search box is enough.
-        search_bytes(b"alpha\nbeta", "alpha\nbeta");
+    fn backlog_3c_fixed_a_pattern_containing_a_newline_is_an_error() {
+        // The same defect by a different route, and a likelier one: the pattern
+        // is valid regex, but `line_terminator(Some(b'\n'))` forbids a literal
+        // newline in it. Pasting two lines into a search box is enough.
+        //
+        // The `#[should_panic]` this replaces matched `NotAllowed`, the Debug
+        // name of the error variant. What a caller now receives is the Display
+        // form, which is a sentence.
+        let error = try_search_bytes(b"alpha\nbeta", "alpha\nbeta")
+            .expect_err("a literal newline is rejected by the line terminator");
+
+        assert!(
+            error.contains(r#"the literal "\n" is not allowed"#),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]
@@ -269,11 +306,11 @@ mod documented_defects {
         // `BinaryDetection::quit(b'\x00')` does not stop AT the NUL; it
         // abandons everything it was given. The match is dropped even when it
         // precedes the NUL, and even when it is on an earlier line.
-        assert!(search_bytes(b"needle here", "needle"));
+        assert!(matches(b"needle here", "needle"));
 
-        assert!(!search_bytes(b"needle here\x00tail", "needle"));
-        assert!(!search_bytes(b"needle here\n\x00tail", "needle"));
-        assert!(!search_bytes(b"\x00needle here", "needle"));
+        assert!(!matches(b"needle here\x00tail", "needle"));
+        assert!(!matches(b"needle here\n\x00tail", "needle"));
+        assert!(!matches(b"\x00needle here", "needle"));
     }
 
     #[test]
@@ -282,13 +319,13 @@ mod documented_defects {
         // character of the line and `$` sits behind it. A `$`-anchored pattern
         // therefore misses silently on any Windows-authored file, while the
         // same pattern unanchored matches fine.
-        assert!(search_bytes(b"needle\r\nnext\r\n", "needle"));
-        assert!(!search_bytes(b"needle\r\nnext\r\n", "needle$"));
+        assert!(matches(b"needle\r\nnext\r\n", "needle"));
+        assert!(!matches(b"needle\r\nnext\r\n", "needle$"));
 
         // `^` is unaffected — the CR is at the other end of the line.
-        assert!(search_bytes(b"a\r\nneedle\r\n", "^needle"));
+        assert!(matches(b"a\r\nneedle\r\n", "^needle"));
 
         // And the LF-only case, to show the anchor itself works.
-        assert!(search_bytes(b"needle\nnext\n", "needle$"));
+        assert!(matches(b"needle\nnext\n", "needle$"));
     }
 }

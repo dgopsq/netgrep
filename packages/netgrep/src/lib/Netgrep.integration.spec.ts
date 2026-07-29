@@ -589,14 +589,48 @@ describe('Netgrep integration (real WASM)', () => {
       });
     });
 
-    it('BACKLOG 3c: an invalid pattern traps the WASM instance', async () => {
+    it('BACKLOG 3c (FIXED): an invalid pattern rejects, and the engine survives it', async () => {
+      // This assertion used to sit here inverted, pinning a real bug:
+      // `.build(pattern).unwrap()` in lib.rs panicked on a malformed regex,
+      // which surfaced as `RuntimeError: unreachable` — a wasm trap rather
+      // than a catchable domain error.
+      //
+      // `search_bytes` now returns a `Result<bool, JsError>`, so the rejection
+      // carries the regex crate's own diagnostic. Per the block comment above,
+      // the assertion is inverted in the same PR that changed it.
       serve([encoder.encode(POEM)]);
 
-      // `.build(pattern).unwrap()` in lib.rs panics on a malformed regex,
-      // which surfaces as a wasm trap rather than a catchable domain error.
-      await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', '('),
-      ).rejects.toThrow('unreachable');
+      const NG = new Netgrep({ enableMemoryCache: false });
+
+      await expect(NG.search('url', '(')).rejects.toThrow('unclosed group');
+
+      // The point of the whole change: a trap would have poisoned the module
+      // for every later call, so this could only be asserted in a browser.
+      // The same instance still answers correctly afterwards.
+      serve([encoder.encode(POEM)]);
+
+      await expect(NG.search('url', 'set aside')).resolves.toMatchObject({
+        result: true,
+      });
+    });
+
+    it('BACKLOG 3c (FIXED): a bad pattern is a per-url error in a batch, not a crash', async () => {
+      // `searchBatch` already documents that a failed url comes back as
+      // `{ result: false, error }`. Before the fix an invalid pattern took a
+      // different path out — a trap — so this is the assertion that the
+      // README's deleted CAUTION block was standing in for.
+      serve([encoder.encode(POEM)]);
+
+      const results = await new Netgrep({
+        enableMemoryCache: false,
+      }).searchBatch([{ url: 'a' }, { url: 'b' }], '(');
+
+      expect(results).toHaveLength(2);
+
+      for (const result of results) {
+        expect(result.result).toBe(false);
+        expect(result.error).toContain('unclosed group');
+      }
     });
 
     it('BACKLOG 3e (FIXED upstream): `^` anchors to the line, on any line', async () => {
