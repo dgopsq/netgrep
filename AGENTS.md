@@ -115,9 +115,9 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **58 tests**: 30 unit in Node, 28 integration in headless Chromium |
+| Test TS | `pnpm test` | Vitest — **59 tests**: 30 unit in Node, 29 integration in headless Chromium |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **25 tests** |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
 
@@ -214,12 +214,14 @@ again.
 
 ## 5. Repository map
 
-Three packages, ~450 lines of first-party source. pnpm workspaces link them; there is no task runner.
+Three packages, ~530 lines of first-party source. pnpm workspaces link them; there is no task runner.
 
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         ~45 lines. Exports one function: search_bytes(&[u8], &str) -> bool
+    src/lib.rs         ~135 lines, mostly comment. Exports one function:
+                       search_bytes(&[u8], &str) -> Result<bool, JsError>, which caches
+                       the last compiled matcher. See decision 0016
     tests/search.rs    plain native `cargo test` — no browser, no WebDriver.
                        Ends with a `documented_defects` module; read §2.1 first
     scripts/post_build.js   fixes up the generated pkg/ (see below)
@@ -317,7 +319,6 @@ in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
 |---|---|---|
 | Chunk-boundary false negatives | `Netgrep.ts` search loop | A match spanning two `fetch` chunks is never found. Silent, non-deterministic. |
 | Poisoned partial cache | `Netgrep.ts` cache paths | Early resolution caches a prefix; later searches answer `false` for text never downloaded. |
-| Panic on invalid pattern | `lib.rs`, `.build(pattern).unwrap()` | A stray `(` traps the WASM instance instead of surfacing a catchable error. A literal newline in the pattern does the same. |
 | One NUL discards the chunk | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
 | `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
 | Concurrent searches double a cache entry | `Netgrep.ts`, no in-flight tracking | Two searches of one url started together both fetch and both append, so the entry holds the file twice — joined with no separator, forming a line the file never had. |

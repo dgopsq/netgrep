@@ -43,7 +43,7 @@ below are documented rather than hidden, and why the API has stayed a boolean.
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
 │ packages/search   — @netgrep/search (Rust → WASM)                │
-│   search_bytes(&[u8], &str) -> bool                              │
+│   search_bytes(&[u8], &str) -> Result<bool, JsError>             │
 │   wasm-pack `web` target: new URL(…, import.meta.url)            │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ crates.io
@@ -65,21 +65,34 @@ never compiled. See [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md).
 
 ## The Rust core — `packages/search`
 
-`src/lib.rs` is ~45 lines and exposes exactly one `#[wasm_bindgen]` function:
+`src/lib.rs` is ~135 lines, most of them comment, and exposes exactly one `#[wasm_bindgen]` function:
 
 ```rust
-pub fn search_bytes(chunk: &[u8], pattern: &str) -> bool
+pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError>
 ```
+
+wasm-bindgen unwraps that `Result`, so the TypeScript a consumer sees is
+`search_bytes(chunk: Uint8Array, pattern: string): boolean` — it simply **throws** on a pattern the regex
+engine will not accept, rather than trapping the instance as it did until 2026.
 
 Per call it:
 
-1. Builds a `RegexMatcherBuilder` with `line_terminator(b'\n')` and **`case_smart(true)`**
-   — smart case is hardcoded on and not configurable. A lowercase pattern matches case-insensitively;
-   a pattern containing an uppercase character matches case-sensitively.
+1. Reuses the **last compiled matcher** if the pattern is unchanged, and otherwise compiles a new one with
+   `line_terminator(b'\n')` and **`case_smart(true)`** — smart case is hardcoded on and not configurable. A
+   lowercase pattern matches case-insensitively; a pattern containing an uppercase character matches
+   case-sensitively. netgrep calls this once per network chunk with the same pattern every time, so the cache
+   hits on every chunk after the first; compilation was 97–99% of the cost before it existed. Failed compiles
+   are cached alongside successful ones. See [decision 0016](decisions/0016-compiled-matcher-memo.md).
 2. Builds a `Searcher` with `BinaryDetection::quit(b'\x00')` and `line_number(false)`.
-3. Runs `search_slice` into `MemSink`, a minimal `Sink` implementation that does nothing but increment a
-   counter — chosen because ripgrep's real sinks write to stdout, which does not exist in WASM.
-4. Returns `match_count > 0`.
+3. Runs `search_slice` into `MemSink`, a minimal `Sink` implementation that does nothing but record that a
+   match happened and stop — chosen because ripgrep's real sinks write to stdout, which does not exist in
+   WASM.
+4. Returns whether it matched.
+
+The engine is split in two: `try_search_bytes` is plain Rust returning `Result<bool, String>`, and
+`search_bytes` is a two-line `#[wasm_bindgen]` wrapper mapping that to a `JsError`. The split is not
+tidiness — `JsError` is a wasm-bindgen import that panics if constructed on a native target, and the Rust
+tests run natively.
 
 The default Rust allocator is used. `wee_alloc` was the global allocator until 2026; it was removed once
 measurement showed it saved 6,839 bytes — 0.6% — which no longer justified an unmaintained dependency with a
@@ -182,24 +195,12 @@ The cache is a plain `Record<string, Uint8Array>` with no eviction, no size cap 
 full bytes of every file searched for the lifetime of the `Netgrep` instance. `upsertMemoryCache` also
 reallocates and copies the whole accumulated buffer **per chunk**, making cache population O(n²) in bytes.
 
-### 4. Regex recompiled per chunk — `lib.rs`, the `RegexMatcherBuilder` in `search_bytes`
-
-`search_bytes` builds a fresh `RegexMatcher` on **every call**, i.e. once per network chunk per file. Regex
-compilation is the expensive part of a small search; this discards it every time.
-
-### 5. Panic on invalid pattern
-
-`.build(pattern).unwrap()` panics inside WASM if the pattern is not valid regex. Since patterns typically come
-straight from a user-facing search box, a stray `(` or `[` surfaces as a wasm trap
-(`RuntimeError: unreachable`) rather than a catchable domain error. The instance does remain usable
-afterwards.
-
-### 6. No completion signal from `searchBatchWithCallback`
+### 4. No completion signal from `searchBatchWithCallback`
 
 It returns `void` and starts every search eagerly with no concurrency limit. Callers cannot await it, cannot
 detect completion, and a batch of N URLs opens N simultaneous connections.
 
-### 7. One NUL byte discards the whole chunk — `lib.rs`, `BinaryDetection::quit`
+### 5. One NUL byte discards the whole chunk — `lib.rs`, `BinaryDetection::quit`
 
 `BinaryDetection::quit(b'\x00')` does not stop *at* the NUL — it abandons the entire chunk. A match is
 dropped even when it occurs before the NUL, and even on an earlier line. Any remote file containing a stray
@@ -208,7 +209,7 @@ NUL therefore reports "no match" for content that is demonstrably present.
 Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
 "binary, not searched" from "no match", because the API is a boolean.
 
-### 8. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
+### 6. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
 
 The searcher is given `line_terminator(Some(b'\n'))`, so on a Windows-authored file the `\r` is the last
 character of the line and `$` sits behind it. `needle$` matches `"needle\n"` and does **not** match
@@ -218,7 +219,7 @@ Silent, and it depends on who wrote the file rather than on anything the caller 
 `RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
 deliberate task rather than a drive-by.
 
-### 9. Concurrent searches of one url double its cache entry — `Netgrep.ts`, `search`
+### 7. Concurrent searches of one url double its cache entry — `Netgrep.ts`, `search`
 
 Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
 `fetch`, and both append what they read to the same cache entry.
@@ -307,8 +308,8 @@ components straight out of `rust-toolchain.toml`.
 | Suite | Runner | What it covers |
 |---|---|---|
 | `Netgrep.spec.ts` | Vitest in **Node**, 30 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 28 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 25 tests | `search_bytes` as pure Rust — bytes in, bool out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection. No browser involved. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 29 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 28 tests | `try_search_bytes` as pure Rust — bytes in, bool out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, and the compiled-matcher cache. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the first three is deliberate: anything that depends only on the bytes is cheapest to pin

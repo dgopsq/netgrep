@@ -27,8 +27,10 @@ the whole point is to never assemble the string.
 - **Correctness: patterns straddling a chunk boundary are missed.** Chunks are searched in isolation with no
   overlap retained, so a match spanning the boundary is invisible. Silent false negative, dependent on
   non-deterministic network chunking. See `ARCHITECTURE.md` caveat 1.
-- The regex is recompiled per chunk (the `RegexMatcherBuilder` in `lib.rs`'s `search_bytes`), discarding the
-  most expensive part of the work on every iteration.
+- ~~The regex is recompiled per chunk (the `RegexMatcherBuilder` in `lib.rs`'s `search_bytes`), discarding the
+  most expensive part of the work on every iteration.~~ **Fixed 2026-07-29**: the engine caches the last
+  compiled pattern, so chunking no longer multiplies compilation. It was the largest cost this decision
+  carried — 97–99% of per-chunk time. See [0016](0016-compiled-matcher-memo.md).
 - Resolving early stops *reading* but does not cancel the underlying request, so bytes may keep arriving.
 - Interacts badly with the memory cache — the cache is left holding a partial file. See
   [0006](0006-in-memory-cache.md) and `ARCHITECTURE.md` caveat 2.

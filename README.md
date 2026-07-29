@@ -151,11 +151,10 @@ itself uses. Note that **smart case is hardcoded on**:
 
 This is not configurable. Lowercase your pattern to search case-insensitively.
 
-> [!CAUTION]
-> **An invalid pattern crashes the search engine.** A stray `(` or `[` surfaces as a
-> `RuntimeError: unreachable` from WebAssembly rather than a catchable error. If patterns come straight from
-> a user-facing search box — the use case this library was built for — validate or escape them before
-> passing them in.
+An invalid pattern — a stray `(`, or a literal newline from a pasted two-line string — is an ordinary
+failure: `search` rejects, and the batch methods report it as `{ result: false, error: "…" }` like any other
+error, carrying the regex crate's own diagnostic. Nothing needs escaping in advance, and one bad keystroke in
+a search box does not affect the searches after it.
 
 ## Cancelling a search
 
@@ -204,8 +203,6 @@ rather than fixed**. They are pinned by tests so they cannot change unnoticed; t
   incomplete. A later search on the same URL for a *different* pattern reads that partial copy and can
   return `false` for text further down the file. Set `enableMemoryCache: false` if this matters more than
   the network savings.
-- **An invalid regex traps the WASM instance**, as described above. A pattern containing a literal newline
-  does the same, so guard against pasted multi-line input.
 - **A file containing a NUL byte reports no match** for the chunk containing it, even when the match came
   earlier. Binary detection abandons the whole chunk rather than stopping at the NUL.
 - **`$` does not match on CRLF files.** The line terminator is `\n`, so on Windows-authored text the `\r`
