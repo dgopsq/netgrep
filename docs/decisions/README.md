@@ -27,7 +27,7 @@ reasoning got wrong.
 | [0012](0012-worktree-bootstrap.md) | A bootstrap script, and no build-cache configuration in the repository | Accepted — **build-cache half superseded** by 0014, whose `CARGO_TARGET_DIR` advice was **unsafe** |
 | [0013](0013-playwright-for-browser-tests.md) | Playwright runs the browser tests; ChromeDriver is gone | Accepted |
 | [0014](0014-sccache-not-a-shared-target-dir.md) | Cache Rust builds with sccache, and never with a shared target directory | Accepted |
-| [0015](0015-one-ci-job-per-failure-mode.md) | One CI job per failure mode, with the WASM built once | Accepted |
+| [0015](0015-ci-jobs-grouped-by-toolchain.md) | Five CI jobs, grouped by toolchain, with the WASM built once | Accepted |
 
 ## Format
 

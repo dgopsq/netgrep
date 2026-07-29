@@ -121,8 +121,9 @@ pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:rust && pnpm
 That is everything CI checks. `pnpm build` is not optional here even though nothing else needs it:
 `verify:pack` inspects the tarballs that would reach npm, and `packages/netgrep/dist/` has to exist first.
 
-CI runs each of these as **its own job**, so a red check names the command rather than the workflow — and
-`pnpm lint:js`, `pnpm lint:rust`, `pnpm test:unit` and `pnpm test:browser` reproduce one job at a time. See
+CI groups these into **five jobs by toolchain** — `wasm`, `rust`, `js`, `browser`, `bundle` — so a red check
+names the tools rather than the whole workflow, and the step list inside it names the command.
+`pnpm lint:js`, `pnpm lint:rust`, `pnpm test:unit` and `pnpm test:browser` reproduce the halves locally. See
 [AGENTS.md §4.3](AGENTS.md#43-what-ci-runs-and-where-a-red-check-comes-from).
 
 Then, in rough order of how likely each is to bite:

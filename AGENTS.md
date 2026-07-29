@@ -121,8 +121,8 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
 
-CI runs each of these as its own job (§4.3), so the local equivalent of a red check is the single command
-that job runs.
+CI groups these into five jobs by toolchain (§4.3). A red check names the group; the step list inside it
+names the command, and that command is one of the above.
 
 ### 4.1 Working in a git worktree
 
@@ -180,29 +180,34 @@ now ship as one pinned unit. See [decision 0013](docs/decisions/0013-playwright-
 
 ### 4.3 What CI runs, and where a red check comes from
 
-`test-and-lint.yml` is **one job per failure mode**, so the check that goes red names the command that
-failed:
+`test-and-lint.yml` is **five jobs grouped by toolchain**, so the check that goes red names the tools
+involved and the step list inside it names the command:
 
-| Job | Waits for | Command |
+| Job | Waits for | Commands |
 |---|---|---|
 | `wasm` | — | `pnpm build:wasm`, then uploads `packages/search/pkg` as an artefact |
-| `lint-js` | — | `pnpm lint:js` |
-| `lint-rust` | — | `pnpm lint:rust` |
-| `test-rust` | — | `pnpm test:rust` |
-| `test-unit` | — | `pnpm test:unit` |
-| `test-browser` | `wasm` | `pnpm test:browser` |
-| `typecheck` | `wasm` | `pnpm typecheck` |
-| `package` | `wasm` | `pnpm build`, then `pnpm verify:pack` |
+| `rust` | — | `pnpm lint:rust`, `pnpm test:rust` |
+| `js` | — | `pnpm lint:js`, `pnpm test:unit` |
+| `browser` | `wasm` | `pnpm test:browser` |
+| `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack` |
 | `ci` | all | Aggregate — **this is the check to require on the branch** |
 
-The WASM is built once and downloaded by the three jobs that need it, rather than recompiled three times.
-The jobs that need nothing from Rust do not wait for it.
+The WASM is built once and downloaded by the two jobs that need it. The two that need nothing from Rust do
+not wait for it.
+
+**Steps after the first in a job carry `if: '!cancelled()'`**, so a clippy nit does not cost you the Rust
+test results — the whole job runs and every failure in it shows up in one pass. Keep that when adding a step,
+unless it genuinely depends on its predecessor (`verify:pack` needs `build` to have produced `dist/`, and so
+does not have it).
 
 Setup lives in two composite actions, `.github/actions/node` and `.github/actions/rust`; the second reads the
 channel, targets and components out of `rust-toolchain.toml`, so the version is pinned in that file and
 nowhere else. **Adding a job means adding it to `ci`'s `needs` list**, or it gates nothing.
 
-See [decision 0015](docs/decisions/0015-one-ci-job-per-failure-mode.md).
+Grouping by toolchain rather than one job per command is deliberate and measured: a job-per-command version
+ran in 108s against ~110s sequential, for twice the runner time. **Parallelising CI here does not make it
+faster** — read [decision 0015](docs/decisions/0015-ci-jobs-grouped-by-toolchain.md) before splitting it up
+again.
 
 ---
 

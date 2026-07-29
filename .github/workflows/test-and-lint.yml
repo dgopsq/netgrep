@@ -20,22 +20,26 @@ concurrency:
 permissions:
   contents: read
 
-# ONE JOB PER FAILURE MODE
-# ------------------------
-# This was a single job running eight commands in sequence, which had two
-# costs. A red build said "Test and lint failed" and you opened the log to find
-# out what; and a clippy warning in the first minute hid every later result,
-# because nothing after it ran.
+# FIVE JOBS, GROUPED BY WHAT THEY NEED INSTALLED
+# ----------------------------------------------
+# This was a single job running eight commands in sequence. A red build said
+# "Test and lint failed" and you opened the log to find out what, and a clippy
+# warning in the first minute hid every later result because nothing after it
+# ran.
 #
-# Split, each check reports under its own name and they run at once. The WASM is
-# the one thing more than one of them needs, so it is built once and passed
-# along as an artefact — the alternative is three jobs each installing wasm-pack
-# and recompiling the ripgrep tree to produce identical bytes.
+# It was then split to one job per command, which fixed both — and measured at
+# 108s wall clock against ~110s for the sequential version, for roughly double
+# the runner time. At this repository's size the parallelism buys nothing; the
+# naming does. So the grouping is by *toolchain*, which is the thing a job
+# actually pays for: a Rust job, a Node-only job, the WASM build, the browser,
+# and the packaging. Five jobs install five sets of tools instead of nine.
 #
-# The jobs that need nothing from Rust at all — Biome, and the unit suite, which
-# mocks the engine (AGENTS.md §2.2) — do not wait for it.
+# The one cost of grouping is that a failing step could hide the ones after it,
+# which is half of what the split was for. `if: '!cancelled()'` on every step
+# after the first buys that back: the whole job runs, every failure is visible
+# in one pass, and the job still fails. See decision 0015.
 jobs:
-  # Built first because three jobs below need `packages/search/pkg`, which is a
+  # Built first because two jobs need `packages/search/pkg`, which is a
   # gitignored build output: `@netgrep/netgrep` resolves `@netgrep/search` to
   # this workspace, so typecheck, build and the integration tests all fail
   # without it.
@@ -59,62 +63,49 @@ jobs:
         with:
           name: wasm-pkg
           path: packages/search/pkg
-          # `pkg/` is reproduced from source by every job that needs it; it is
-          # a hand-off between jobs in one run, not something to keep.
+          # A hand-off between jobs in one run, not something to keep.
           retention-days: 1
-          # An empty upload here would surface as a confusing failure three jobs
-          # later, when the download produced nothing.
+          # An empty upload here would otherwise surface as a confusing failure
+          # two jobs later, when the download produced nothing.
           if-no-files-found: error
 
-  lint-js:
-    name: Lint (Biome)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/node
-      - run: pnpm lint:js
-
-  lint-rust:
-    name: Lint (clippy)
+  # Everything needing the Rust toolchain but not the WASM: clippy checks the
+  # crate, `cargo test` links it for the host. Neither touches `pkg/`.
+  rust:
+    name: Rust (clippy + tests)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/rust
         with:
-          # Clippy's own dev-profile artefacts, shared with nothing else.
-          cache-key: clippy
+          cache-key: rust
       - uses: ./.github/actions/node
+
       - run: pnpm lint:rust
-
-  # Native `cargo test` — no browser, no WebDriver, and no WASM: it links the
-  # crate for the host. See decision 0013.
-  test-rust:
-    name: Test (Rust)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/rust
-        with:
-          cache-key: cargo-test
-      - uses: ./.github/actions/node
+      # `-D warnings` means clippy fails on a nit. Running the tests anyway is
+      # the point of this line: a formatting-grade complaint must not cost you
+      # the test results.
       - run: pnpm test:rust
+        if: '!cancelled()'
 
-  # Mocks `fetch` and the engine, so it needs neither the WASM nor a browser and
-  # starts immediately. In practice this is the check that fails first.
-  test-unit:
-    name: Test (unit)
+  # Everything needing neither Rust nor a browser. The unit suite mocks `fetch`
+  # AND the engine (AGENTS.md §2.2), so it never touches `pkg/` — which is why
+  # this does not wait for the WASM and is usually the first check to report.
+  js:
+    name: JS (Biome + unit tests)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/node
-      - run: pnpm test:unit
 
-  test-browser:
-    name: Test (browser)
+      - run: pnpm lint:js
+      - run: pnpm test:unit
+        if: '!cancelled()'
+
+  browser:
+    name: Browser tests
     needs: wasm
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -134,8 +125,13 @@ jobs:
 
       - run: pnpm test:browser
 
-  typecheck:
-    name: Typecheck
+  # The three things that consume the compiled TypeScript. `typecheck` is not
+  # redundant with `build`: it uses the wider tsconfig, so it covers the spec
+  # files, which `tsconfig.lib.json` excludes. `verify:pack` then inspects the
+  # tarballs that would actually reach npm — the only artefact users ever see,
+  # and once the only one nothing checked.
+  bundle:
+    name: Typecheck, build & package
     needs: wasm
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -146,25 +142,13 @@ jobs:
         with:
           name: wasm-pkg
           path: packages/search/pkg
-      - run: pnpm typecheck
 
-  # `pnpm build` and `pnpm verify:pack` belong together: everything else here
-  # inspects the working tree, while this pair produces the tarballs that would
-  # actually reach npm and then inspects those — the only artefact users ever
-  # see, and once the only one nothing checked.
-  package:
-    name: Package
-    needs: wasm
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/node
-      - uses: actions/download-artifact@v4
-        with:
-          name: wasm-pkg
-          path: packages/search/pkg
+      - run: pnpm typecheck
+        if: '!cancelled()'
       - run: pnpm build
+        if: '!cancelled()'
+      # Needs `pnpm build` to have produced dist/, so unlike the two above this
+      # one has a real dependency on its predecessor and is skipped if it fails.
       - run: pnpm verify:pack
 
   # One check to require on the branch, and one for `workflow_call` callers to
@@ -174,13 +158,10 @@ jobs:
     if: always()
     needs:
       - wasm
-      - lint-js
-      - lint-rust
-      - test-rust
-      - test-unit
-      - test-browser
-      - typecheck
-      - package
+      - rust
+      - js
+      - browser
+      - bundle
     runs-on: ubuntu-latest
     steps:
       - name: Report

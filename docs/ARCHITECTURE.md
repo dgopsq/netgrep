@@ -265,29 +265,29 @@ that only webpack supported, and that failed *silently* under Vite — see
 
 | Workflow | Trigger | Action |
 |---|---|---|
-| `test-and-lint.yml` | push/PR to `main`, or called | Nine jobs — see below |
+| `test-and-lint.yml` | push/PR to `main`, or called | Five jobs plus an aggregate — see below |
 | `publish-search.yml` | tag `search-**` | test-and-lint → `build:wasm` → npm publish `packages/search/package.json` |
 | `publish-netgrep.yml` | tag `netgrep-**` | test-and-lint → `build:wasm` → `build` → npm publish `packages/netgrep/package.json` |
 
-`test-and-lint.yml` is **one job per failure mode**, so the check that goes red names the command that
-failed:
+`test-and-lint.yml` groups its work **by toolchain**, which is what a job actually pays to install:
 
 ```
-wasm ──┬── test-browser ──┐
-       ├── typecheck ─────┤
-       └── package ───────┤
-                          ├── ci   (aggregate; the check to require)
-lint-js ──────────────────┤
-lint-rust ────────────────┤
-test-rust ────────────────┤
-test-unit ────────────────┘
+wasm ──┬── browser  (test:browser) ──────────────────┐
+       └── bundle   (typecheck, build, verify:pack) ─┤
+                                                     ├── ci  (aggregate; the check to require)
+rust  (lint:rust, test:rust) ────────────────────────┤
+js    (lint:js, test:unit) ──────────────────────────┘
 ```
 
-`wasm` runs `build:wasm` and uploads `packages/search/pkg` as an artefact, so the three jobs that need it
-download it instead of recompiling the ripgrep tree three times. The four that need nothing from Rust — Biome
-and the unit suite, which mocks the engine — do not wait for it. Setup is shared through the composite
-actions in `.github/actions/`. See
-[decision 0015](decisions/0015-one-ci-job-per-failure-mode.md).
+`wasm` runs `build:wasm` and uploads `packages/search/pkg` as an artefact, so the two jobs that need it
+download it instead of recompiling the ripgrep tree. `rust` and `js` need nothing from it — the unit suite
+mocks the engine — so they do not wait. Setup is shared through the composite actions in `.github/actions/`.
+
+Steps after the first in a job carry `if: '!cancelled()'`, so one failing command does not hide the ones
+after it; that was the original single job's worst property, and it is a step-level problem rather than a
+reason to have more jobs. A job-per-command version was built and measured first: 108s wall clock against
+~110s sequential, at twice the runner time. See
+[decision 0015](decisions/0015-ci-jobs-grouped-by-toolchain.md).
 
 Both publish workflows use `greater-version-only: true`, so a forgotten version bump makes the publish a
 silent no-op rather than a loud failure. They rebuild the WASM rather than take the tested artefact, on
