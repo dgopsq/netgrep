@@ -1,5 +1,12 @@
 @import "tailwindcss";
-@import "tw-animate-css";
+
+/*
+ * shadcn's setup also imports `tw-animate-css`. It is not here because nothing
+ * used it: the only animations on the page are `animate-pulse` and
+ * `animate-spin`, both of which are Tailwind v4 core. That package supplies the
+ * `animate-in` / `fade-in` family, which only the Radix-backed components need
+ * — and there are none. Add it back with the first one.
+ */
 
 /*
  * The site is dark-only, so the shadcn tokens are defined once on `:root`
@@ -11,6 +18,13 @@
  * The hues come from `assets/header.jpg`, which is the project's existing
  * identity: near-black, monospace, one teal accent. Nothing here introduces a
  * second accent colour.
+ *
+ * The token set below is shadcn's COMPLETE one, and deliberately so, even
+ * though this page never draws a popover or a secondary badge. It is the
+ * contract every shadcn component is written against: drop the unused names and
+ * the next component copied in resolves them to nothing and renders unstyled,
+ * which is a confusing failure to debug. Unused CSS variables cost bytes;
+ * unused *dependencies* are what got trimmed instead.
  */
 @custom-variant dark (&:is(.dark *));
 

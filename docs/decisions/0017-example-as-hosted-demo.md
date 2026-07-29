@@ -121,3 +121,22 @@ no commit can do it.
 rediscovered: shadcn's `separator` wraps `@radix-ui/react-separator` and its `badge` imports
 `@radix-ui/react-slot`, so "these six primitives are Radix-free" was false. `separator` was dropped in favour
 of a CSS utility, and `badge` was copied in without its `asChild` prop.
+
+### What was trimmed from the shadcn setup, and what was not
+
+shadcn components are vendored, not depended on, so unused parts of them are ordinary dead code. Removed:
+`skeleton` (never imported), card's `CardHeader`/`CardTitle`/`CardDescription`/`CardContent` (the one consumer
+lays out its own contents), badge's `secondary` and `destructive` variants, the `badgeVariants` export, and
+alert's `cva` — the page raises exactly one alert and it is always the destructive one, so there was nothing
+to choose between.
+
+**`tw-animate-css` was removed as a dependency.** The only animations on the page are `animate-pulse` and
+`animate-spin`, both Tailwind v4 core; that package supplies the `animate-in`/`fade-in` family, which only the
+Radix-backed components use, and there are none.
+
+**The CSS token set was deliberately NOT trimmed**, though several names — `--popover`, `--accent`,
+`--secondary` — are unused today, as was `@custom-variant dark` and the `class="dark"` on `<html>`. These are
+the contract every shadcn component is written against: delete the unused names and the next component copied
+in resolves them to nothing and renders unstyled, which is an unpleasant thing to debug. The distinction drawn
+is that unused CSS variables cost a few bytes in a file this repository owns, whereas an unused *dependency*
+costs install time, lockfile surface and a place on the maintenance path this decision just created.

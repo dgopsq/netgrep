@@ -74,7 +74,7 @@ export function App() {
         `search_bytes` returns.
       */}
         {state.error && (
-          <Alert variant="destructive" className="mb-6">
+          <Alert className="mb-6">
             <CircleAlert />
             <AlertTitle>That pattern did not compile</AlertTitle>
             <AlertDescription>
