@@ -301,6 +301,12 @@ mod search {
 /// browser, a stream or a cache in the way.
 ///
 /// Tracked in `docs/BACKLOG.md`.
+///
+/// And the published demo warns its visitors about these, so a fix is not
+/// finished until it stops: drop the caveat from the `CAVEATS` array in
+/// `packages/example/src/components/limitations.tsx` in the same PR. Nothing
+/// checks that — a green `cargo test` is not evidence the site is honest.
+/// See AGENTS.md §2.3.
 #[cfg(test)]
 mod documented_defects {
     use super::matches;

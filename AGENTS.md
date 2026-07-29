@@ -33,7 +33,7 @@ sanctioned work.
 
 ## 2. ⚠️ Read this before you edit anything
 
-Two things will mislead you if you do not know them.
+Three things will mislead you if you do not know them.
 
 ### 2.1 Some tests assert behaviour that is WRONG, on purpose
 
@@ -69,6 +69,42 @@ pnpm build:wasm
 This is the first thing to try when something fails inexplicably on a clean checkout.
 
 `pnpm bootstrap` does this step for you, along with the install and Playwright's Chromium — see §4.1.
+
+### 2.3 ⚠️ Fixing a defect is not finished until the DEMO SITE stops warning about it
+
+The example is a **published web page** — <https://dgopsq.github.io/netgrep/> — and its "Scope" section tells
+visitors what netgrep cannot do. A fix that leaves that list alone puts the project in the worst possible
+position: a live site confidently warning the world about a bug that no longer exists. The site's only value
+is that it is accurate, so stale honesty is worse than none.
+
+**So a change to library behaviour is incomplete until the site agrees with it.** This is the same rule as
+§2.1 and it fires on the same commits: fixing a defect means inverting its test *and* updating the site, both
+in the PR that fixes it.
+
+**Nothing enforces this.** No test fails, CI stays green, and the site keeps lying until a human notices. That
+is exactly why it is in this section rather than in a comment somewhere.
+
+| If you… | Then, in the same PR… |
+|---|---|
+| Fix 3a, 3b, 3f, 17 or 18 | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) |
+| Fix **both** 3b and 18 | Also re-enable the cache in `packages/example/src/hooks/use-corpus-search.ts` and delete the "This demo runs with the cache off" caveat — the workaround exists only because of those two |
+| Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
+| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state "one boolean per file" and the 1.15 MB WebAssembly download |
+
+**The four caveats currently on the site map to backlog items like this**, so you can find yours quickly:
+
+| Caveat on the site | Backlog |
+|---|---|
+| One boolean per file | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md). Will never be "fixed" |
+| Matches spanning two network chunks are missed | **3a** |
+| This demo runs with the cache off | **3b** and **18** |
+| Binary files stop at the first NUL | **3f** |
+
+Item **17** (`$` on CRLF input) is deliberately *not* on the site: every file in the demo corpus is LF, so it
+cannot be triggered there. If the corpus ever gains a CRLF file, it needs a caveat.
+
+**Do not delete a caveat to tidy the page.** The list is short because the defects are few, not because the
+page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
 
 ---
 

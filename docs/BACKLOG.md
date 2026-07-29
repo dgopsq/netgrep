@@ -27,6 +27,16 @@ module of `packages/search/tests/search.rs`. Read
 and [decision 0011](decisions/0011-tests-that-assert-known-bugs.md) before touching any of them: **fixing one
 means inverting its assertion in the same PR.**
 
+> [!IMPORTANT]
+> **Moving an item to _Done_ is not finished until the demo site stops warning about it.** The published
+> page at <https://dgopsq.github.io/netgrep/> names the defects that affect its visitors, in the `CAVEATS`
+> array of `packages/example/src/components/limitations.tsx`. Leave it alone and the site goes on warning
+> the world about a bug you just fixed.
+>
+> **3a, 3b, 3f and 18 each have a caveat there. 3b and 18 also keep the demo's cache switched off** — fix
+> both and the workaround goes too. Nothing checks this for you; CI will be green either way. See
+> [`../AGENTS.md` §2.3](../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
+
 **3a and 3b interact — do not fix either in isolation**, and 3b and 18 want the same per-url promise
 registry.
 

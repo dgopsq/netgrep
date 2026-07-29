@@ -1,5 +1,29 @@
 import { Info } from 'lucide-react';
 
+/**
+ * ⚠️ THIS LIST IS PUBLISHED, AND GOES STALE SILENTLY. ⚠️
+ *
+ * These are the defects the live site tells its visitors about. When one is
+ * fixed in the library, DELETE ITS ENTRY HERE IN THE SAME PR — otherwise the
+ * page carries on warning the world about a bug that no longer exists, which is
+ * worse than saying nothing, because being accurate is the only reason anyone
+ * should believe the rest of the page.
+ *
+ * Nothing enforces this. No test fails and CI stays green.
+ *
+ *   "Matches spanning two network chunks"  -> BACKLOG 3a
+ *   "This demo runs with the cache off"    -> BACKLOG 3b + 18. Fixing BOTH also
+ *                                             means re-enabling the cache in
+ *                                             use-corpus-search.ts and removing
+ *                                             this entry
+ *   "Binary files stop at the first NUL"   -> BACKLOG 3f
+ *   "One boolean per file"                 -> by design, decision 0003. Stays
+ *
+ * Backlog 17 (`$` on CRLF input) is deliberately absent: every file in the
+ * corpus is LF, so it cannot happen here. Add it if that ever changes.
+ *
+ * See AGENTS.md §2.3.
+ */
 const CAVEATS = [
   {
     title: 'One boolean per file',
