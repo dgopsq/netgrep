@@ -4,15 +4,17 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  // The site is served from https://dgopsq.github.io/netgrep, so every asset
-  // and every story URL sits under `/netgrep/`. Nothing may hard-code a
-  // leading-slash path: use `import.meta.env.BASE_URL` via `src/lib/story-url.ts`,
-  // which is the single place that knows about this.
+  // The site is served from https://netgrep.diegopasquali.com, a custom domain,
+  // so it sits at the root and this is `/`. It used to be `/netgrep/`, for the
+  // project page at dgopsq.github.io/netgrep.
   //
-  // `pnpm dev` serves at http://localhost:5173/netgrep/ for the same reason —
-  // matching production is worth more than a shorter dev URL, because a
-  // base-path mistake then fails locally instead of only after deploying.
-  base: '/netgrep/',
+  // Stated explicitly rather than left to Vite's default, because it is the one
+  // knob that has to move if the site ever goes back onto a project page — and
+  // because `src/lib/story-url.ts` composes story URLs from
+  // `import.meta.env.BASE_URL`, which is exactly this value. Keeping that
+  // indirection now that it resolves to `/` costs nothing and means a future
+  // base change stays a one-line edit here.
+  base: '/',
 
   plugins: [react(), tailwindcss()],
 

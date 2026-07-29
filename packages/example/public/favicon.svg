@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="netgrep">
+  <!--
+    The `()` from the wordmark, drawn as two arcs rather than set as text: a
+    favicon renders in contexts with no webfont and no guarantee about the
+    system monospace, so a glyph would be a different shape on every platform.
+    Colours are the site's own background and primary tokens, resolved to sRGB
+    because CSS custom properties do not exist here. (No double hyphen in this
+    comment: it is XML, so the token names cannot be written literally.)
+  -->
+  <rect width="32" height="32" rx="7" fill="#0a0b0c" />
+  <g fill="none" stroke="#2ee0c9" stroke-width="2.6" stroke-linecap="round">
+    <path d="M13 7C9 11 9 21 13 25" />
+    <path d="M19 7c4 4 4 14 0 18" />
+  </g>
+</svg>
