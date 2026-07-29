@@ -37,18 +37,12 @@ jobs:
         with:
           version: 'v0.13.1'
 
-      # NOTE: ChromeDriver is deliberately NOT pinned here.
-      #
-      # Pinning it via browser-actions/setup-chrome was tried and reverted: it
-      # installs a driver into the tool cache, but the browser ChromeDriver
-      # actually launches is the runner's system Chrome, so pinning one half of
-      # the pair CREATES the version mismatch it was meant to prevent
-      # (ChromeDriver 151 vs the system browser -> SIGKILL).
-      #
-      # Letting `wasm-pack` manage the driver keeps both halves current
-      # together. docs/BACKLOG.md item 2 is a local-machine problem, where the
-      # installed Chrome is older than the driver wasm-pack fetches; CI does
-      # not have that problem.
+      # The browser `pnpm test` runs in is Playwright's own Chromium, pinned to
+      # the `playwright` version in the lockfile. Nothing here depends on the
+      # runner's system Chrome, so the browser and the thing driving it cannot
+      # drift apart — which is exactly what ChromeDriver used to do. Only
+      # chromium is downloaded; firefox and webkit are not used.
+      - run: pnpm exec playwright install --with-deps chromium
 
       # The WASM build comes first: `@netgrep/netgrep` resolves
       # `@netgrep/search` to this workspace, so typecheck, build and the
@@ -59,7 +53,7 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
-      - run: pnpm test:wasm
+      - run: pnpm test:rust
 
       # Everything above inspects the working tree. This inspects the tarballs
       # that would actually reach npm — the only artefact users ever see, and

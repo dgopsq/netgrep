@@ -81,6 +81,7 @@ place only.
 | pnpm | **11.17.0** | `packageManager` in root `package.json` (via corepack) |
 | Rust | **1.97.1** | `rust-toolchain.toml`, with `wasm32-unknown-unknown` + clippy |
 | wasm-pack | 0.13.1 | CI action; install locally with `cargo install wasm-pack` |
+| Playwright | 1.62.0 | root `package.json` + lockfile; the browser it downloads is pinned to it — see §4.2 |
 
 The Rust pin is deliberate, not incidental. `rust-toolchain.toml` used to say `channel = "stable"`, which
 meant an unrelated Rust release broke the build with no commit to point at (1.82 changed the wasm C ABI).
@@ -112,8 +113,8 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`) |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **24 tests** (7 unit, 17 integration) |
-| Test Rust | `pnpm test:wasm` | wasm-bindgen in headless Chrome — **2 tests** |
+| Test TS | `pnpm test` | Vitest — **24 tests**: 7 unit in Node, 17 integration in headless Chromium |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **2 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the example | `pnpm dev` | Demo, not a test — see §6.3 |
 
@@ -126,12 +127,12 @@ pnpm worktree fix/chunk-boundary     # → ../netgrep-fix-chunk-boundary, ready 
 Creates the branch if it does not exist, places the worktree **beside** this checkout (never inside it — a
 nested checkout would be picked up by the workspace glob, Biome and Vitest alike), and bootstraps it.
 
-`pnpm bootstrap` inside an existing worktree does the same preparation. Both accept `--no-install` and
-`--no-build` to skip a step.
+`pnpm bootstrap` inside an existing worktree does the same preparation. Both accept `--no-install`,
+`--no-build` and `--no-browser` to skip a step.
 
 **The repository configures no build cache, on purpose.** Cargo keeps `target/` inside each worktree, so each
-one recompiles the ripgrep dependency tree and keeps its own copy (~8s release, ~5s more for clippy, up to
-1.2 GB). Sharing that is a line in the developer's shell profile, not a file in this repo:
+one recompiles the ripgrep dependency tree and keeps its own copy (~8s release, ~5s more for clippy, hundreds
+of MB). Sharing that is a line in the developer's shell profile, not a file in this repo:
 
 ```bash
 export CARGO_TARGET_DIR="$HOME/.cache/cargo-shared"
@@ -147,13 +148,21 @@ Do not commit this as `build.target-dir`: it is an absolute path, and CI's cachi
 that was built first, measured, and dropped — and what comparable JS+Rust repositories do instead.
 [`CONTRIBUTING.md`](CONTRIBUTING.md) is the human-facing version of this section.
 
-### `pnpm test:wasm` may fail on your machine
+### 4.2 The browser the tests run in
 
-`wasm-pack` downloads the *latest* ChromeDriver, which cannot drive an older installed Chrome
-(`invalid session id`, driver killed with signal 9). CI is unaffected — its Chrome and driver move together.
+`pnpm test` runs the integration suite in **Playwright's own Chromium**, pinned to the `playwright` version in
+the lockfile. `pnpm bootstrap` installs it; on its own that is:
 
-It also **overrides** `CHROMEDRIVER`, so exporting it and re-running `wasm-pack` changes nothing. Invoke the
-harness directly; see [`docs/BACKLOG.md`](docs/BACKLOG.md) item 2 for the exact commands.
+```bash
+pnpm exec playwright install chromium     # ~180 MB, once per machine
+```
+
+It lands in a shared per-user cache, not in the checkout, so worktrees share one copy.
+
+Nothing depends on the Chrome installed on your machine. This replaced `wasm-pack test --chrome --headless`,
+which downloaded the newest ChromeDriver, could not drive an older local Chrome, and **overrode**
+`CHROMEDRIVER` so the mismatch was not fixable by hand. That whole failure mode is gone — browser and driver
+now ship as one pinned unit. See [decision 0013](docs/decisions/0013-playwright-for-browser-tests.md).
 
 ---
 
@@ -165,7 +174,7 @@ Three packages, ~450 lines of first-party source. pnpm workspaces link them; the
 packages/
   search/            Rust → WASM core. The actual search engine.
     src/lib.rs         ~45 lines. Exports one function: search_bytes(&[u8], &str) -> bool
-    tests/search.rs    wasm-bindgen tests, run in headless Chrome
+    tests/search.rs    plain native `cargo test` — no browser, no WebDriver
     scripts/post_build.js   fixes up the generated pkg/ (see below)
     package.json       hand-written wrapper; THIS is what gets published
     pkg/               BUILD OUTPUT, gitignored
@@ -175,7 +184,8 @@ packages/
     src/lib/Netgrep.ts               the whole public API (~225 lines)
     src/lib/data/*.ts                5 type definitions, one per file
     src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
-    src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop
+    src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop,
+                                          in headless Chromium (§4.2)
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
@@ -189,8 +199,8 @@ scripts/worktree.mjs      `git worktree add` + bootstrap, in one command.
 
 Root config: `pnpm-workspace.yaml`, `Cargo.toml` (Rust workspace **and** the release profile — Cargo ignores
 `[profile.*]` in member packages), `tsconfig.base.json`, `biome.jsonc`, `vitest.config.ts`,
-`rust-toolchain.toml`, `.node-version`, `.github/workflows/`. There is deliberately **no `.cargo/config.toml`**
-— see §4.1.
+`vitest.global-setup.ts` (the "run `pnpm build:wasm`" guard for the browser project), `rust-toolchain.toml`,
+`.node-version`, `.github/workflows/`. There is deliberately **no `.cargo/config.toml`** — see §4.1.
 
 ### Two things about `packages/search` that surprise people
 
@@ -232,7 +242,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 
 3. **The example is a demo.** It now runs against local workspace source, so it is a legitimate manual smoke
    test — but it is not automated and does not run in CI. Correctness is established by `pnpm test`,
-   `pnpm test:wasm` and `pnpm verify:pack`.
+   `pnpm test:rust` and `pnpm verify:pack`.
 
 4. **Do not commit build outputs or lockfile churn.** `packages/netgrep/dist/` and `packages/search/pkg/` are
    gitignored. If a command rewrites a lockfile as a side effect of something unrelated, revert it.

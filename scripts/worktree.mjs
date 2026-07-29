@@ -12,7 +12,7 @@
  * sources.
  *
  * Usage:
- *   node scripts/worktree.mjs <branch> [path] [--no-install] [--no-build]
+ *   node scripts/worktree.mjs <branch> [path] [--no-install] [--no-build] [--no-browser]
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -25,7 +25,7 @@ const [branch, requestedPath] = positional;
 
 if (!branch) {
   console.error(
-    'usage: pnpm worktree <branch> [path] [--no-install] [--no-build]',
+    'usage: pnpm worktree <branch> [path] [--no-install] [--no-build] [--no-browser]',
   );
   process.exit(2);
 }

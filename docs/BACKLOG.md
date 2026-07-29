@@ -72,32 +72,6 @@ distinction — which is an API change and therefore out of scope today.
 
 ## P2 — Health
 
-### 2. `pnpm test:wasm` fails on a fresh machine
-
-`wasm-pack test --chrome --headless` downloads the *latest* ChromeDriver, which cannot drive an older
-installed Chrome. Observed: ChromeDriver 151 vs Chrome 150 → `invalid session id`, driver killed (signal 9).
-
-**This is a local-machine problem only.** CI's Chrome and driver move together.
-
-*Do not try to pin it in CI.* That was attempted with `browser-actions/setup-chrome` and reverted: the action
-installs a driver into the tool cache, but the browser ChromeDriver actually launches is the runner's
-*system* Chrome, so pinning one half of the pair creates the very mismatch it was meant to prevent.
-
-Locally, note that `wasm-pack` **overrides** `CHROMEDRIVER` with its own cached copy, so exporting it and
-running `wasm-pack test` does nothing. Invoke the harness directly:
-
-```bash
-cd packages/search
-export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=~/Library/Caches/.wasm-pack/wasm-bindgen-<hash>/wasm-bindgen-test-runner
-export CHROMEDRIVER=/path/to/matching/chromedriver   # from Chrome for Testing
-export WASM_BINDGEN_TEST_ONLY_WEB=1
-cargo test --target wasm32-unknown-unknown
-```
-
-The runner must match the `wasm-bindgen` version in `Cargo.toml`; a stale cached one fails with
-`panicked at 'remaining data [...]', crates/cli-support/src/descriptor.rs`. Running `wasm-pack test` once
-downloads the right one into the cache.
-
 ### 14. The `.wasm` is ~1.15 MB, up 10.6% from the 2022 build
 
 1,038,608 → 1,148,922 bytes. Accounted for (all measured 2026-07-28, release builds through `wasm-pack`):
@@ -156,6 +130,7 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 2 | `pnpm test:wasm` fails on a fresh machine | **Fixed by removing the harness.** ChromeDriver was versioned independently of the browser it drove, by a mechanism this repo did not control, so the mismatch was structural. Playwright now runs the browser tests with a Chromium pinned to its own package version, the Rust tests became a native `cargo test` (`pnpm test:rust`), and browser coverage went *up* — 2 assertions about pure byte logic replaced by the 17-test integration suite, which now also exercises the fetch-based loader. See [0013](decisions/0013-playwright-for-browser-tests.md). |
 | 16 | Published package did not work under Vite | **Fixed.** Shipped wasm-pack's `web` target; the `bundler` target failed *silently* under Vite, returning `false` for every search. Verified in real Chrome against Vite (no plugins), webpack (no config), and a fresh app installed from the actual tarballs. See [0005](decisions/0005-esm-only-distribution.md). |
 | 10 | Root depended on its own published packages | **Fixed** by pnpm workspaces. The example now bundles local source. This was the repository's headline gotcha. See [0009](decisions/0009-pnpm-workspaces.md). |
 | 9 | `@netgrep/search` version drift unenforced | **Fixed.** `workspace:*` plus `post_build.js` copying the version from `Cargo.toml`; `verify:pack` asserts it. |

@@ -50,8 +50,8 @@ pnpm build:wasm        # must run first: the TS package compiles against pkg/ind
 pnpm lint              # Biome + clippy
 pnpm typecheck
 pnpm build
-pnpm test              # 24 tests
-pnpm test:wasm         # 2 tests
+pnpm test              # 24 tests: 7 in Node, 17 in headless Chromium
+pnpm test:rust         # 2 tests, native cargo test
 pnpm verify:pack       # the tarballs that would actually reach npm
 ```
 
@@ -59,10 +59,11 @@ pnpm verify:pack       # the tarballs that would actually reach npm
 Everything above it inspects the working tree, which is how `@netgrep/search` once published a tarball
 containing no WASM at all. Never hand over a release without it passing.
 
-`pnpm test:wasm` fails on a fresh machine — `wasm-pack` fetches the latest ChromeDriver, which cannot drive
-an older installed Chrome (`invalid session id`, driver killed with signal 9). It also **overrides**
-`CHROMEDRIVER`, so exporting it and re-running `wasm-pack` changes nothing; invoke the harness directly. See
-[`docs/BACKLOG.md`](../../../docs/BACKLOG.md) item 2 for the exact commands.
+`pnpm test` needs Playwright's Chromium (`pnpm exec playwright install chromium`, ~180 MB, once per machine).
+It is pinned to the `playwright` version in the lockfile, so it cannot drift from its driver the way the old
+ChromeDriver setup did. That half of the suite is the one that loads `pkg/` through the real fetch-based
+`init()`, so it is also the closest thing to a release rehearsal short of `verify:pack`. See
+[decision 0013](../../../docs/decisions/0013-playwright-for-browser-tests.md).
 
 The example app now runs against **local workspace source**, so `pnpm dev` is a legitimate manual smoke
 test. It is still not automated and does not run in CI, so it never substitutes for the targets above.

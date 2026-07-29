@@ -37,7 +37,8 @@ most common way to lose an hour here.
 All from the repository root. [AGENTS.md §4](AGENTS.md#4-commands) has the full list and the caveats.
 
 ```bash
-pnpm test          # Vitest — 24 tests
+pnpm test          # Vitest — 24 tests (7 in Node, 17 in headless Chromium)
+pnpm test:rust     # cargo test — 2 tests, native, no browser
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # Biome (JS/TS) and clippy (-D warnings)
 pnpm format        # Biome, writes in place
@@ -45,9 +46,16 @@ pnpm build:wasm    # rebuild after any change to packages/search
 pnpm dev           # the Sherlock Holmes demo — a manual smoke test, not a test
 ```
 
-`pnpm test:wasm` runs the Rust tests in headless Chrome and **may fail on your machine** through no fault of
-your change: wasm-pack downloads the newest ChromeDriver, which cannot drive an older installed Chrome. CI is
-unaffected. See [`docs/BACKLOG.md`](docs/BACKLOG.md) item 2.
+The integration half of `pnpm test` drives the real WASM engine in a real browser, so it needs Playwright's
+Chromium. `pnpm bootstrap` installs it; on its own it is:
+
+```bash
+pnpm exec playwright install chromium     # ~180 MB, once per machine
+```
+
+It is pinned to the `playwright` version in the lockfile and is unrelated to the Chrome you have installed,
+so it cannot fall out of step with its driver. That used to be this repository's most annoying local failure
+— see [decision 0013](docs/decisions/0013-playwright-for-browser-tests.md).
 
 ## Working on several branches at once
 
@@ -57,14 +65,16 @@ pnpm worktree fix/chunk-boundary
 
 Creates the branch if it does not exist, adds a git worktree **beside** this checkout (never inside it — a
 nested checkout would be picked up by the pnpm workspace glob, Biome and Vitest alike), and bootstraps it.
-`pnpm bootstrap` inside an existing worktree does the same preparation. Both take `--no-install` and
-`--no-build`.
+`pnpm bootstrap` inside an existing worktree does the same preparation. Both take `--no-install`,
+`--no-build` and `--no-browser`.
 
 ### Sharing a build cache
 
 Cargo keeps its `target/` **inside each worktree**, so every worktree compiles the ripgrep dependency tree
 again and keeps its own copy — measured here at ~8s for the release profile, ~5s more for clippy's dev
-profile, and a directory that reaches 1.2 GB once the `wasm-pack test` artefacts land in it.
+profile, and a directory that runs to hundreds of megabytes per worktree. (It used to reach 1.2 GB, when
+`wasm-pack test` dropped a browser-test toolchain in there too; see
+[decision 0013](docs/decisions/0013-playwright-for-browser-tests.md).)
 
 If you keep more than one worktree around, share one cache by exporting a variable from your shell profile:
 
