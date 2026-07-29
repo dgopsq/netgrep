@@ -65,7 +65,7 @@ never compiled. See [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md).
 
 ## The Rust core — `packages/search`
 
-`src/lib.rs` is ~125 lines, most of them comment, and exposes exactly one `#[wasm_bindgen]` function:
+`src/lib.rs` is ~135 lines, most of them comment, and exposes exactly one `#[wasm_bindgen]` function:
 
 ```rust
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError>

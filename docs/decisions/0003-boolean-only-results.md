@@ -14,7 +14,13 @@ matching posts; it does not render snippets.
 ## Decision
 
 `search_bytes(chunk, pattern) -> bool`. Internally `MemSink` implements `grep::searcher::Sink` and does
-nothing but increment a counter; the function returns `match_count > 0`.
+nothing but record that a match happened; the function returns that flag.
+
+> **Amended (2026-07-29).** `MemSink` counted matches until [0016](0016-compiled-matcher-memo.md); it now
+> records a `bool` and stops at the first hit, which is what the *Consequences* below always said it could
+> do. The signature also gained a fallible path — `Result<bool, JsError>` in Rust, still
+> `(chunk, pattern): boolean` in the generated TypeScript, throwing rather than trapping on an invalid
+> pattern. **The answer is still a boolean**, so this record's decision stands unchanged.
 
 The README states this plainly: *"At the moment Netgrep is just going to tell whether a pattern is present on
 a remote file."*
@@ -26,7 +32,9 @@ a remote file."*
   *where* or *how often* a term appears without a second pass in JavaScript.
 - Because only membership is needed, the searcher can stop at the first match. Combined with
   [0002](0002-search-while-downloading.md), that is what makes early resolution possible at all.
-- `MemSink` counting rather than short-circuiting is slightly wasteful — `Sink::matched` returns `Ok(true)`
-  ("keep searching") when it could return `Ok(false)` to stop at the first hit within a chunk.
+- ~~`MemSink` counting rather than short-circuiting is slightly wasteful — `Sink::matched` returns `Ok(true)`
+  ("keep searching") when it could return `Ok(false)` to stop at the first hit within a chunk.~~ **Done
+  2026-07-29** (BACKLOG 13); it returns `Ok(false)`. Worth 16.4ms → 1.3ms over 800 16 KB chunks in which
+  every line matches, and nothing at all where matches are rare.
 - The richer output would require designing a serialisation format across the boundary. Out of scope while the
   project is in maintenance mode.

@@ -5,8 +5,8 @@
 ## Context
 
 netgrep has known, unfixed correctness bugs: a pattern straddling a `fetch` chunk boundary is missed, a
-partial cache answers later queries, an invalid pattern traps the WASM instance, a single NUL byte discards a
-chunk. They are documented in [`../ARCHITECTURE.md`](../ARCHITECTURE.md#known-limitations--correctness-caveats)
+partial cache answers later queries, a single NUL byte discards a chunk, `$` misses on CRLF input. (The
+invalid-pattern trap was on this list until 2026-07-29; see the second amendment below.) They are documented in [`../ARCHITECTURE.md`](../ARCHITECTURE.md#known-limitations--correctness-caveats)
 and tracked in [`../BACKLOG.md`](../BACKLOG.md).
 
 Fixing them is out of scope for dependency work: the first two interact, and a naive fix to either destroys
@@ -53,3 +53,11 @@ case-sensitive. No source change, no release note, nothing else in the repositor
 
 The defect test failed, the change was investigated, the new behaviour was confirmed correct, and the
 assertion was inverted in the same PR. That is the mechanism working exactly as intended.
+
+> **Amended again (2026-07-29).** The first of these tests was retired the way this record prescribes, which
+> is the point of writing it down. BACKLOG 3c — the trap on an invalid pattern — was fixed in
+> [0016](0016-compiled-matcher-memo.md), and its three assertions were inverted **in the same PR**: two
+> `#[should_panic]` tests in `search.rs` became assertions on the error message, and the integration test
+> asserting `rejects.toThrow('unreachable')` became one asserting a real diagnostic plus the thing the trap
+> had made impossible to assert — that the same instance still answers correctly afterwards. Both keep their
+> `BACKLOG 3c` label with a `(FIXED)` marker and a note saying what they used to claim, following 3e.

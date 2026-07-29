@@ -304,7 +304,7 @@ mod search {
 #[cfg(test)]
 mod documented_defects {
     use super::matches;
-    use search::try_search_bytes;
+    use ::search::try_search_bytes;
 
     #[test]
     fn backlog_3c_fixed_an_invalid_pattern_is_an_error() {

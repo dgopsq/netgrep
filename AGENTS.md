@@ -219,7 +219,7 @@ Three packages, ~530 lines of first-party source. pnpm workspaces link them; the
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         ~125 lines, mostly comment. Exports one function:
+    src/lib.rs         ~135 lines, mostly comment. Exports one function:
                        search_bytes(&[u8], &str) -> Result<bool, JsError>, which caches
                        the last compiled matcher. See decision 0016
     tests/search.rs    plain native `cargo test` — no browser, no WebDriver.

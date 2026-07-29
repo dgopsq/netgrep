@@ -48,7 +48,9 @@ recommended it in as many words. **It was rejected**, for three reasons:
 Keep the exported surface exactly as it is, and cache inside Rust.
 
 ```rust
-static LAST_COMPILED: RefCell<Option<(String, Result<RegexMatcher, String>)>>
+struct Compiled { pattern: String, matcher: Result<RegexMatcher, String> }
+
+static LAST_COMPILED: RefCell<Option<Compiled>>
 ```
 
 - **One entry.** Every url in a single `searchBatch` shares one pattern, so a single slot hits on every chunk
@@ -86,6 +88,13 @@ Native, release profile, 800 chunks of prose — the shape of the worked example
 wasm32 because the ratio between compiling and scanning is what matters, and no dependency was added to
 measure it (see [`AGENTS.md` §6.2](../../AGENTS.md#6-hard-rules)); the harness was thrown away.
 
+Issue #17 suggested benchmarking against the 67-file Sherlock corpus in `packages/example` instead. That was
+**not** what was done, deliberately: the example is a manual demo with a browser and a network in the way, so
+it measures the whole pipeline rather than the thing being changed, and it cannot separate a 40× win on
+compilation from the milliseconds a chunk spends arriving. The synthetic chunks below isolate the ratio. The
+trade is that these numbers say nothing about end-to-end wall-clock, which is dominated by the network and
+barely moves.
+
 | pattern | 16 KB chunk | 64 KB chunk |
 |---|---|---|
 | `needle` | 91.2ms → **2.2ms** | 79.4ms → **9.1ms** |
@@ -115,7 +124,7 @@ library can least afford. Not worth 0.5µs. Recorded here so it is not rediscove
 
 ## Consequences
 
-- `lib.rs` grows from ~45 to ~120 lines, most of it comment. The exported surface is unchanged: still one
+- `lib.rs` grows from ~45 to ~135 lines, most of it comment. The exported surface is unchanged: still one
   function, still a boolean.
 - **There is now state in the engine.** Its failure mode — answering with the previous pattern's matcher — is
   a wrong answer, not a crash. Three tests in `search.rs` pin it: a changed pattern is not answered by the old
