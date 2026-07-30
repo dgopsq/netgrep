@@ -525,6 +525,57 @@ describe('Netgrep integration (real WASM)', () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
+
+    it('answers a concurrent search of the same url from the one download', async () => {
+      serve([encoder.encode(POEM)]);
+
+      const NG = new Netgrep({ enableMemoryCache: true });
+
+      // Order matters: the miss goes first, so the caller that fetches is the
+      // one that drains the stream and writes the entry. The second waits on it
+      // and is answered from that entry — a different pattern, same bytes.
+      const results = await Promise.all([
+        NG.search('url', 'dragon'),
+        NG.search('url', 'Wiseman'),
+      ]);
+
+      expect(results.map((r) => r.result)).toEqual([false, true]);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a waiter fetch for itself when the download ahead cached nothing', async () => {
+      // The honest residual of sharing one download: completeness is not known
+      // until `done`, so a caller that matches early resolves without writing
+      // an entry. The waiter wakes to a cold cache and has to fetch after all —
+      // one request saved is not a guarantee, only the common case.
+      serve([encoder.encode('needle\n'), encoder.encode('omega\n')]);
+
+      const NG = new Netgrep({ enableMemoryCache: true });
+
+      const results = await Promise.all([
+        NG.search('url', 'needle'),
+        NG.search('url', 'omega'),
+      ]);
+
+      expect(results.map((r) => r.result)).toEqual([true, true]);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('still fetches twice for concurrent searches when the cache is disabled', async () => {
+      // Deliberate, and the boundary of the in-flight registry. With no cache
+      // there is no entry to hand a waiter, so waiting would buy it nothing but
+      // the first download's latency. Both go to the network instead.
+      serve([encoder.encode(POEM)]);
+
+      const NG = new Netgrep({ enableMemoryCache: false });
+
+      await Promise.all([
+        NG.search('url', 'dragon'),
+        NG.search('url', 'dragon'),
+      ]);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
   });
 
   /**
@@ -647,35 +698,45 @@ describe('Netgrep integration (real WASM)', () => {
       expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
-    it('BACKLOG 18: concurrent searches of one url still both fetch', async () => {
-      // Nothing tracks a download already in flight, so two searches started
-      // before either resolves both fetch. Still open — it wants a per-url
-      // promise registry, which this change did not add.
+    it('BACKLOG 18 (FIXED): concurrent searches of one url share a single fetch', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: nothing
+      // tracked a download already in flight, so two searches of one url
+      // started before either resolved both fetched it. A per-url registry now
+      // makes the second wait for the first and answer from the entry it
+      // writes. Per the block comment above, inverted in the same PR.
       //
-      // The sharp half IS fixed, and the second assertion is what used to be
-      // inverted here: the entry was APPENDED to per chunk, joining the file to
-      // itself with no separator and forming a line that existed in no file. It
-      // is now assigned once from a drained stream.
+      // It works only with the cache ON, because the entry IS the handover.
+      // With it off both still fetch, deliberately — pinned in the cache suite
+      // above rather than here, since that is a design boundary and not a bug.
       //
       // One chunk, so this does not depend on how the two reads interleave.
       serve([encoder.encode('needle')]);
 
       const NG = new Netgrep({ enableMemoryCache: true });
 
-      await Promise.all([NG.search('url', 'zzz'), NG.search('url', 'zzz')]);
+      const results = await Promise.all([
+        NG.search('url', 'zzz'),
+        NG.search('url', 'zzz'),
+      ]);
 
-      // No in-flight de-duplication. This half is unchanged.
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(results.map((r) => r.result)).toEqual([false, false]);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
 
-      // Previously true, off a cache that read 'needleneedle'.
+      // The other half of this entry, fixed earlier and still true: the shared
+      // record holds the file once. It used to be APPENDED to per chunk,
+      // joining the file to itself with no separator and forming a line that
+      // existed in no file.
       await expect(NG.search('url', '^needleneedle$')).resolves.toMatchObject({
         result: false,
       });
 
-      // The file is 'needle', and that is now what the cache holds.
+      // The file is 'needle', and that is what the cache holds.
       await expect(NG.search('url', '^needle$')).resolves.toMatchObject({
         result: true,
       });
+
+      // All four searches, one request.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('BACKLOG 3g: a match longer than the 64 KB tail ceiling is still missed', async () => {

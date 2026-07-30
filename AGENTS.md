@@ -91,8 +91,7 @@ is exactly why it is in this section rather than in a comment somewhere.
 | If you… | Then, in the same PR… |
 |---|---|
 | Fix 3f | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) — it is the only open defect with one |
-| Fix 3g, 17 or 18 | Nothing on the site to remove: none of them has an entry, for the reasons below. Check that still holds rather than assuming it |
-| Fix 18 | **Do not** re-enable the demo's cache as part of it. That instruction used to live here and has been retracted — see below |
+| Fix 3g or 17 | Nothing on the site to remove: neither has an entry, for the reasons below. Check that still holds rather than assuming it |
 | Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
 | Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state "one boolean per file" and the 1.15 MB WebAssembly download |
 
@@ -105,15 +104,15 @@ is exactly why it is in this section rather than in a comment somewhere.
 | Binary files stop at the first NUL | **3f** |
 
 > [!WARNING]
-> **Do not turn the demo's cache on to close item 18.** This section used to say that fixing 3b and 18 meant
-> re-enabling it and deleting the caveat. 3b is fixed and 18 no longer corrupts the entry, so the safety half
-> of that instruction is satisfied — but the cache stays off for a reason that has nothing to do with defects:
-> **the page measures the network.** A miss drains the stream, which is exactly the condition for caching, so
-> with the cache on every missing file would be answered from memory from the second query onward and the
-> `StatsBar` would report a `Record` lookup as a download. Read the comment in
-> `packages/example/src/hooks/use-corpus-search.ts` before changing it, and treat it as a decision about the
-> demo rather than a consequence of a library fix. See
-> [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md).
+> **The demo's cache stays off, and no library fix changes that.** This section used to say that fixing 3b and
+> 18 meant re-enabling it and deleting the caveat. Both are now fixed and neither instruction survived: the
+> cache is off for a reason that has nothing to do with defects — **the page measures the network.** A miss
+> drains the stream, which is exactly the condition for caching, so with the cache on every missing file would
+> be answered from memory from the second query onward and the `StatsBar` would report a `Record` lookup as a
+> download. Read the comment in `packages/example/src/hooks/use-corpus-search.ts` before changing it, and treat
+> it as a decision about the demo rather than a consequence of a library fix. See
+> [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
+> [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md).
 
 Two items are deliberately *not* on the site, both because the corpus cannot trigger them: **17** (`$` on CRLF
 input — every file is LF) and **3g** (inside a line longer than 64 KB, a long match is lost and `^` can match at
@@ -168,7 +167,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **77 tests**: 45 unit in Node, 32 integration in headless Chromium |
+| Test TS | `pnpm test` | Vitest — **84 tests**: 48 unit in Node, 36 integration in headless Chromium |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
@@ -409,20 +408,23 @@ in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
 | Anchors and long matches inside a >64 KB line | `Netgrep.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window. Inside such a line a match longer than 64 KB is lost, **and** `^` can match at the window's first byte. Needs a line over 64 KB — unreachable in prose. |
 | One NUL discards the searched block | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
 | `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
-| Concurrent searches of one url both fetch | `Netgrep.ts`, no in-flight tracking | Wasted bandwidth (**18**). The answers and the cache entry are correct. |
 
-The last two were found while broadening the test suite on 2026-07-29 and are backlog items 17 and 18.
+The last was found while broadening the test suite on 2026-07-29 and is backlog item 17.
 
-**Two entries left this table on 2026-07-30**, both closed by
+**Three entries left this table on 2026-07-30.** Two were closed by
 [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md): chunk-boundary false negatives and the
 poisoned partial cache. They had to be fixed together, though not for the reason recorded here — the shared
 "draining the stream destroys early resolution" is a failure mode of naive fixes, not a coupling. The real
 coupling was that the boundary defect *suppressed* early resolution, so closing it alone would have made the
 cache defect fire more often, in the default configuration.
 
-That decision also narrowed the two rows that remain: what the engine is handed is now a block of complete
-lines rather than a network chunk, which changed the shape of the NUL defect's blast radius, and the cache
-entry is assigned from a drained stream rather than appended to, which removed the corrupting half of 18. See
+The third was the duplicate fetch of item **18**, closed by
+[decision 0019](docs/decisions/0019-in-flight-fetch-registry.md) with a per-url in-flight registry — and only
+for instances running with the cache **on**, since the cache entry is what the second caller is handed. With
+the cache off both callers still fetch, which is deliberate and pinned by a test.
+
+Decision 0018 also narrowed the row that remains: what the engine is handed is now a block of complete lines
+rather than a network chunk, which changed the shape of the NUL defect's blast radius. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#known-limitations--correctness-caveats) and
 [decision 0002](docs/decisions/0002-search-while-downloading.md).
 

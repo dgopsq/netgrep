@@ -32,18 +32,19 @@ export type SearchState = {
  * THE MEMORY CACHE IS OFF, DELIBERATELY — AND NO LONGER BECAUSE IT IS UNSAFE.
  *
  * The poisoned partial cache (backlog 3b) is FIXED: entries are written only once
- * the whole file has been read. Backlog 18 no longer corrupts anything either —
- * two concurrent searches of one url still both fetch, which is wasteful, but
- * they write identical complete bytes rather than joining the file to itself.
+ * the whole file has been read. So is the duplicate download of backlog 18, for
+ * instances running with the cache ON — though not for this page's overlapping
+ * runs even so, because a keystroke ABORTS the previous search, and an aborted
+ * download leaves no entry for the next one to share. That is accepted.
  *
  * It stays off because THIS PAGE MEASURES THE NETWORK. A miss drains the stream,
  * which is exactly the condition for caching, so with the cache on the StatsBar
  * would time a `Record` lookup and present it as a download from the second query
  * onward — and those numbers are the page's only evidence for its claim.
  *
- * So do not turn this on while closing backlog 18: it is a decision about what
- * the demo measures, not about whether the cache works. Leaving it off is cheap —
- * 2.6 MB, and the browser's own HTTP cache serves repeats.
+ * A decision about what the demo measures, then, not about whether the cache
+ * works. Leaving it off is cheap — 2.6 MB, and the browser's own HTTP cache
+ * serves repeats.
  */
 const netgrep = new Netgrep({ enableMemoryCache: false });
 

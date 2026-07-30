@@ -141,8 +141,7 @@ Then, in rough order of how likely each is to bite:
   that no longer exists. Remove the entry from the `CAVEATS` array in
   `packages/example/src/components/limitations.tsx` in the same PR. **No test catches this**, which is why it
   is worth remembering. (Note the demo's cache stays off even though the defects that justified it are fixed —
-  it is off so the page's timings keep measuring the network. Do not switch it on as a side effect of closing
-  backlog 18.)
+  it is off so the page's timings keep measuring the network, and no library fix changes that.)
   [AGENTS.md §2.3](AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 - **Do not bump dependencies as a side effect.** A version change is its own deliberate, tested change. If a
   tool suggests one while you are doing something else, add it to `docs/BACKLOG.md`.
