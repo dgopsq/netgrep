@@ -138,12 +138,16 @@ search(url, pattern)
   │
   ├─ await wasmReady          ← init() started once at module load
   │
+  ├─ cache enabled AND a search of this url is in flight?
+  │     └─ yes → await it, then look again (it may have cached nothing)
+  │
   ├─ cache enabled AND cache[url] exists?
   │     └─ yes → search_bytes(cache[url], pattern) → resolve
   │              (always the WHOLE file — entries are only written from a
   │               drained stream, so there are no boundaries inside one)
   │
-  └─ fetch(url, { signal })
+  └─ register in inFlight[url] (cache enabled only), then
+     fetch(url, { signal })
        └─ res.body.getReader()
             └─ handleReader(reader)   ── recursive
                  ├─ read() → { value, done }
@@ -173,6 +177,12 @@ Two things about that shape are load-bearing, and both are [decision
   prefix that later answers questions about text it never downloaded (caveat 2). Chunks are only collected when
   the cache is enabled, so a search with it off holds one chunk plus the tail.
 
+The two `cache enabled` branches at the top are [decision
+0019](decisions/0019-in-flight-fetch-registry.md), and the second one is the reason the first is a *loop* in
+the code rather than a single check: a waiter can wake to a cold cache — the search it waited on may have
+matched early, or failed — by which time a third caller is already re-fetching, and it should queue behind that
+one rather than open a request beside it.
+
 Errors are normalised to strings by `serializeError` — `Error.message`, or `JSON.stringify` for
 non-`Error` throws. The recursive `handleReader` call carries a `.catch(reject)`: the promise it returns is not
 chained to the one the executor was handed, so without it a rejection from any chunk after the first would be
@@ -192,7 +202,8 @@ any of them.
 **Documented, not fixed.** Caveats 1 and 2 were both closed on 2026-07-30 by
 [decision 0018](decisions/0018-line-oriented-tail-buffer.md), and they had to be closed together: caveat 1 was
 suppressing early resolution, so fixing it alone would have made caveat 2 fire more often, in the default
-configuration. Caveat 1's *residual* is what remains, and is described below.
+configuration. Caveat 1's *residual* is what remains, and is described below. Caveat 7 was closed the same day
+by [decision 0019](decisions/0019-in-flight-fetch-registry.md), for instances running with the cache on.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 
@@ -276,17 +287,23 @@ Silent, and it depends on who wrote the file rather than on anything the caller 
 `RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
 deliberate task rather than a drive-by.
 
-### 7. Concurrent searches of one url both fetch it — `Netgrep.ts`, `search`
+### 7. Concurrent searches of one url both fetch it — FIXED with the cache on, unchanged with it off
 
-Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
-`fetch`, so the file is downloaded twice.
+Nothing used to track a download already in flight, so two searches of one url started before either resolved
+both `fetch`ed it. The sharp half went first, in decision 0018: the cache entry used to be *appended* to per
+chunk, so the two copies were joined with no separator and the seam formed a line that existed nowhere — a file
+of `needle` cached as `needleneedle`, and `^needleneedle$` answered `true`.
 
-The waste is what remains. The sharp half was fixed by decision 0018: the cache entry used to be *appended* to
-per chunk, so the two copies were joined with no separator and the seam formed a line that existed nowhere — a
-file of `needle` cached as `needleneedle`, and `^needleneedle$` answered `true`. The entry is now assigned once
-from a drained stream, so both searches write the same complete bytes.
+The wasted request went in [decision 0019](decisions/0019-in-flight-fetch-registry.md). `search` keeps a per-url
+registry of in-flight searches; a second caller of the same url waits on the first and is then answered from the
+cache entry the first one writes.
 
-*A fix for the remaining half needs a per-url promise registry so the second caller awaits the first.*
+That entry is the handover, which is why the de-duplication only applies with the **cache on**. With it off there
+is nothing to hand a waiter — sharing would mean retaining every chunk of a file nobody asked to keep, or teeing
+the response stream and with it the first caller's abort signal — so both callers still fetch, deliberately.
+Two further cases fall back to fetching, both pinned: a first caller that matches early resolves without
+draining and writes no entry, and a failed download is not inherited by its waiter, which retries with its own
+signal.
 
 ---
 

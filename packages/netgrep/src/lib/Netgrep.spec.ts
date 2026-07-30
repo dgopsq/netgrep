@@ -318,6 +318,33 @@ describe('Netgrep', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
+    it('frees a waiting search when the download it waited on fails', async () => {
+      // A waiter parked on an in-flight download must not inherit its failure —
+      // it never asked for that request, and its own signal may be perfectly
+      // live. It also must not park forever. So: fetch for itself, and let the
+      // failure belong to the caller that owns it.
+      mockSearch.mockReturnValue(true);
+      mockFetch
+        .mockImplementationOnce(() => Promise.reject(new Error('offline')))
+        .mockImplementation(() =>
+          Promise.resolve({ body: genReadableStreamFromString('test') }),
+        );
+
+      const instance = new Netgrep({ enableMemoryCache: true });
+
+      const settled = await Promise.allSettled([
+        instance.search('doomed', pattern),
+        instance.search('doomed', pattern),
+      ]);
+
+      expect(settled[0]).toMatchObject({ status: 'rejected' });
+      expect(settled[1]).toMatchObject({
+        status: 'fulfilled',
+        value: { url: 'doomed', result: true },
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('stops reading as soon as a chunk matches', async () => {
       // The terminators matter: a chunk is searched only up to its last `\n`, so
       // a newline-free fixture would search nothing until the stream ended and

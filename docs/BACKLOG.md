@@ -33,9 +33,9 @@ means inverting its assertion in the same PR.**
 > array of `packages/example/src/components/limitations.tsx`. Leave it alone and the site goes on warning
 > the world about a bug you just fixed.
 >
-> **3f has a caveat there. 18 keeps the demo's cache switched off** — though as of 0018 that is a *choice*
-> rather than a workaround, because a warm cache stops the page's timings measuring the network. Nothing checks
-> this for you; CI will be green either way. See
+> **3f has a caveat there.** The demo's cache is switched off, but no longer for any reason on this list — a
+> warm cache stops the page's timings measuring the network, which is a choice about the demo rather than a
+> workaround for a defect. Nothing checks this for you; CI will be green either way. See
 > [`../AGENTS.md` §2.3](../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 
 **3a and 3b were fixed together on 2026-07-30** — see the *Done* table and
@@ -107,32 +107,6 @@ change, so it wants its own tested commit.
 Found on 2026-07-29 while broadening the test suite. Pinned in the `documented_defects` module of
 `packages/search/tests/search.rs`.
 
-### 18. Concurrent searches of one url both fetch it — `packages/netgrep/src/lib/Netgrep.ts`
-
-Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
-`fetch`, so the file is downloaded twice.
-
-`searchBatchWithCallback` makes this easy to hit — it starts every search eagerly with no concurrency limit, so
-a corpus listing one url twice reaches it immediately. The demo hits it across *runs* rather than within one: a
-keystroke aborts run N while run N+1 starts, so two searches of each url overlap.
-
-A per-url promise registry fixes it: the second caller awaits the first instead of fetching.
-
-**Amended 2026-07-30 — the expensive half is already fixed.** This entry used to record that the entry held
-bytes the file never contained, because each search *appended* what it read:
-
-```
-file:   "needle"
-cache:  "needleneedle"        before decision 0018
-        ~ "^needleneedle$"  ->  true
-```
-
-[Decision 0018](decisions/0018-line-oriented-tail-buffer.md) writes the entry once, assigned from a drained
-stream, so both searches now store the same complete bytes. What is left is a wasted request. That also means
-this no longer shares a fix with 3b, which is closed.
-
-Found on 2026-07-29 while broadening the test suite. Pinned in `Netgrep.integration.spec.ts`.
-
 ---
 
 ## P2 — Health
@@ -187,6 +161,7 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 18 | Concurrent searches of one url both fetch | **Fixed, for cache-on instances only — and that is the whole design rather than a shortcut.** A per-url registry of in-flight searches; a second caller of the same url waits on the first and answers from the entry it writes. The entry *is* the handover, so with the cache **off** there is nothing to hand over: sharing would mean either retaining every chunk of a file nobody asked to keep — the cost [0018](decisions/0018-line-oriented-tail-buffer.md) had just removed — or teeing the response stream and with it the first caller's abort signal. So with the cache off both callers still fetch, deliberately, and a test pins it. Two more residuals, both pinned: a first caller that matches early resolves without draining, writes no entry, and its waiter fetches after all — one saved request is the common case, not a guarantee; and a failed download is not inherited by its waiter, which retries with its own signal. `searchBatch` and `searchBatchWithCallback` inherit the de-duplication for free, since both go through `search`. The demo is untouched: it runs with the cache off on purpose, because the page measures the network. See [0019](decisions/0019-in-flight-fetch-registry.md). |
 | 3a | Chunk-boundary false negatives | **Fixed, and the design question in [issue #20](https://github.com/dgopsq/netgrep/issues/20) had a wrong premise.** That issue said the tail size must be a configured cap because the maximum match length of an arbitrary regex is not derivable from the pattern. True — but it is derivable from the *data*: a match can never span a `\n`, because grep-regex strips the terminator out of character classes and rejects patterns containing a literal one. So the exact carry-over is the incomplete trailing **line**, and no cap is needed for correctness. `MAX_TAIL_BYTES` (64 KB, not configurable) exists only so a line with no terminator cannot buffer a 500 MB response; past it the tail degrades to a byte window, which is item **3g**. Fixing it also removed the never-tracked mirror-image false *positives*, where a seam looked like a line start to `^` and a line end to `$`. Early resolution became line-granular, which costs two extra reads in one test and nothing against real 16–64 KB chunks. Four assertions inverted. See [0018](decisions/0018-line-oriented-tail-buffer.md). |
 | 3b | Poisoned partial cache | **Fixed, and it had to ship with 3a.** Not for the reason recorded here — "a naive fix drains the stream" is a shared failure mode of bad fixes, not a coupling. The real one: 3a was *suppressing* early resolution, so closing it alone would have left more searches resolving early, more prefixes cached, and a regression in the default configuration. The fix is smaller than the completeness flag this entry proposed: write the entry only when the reader reports `done`, so a partial one is never created. A partial entry cannot resume a download either, and nothing needed it to. Note a match in the *final* chunk still caches nothing — `done` is one read later. |
 | 11 | `upsertMemoryCache` is O(n²) | **Fixed** as a side effect of 3b, because "collect chunks and join once" is what deferring the write requires. Chunks are also only collected when the cache is *on*, so a search with it off no longer retains the whole file — it had been paying the memory cost for a cache it was not using. The no-eviction half of this entry is not fixed and is now item **19**. |

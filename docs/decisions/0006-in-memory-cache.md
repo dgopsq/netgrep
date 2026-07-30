@@ -72,3 +72,16 @@ prefixes cached — a regression in the default configuration.
 
 One consequence for callers: **`enableMemoryCache: false` is no longer a workaround for a correctness defect.**
 It is now only a memory/bandwidth trade.
+
+## Amendment (2026-07-30) — the flag now also decides whether concurrent downloads are shared
+
+See [0019](0019-in-flight-fetch-registry.md). Two searches of one url started before either resolves used to
+fetch it twice; the second now waits for the first and is answered from the entry it writes.
+
+That makes `enableMemoryCache` do a second thing. The entry **is** the handover — a waiter is given no bytes
+and no result, only the cache — so with the flag off there is nothing to hand over and both callers still
+fetch. Sharing regardless would mean either retaining every chunk of a file the caller asked not to keep, or
+teeing the response stream and with it the first caller's abort signal.
+
+So the trade this record describes has grown a third term: `enableMemoryCache: false` costs a repeat download,
+retains nothing — and no longer collapses concurrent downloads of the same url either.

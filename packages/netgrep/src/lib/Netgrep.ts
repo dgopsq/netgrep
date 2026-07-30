@@ -62,6 +62,19 @@ export class Netgrep {
   private readonly config: NetgrepConfig;
   private readonly memoryCache: Record<string, Uint8Array> = {};
 
+  /**
+   * Downloads currently in flight, keyed by url — BACKLOG 18.
+   *
+   * Only ever populated when the memory cache is on. A second concurrent caller
+   * waits for the first and answers from the entry the first one writes, so the
+   * bytes it needs are exactly the bytes the cache holds. With the cache off
+   * there is nothing to hand over — sharing would mean either retaining every
+   * chunk of a file nobody asked to keep, or teeing the response stream and
+   * with it the first caller's abort signal — so waiting would add latency and
+   * save no request at all.
+   */
+  private readonly inFlight: Record<string, Promise<unknown>> = {};
+
   constructor(config?: Partial<NetgrepConfig>) {
     this.config = {
       ...defaultConfig,
@@ -94,10 +107,67 @@ export class Netgrep {
     metadata?: T,
     config?: NetgrepSearchConfig,
   ): Promise<NetgrepResult<T>> {
-    // Nothing below can run before the engine exists. Everything after this
-    // line is unchanged from the synchronous-instantiation version.
+    // Nothing below can run before the engine exists.
     await wasmReady;
 
+    if (this.config.enableMemoryCache) {
+      // A `while` rather than an `if`: waking to a cold cache is normal — the
+      // download ahead may have matched early and cached nothing, or failed —
+      // and by then a third caller can already be re-fetching. Queue behind
+      // that one too instead of opening a second request beside it.
+      //
+      // Its rejection is swallowed because the recourse to a failed download
+      // is the same as the recourse to a miss: fetch below, with this caller's
+      // own signal rather than the one that just aborted.
+      while (this.inFlight[url]) {
+        await this.inFlight[url].catch(() => undefined);
+      }
+
+      // Search the content in the memory cache if it's enabled. No tail buffer
+      // needed: entries are only written from a drained stream, so an entry is
+      // the whole file in one buffer with no boundaries to lose a match across.
+      const cached = this.memoryCache[url];
+
+      if (cached) {
+        return {
+          url,
+          pattern,
+          result: search_bytes(cached, pattern),
+          metadata,
+        };
+      }
+    }
+
+    const running = this.executeSearch<T>(url, pattern, metadata, config);
+
+    if (this.config.enableMemoryCache) {
+      this.inFlight[url] = running;
+
+      // Both handlers, so this never becomes a rejection of its own — the
+      // caller holds `running` and answers for that one. Registered before any
+      // waiter can attach, so the entry is gone by the time one resumes.
+      const settle = () => {
+        if (this.inFlight[url] === running) delete this.inFlight[url];
+      };
+
+      running.then(settle, settle);
+    }
+
+    return running;
+  }
+
+  /**
+   * One fetch-and-stream pass over a url, searching each chunk as it arrives.
+   *
+   * Knows nothing about the cache read or the in-flight registry: `search`
+   * decides whether this needs to run at all.
+   */
+  private executeSearch<T extends object>(
+    url: string,
+    pattern: string,
+    metadata?: T,
+    config?: NetgrepSearchConfig,
+  ): Promise<NetgrepResult<T>> {
     return new Promise((resolve, reject) => {
       // The incomplete final line seen so far, held back until the rest of it
       // arrives — BACKLOG 3a. Annotated because `subarray` yields an
@@ -170,15 +240,6 @@ export class Netgrep {
           }
         });
       };
-
-      // Search the content in the memory cache if it's enabled. No tail buffer
-      // needed: entries are only written from a drained stream, so an entry is
-      // the whole file in one buffer with no boundaries to lose a match across.
-      if (this.config.enableMemoryCache && this.memoryCache[url]) {
-        const result = search_bytes(this.memoryCache[url], pattern);
-        resolve({ url, pattern, result, metadata });
-        return;
-      }
 
       fetch(url, { signal: config?.signal })
         .then((res) =>
@@ -287,8 +348,9 @@ export class Netgrep {
    * prefix behind with nothing marking it incomplete, so a later search for a
    * term further down answered `false` about text never downloaded.
    *
-   * Assigns rather than appends, so two concurrent searches of one url store
-   * identical files instead of concatenating the file to itself.
+   * Assigns rather than appends. Two concurrent searches of one url no longer
+   * reach here together — the second waits on the first — but an assignment is
+   * what makes that safe to rely on rather than something to reason about.
    */
   private commitMemoryCache(
     url: string,
