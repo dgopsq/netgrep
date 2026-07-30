@@ -66,8 +66,21 @@ rsvg-convert -w 192 -h 192 favicon.svg -o icon-192.png
 rsvg-convert -w 180 -h 180 favicon.svg -o apple-touch-icon.png
 ```
 
-`public/og-image.jpg` is `assets/header.jpg` resampled to 1200px wide and padded to the 1200×630 that Open
-Graph wants: `sips --resampleWidth 1200 … | sips -p 630 1200 --padColor 000000`.
+**`public/og-image.jpg` is cut from `assets/social-preview.png`**, so the unfurl looks like the rest of the
+project's artwork — same gradient, same wordmark, same tagline — rather than like a shrunken banner. The
+source is 2000×1000 and Open Graph wants 1200×630, which is a slightly wider frame than 2:1, so it is centre
+cropped to that ratio first and only then resampled; scaling straight to 1200×630 would stretch the wordmark:
+
+```bash
+cp assets/social-preview.png /tmp/og.png
+sips -c 1000 1905 /tmp/og.png                                  # centre crop to 1.905:1
+sips -z 630 1200 /tmp/og.png                                   # resample
+sips -s format jpeg -s formatOptions 88 /tmp/og.png --out packages/example/public/og-image.jpg
+```
+
+The previous version was `assets/header.jpg` padded out with pure black, which left the wordmark small in a
+letterbox whose black did not match the image's own background. If you replace the image, update
+`og:image:alt` in `index.html` too — it describes what is actually in it.
 
 **`src/data/stories.ts` is generated.** Titles are read out of each file's own header block. After adding or
 removing a file in `public/stories/`:
