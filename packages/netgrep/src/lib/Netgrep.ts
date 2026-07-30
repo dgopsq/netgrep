@@ -16,14 +16,11 @@ const defaultConfig: NetgrepConfig = {
 /**
  * Ceiling on the bytes retained between two `fetch` chunks.
  *
- * The tail is normally the incomplete trailing *line*, which `splitAtLastLine`
- * keeps in full — 76 bytes at worst in the demo's 2.6 MB corpus. Only
- * terminator-free input reaches this ceiling, and there the guarantee weakens
- * from "a boundary never hides a match" to "a boundary never hides a match
- * shorter than 64 KB".
+ * Only terminator-free input reaches it — the tail is normally the incomplete
+ * trailing line, 76 bytes at worst in the demo's corpus. Past it the guarantee
+ * weakens to "a boundary never hides a match shorter than 64 KB".
  *
- * Deliberately not configurable: a safety valve for input netgrep is not aimed
- * at, not a tuning knob, and one contract is easier to describe than a family.
+ * A safety valve for input netgrep is not aimed at, so not configurable.
  */
 const MAX_TAIL_BYTES = 64 * 1024;
 
@@ -102,18 +99,22 @@ export class Netgrep {
     await wasmReady;
 
     return new Promise((resolve, reject) => {
-      // The incomplete final line seen so far, unsearchable until the rest of
-      // it arrives. Closes BACKLOG 3a; see `splitAtLastLine`. Annotated because
-      // `subarray` yields an `ArrayBufferLike` view, which the type inferred
-      // from this initialiser would reject.
+      // The incomplete final line seen so far, held back until the rest of it
+      // arrives — BACKLOG 3a. Annotated because `subarray` yields an
+      // `ArrayBufferLike` view, which the inferred type would reject.
       let tail: Uint8Array = new Uint8Array(0);
+
+      // Whether `tail` still needs searching when the stream ends. False in the
+      // windowed case, where it was already searched as part of the whole buffer.
+      let tailPending = false;
+
+      const caching = this.config.enableMemoryCache;
 
       // Joined ONCE at the end rather than reallocated per chunk, which used to
       // make this O(n²) — BACKLOG 11. Left empty when the cache is off: the
-      // search itself never needs more than the tail, so collecting anyway would
-      // retain all 500 MB of a 500 MB file for nothing.
+      // search never needs more than the tail, so collecting anyway would retain
+      // all 500 MB of a 500 MB file for nothing.
       const chunks: Array<Uint8Array> = [];
-      const caching = this.config.enableMemoryCache;
 
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -123,11 +124,17 @@ export class Netgrep {
           // let's quit this job returning `false`.
           if (done) {
             // The stream ended, so the held-back tail is a genuine final line
-            // rather than a fragment. Nothing has searched it yet: skipping it
-            // would lose the last line of every file not ending in a newline.
-            const result = tail.length > 0 && search_bytes(tail, pattern);
+            // rather than a fragment, and skipping it would lose the last line of
+            // every file not ending in a newline.
+            //
+            // Only when it has not already been searched. A windowed tail was
+            // covered by the whole-buffer search that produced it, and searching
+            // it alone would treat its first byte as a line start — letting `^`
+            // match a line that begins earlier.
+            const result =
+              tailPending && tail.length > 0 && search_bytes(tail, pattern);
 
-            this.commitMemoryCache(url, chunks);
+            this.commitMemoryCache(url, chunks, caching);
 
             resolve({ url, pattern, result, metadata });
             return;
@@ -136,15 +143,21 @@ export class Netgrep {
           if (caching) chunks.push(value);
 
           // Prepend the held-back tail, then hand the engine only whole lines.
-          const { searched, tail: nextTail } = splitAtLastLine(
+          const {
+            searchable,
+            tail: nextTail,
+            tailSearched,
+          } = splitAtLastLine(
             tail.length > 0 ? concatBytes([tail, value]) : value,
             MAX_TAIL_BYTES,
           );
 
           tail = nextTail;
+          tailPending = !tailSearched;
 
           // A chunk with no terminator in it searches nothing and grows the tail.
-          const result = searched.length > 0 && search_bytes(searched, pattern);
+          const result =
+            searchable.length > 0 && search_bytes(searchable, pattern);
 
           if (result) {
             resolve({ url, pattern, result: true, metadata });
@@ -270,19 +283,19 @@ export class Netgrep {
   /**
    * Store a fully downloaded file in the in-memory cache.
    *
-   * ONLY EVER CALLED ON A DRAINED STREAM — that is the whole point. Writing per
-   * chunk meant an early resolution left a *prefix* with nothing marking it
-   * incomplete, so a later search for a term further down answered `false` about
-   * text never downloaded (BACKLOG 3b). Waiting for `done` means a partial entry
-   * is never created rather than flagged.
+   * ONLY EVER CALLED ON A DRAINED STREAM — BACKLOG 3b. Writing per chunk left a
+   * prefix behind with nothing marking it incomplete, so a later search for a
+   * term further down answered `false` about text never downloaded.
    *
-   * Assigns rather than appends, so two concurrent searches of one url overwrite
-   * each other with identical files instead of concatenating the file to itself
-   * and forming a line that exists nowhere. Their duplicate fetch is BACKLOG 18,
-   * still open.
+   * Assigns rather than appends, so two concurrent searches of one url store
+   * identical files instead of concatenating the file to itself.
    */
-  private commitMemoryCache(url: string, chunks: Array<Uint8Array>) {
-    if (!this.config.enableMemoryCache) return;
+  private commitMemoryCache(
+    url: string,
+    chunks: Array<Uint8Array>,
+    caching: boolean,
+  ) {
+    if (!caching) return;
 
     this.memoryCache[url] = concatBytes(chunks);
   }

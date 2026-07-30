@@ -678,18 +678,12 @@ describe('Netgrep integration (real WASM)', () => {
       });
     });
 
-    it('BACKLOG 3a (RESIDUAL): a match longer than the 64 KB tail ceiling is still missed', async () => {
-      // What the tail buffer does NOT fix, and why 3a is narrowed rather than
-      // closed outright.
-      //
-      // The tail is normally the incomplete trailing LINE, which is exact. Since
-      // a terminator-free line would otherwise buffer an entire response, past a
-      // 64 KB ceiling the tail degrades to a window on the last 64 KB — so a
-      // match starting before that window and ending after the buffer is lost.
-      //
-      // Needs a line over 64 KB AND a match spanning most of it, so it is
-      // unreachable in hand-written text: the demo corpus is 2.6 MB of prose
-      // whose longest line is 76 bytes.
+    it('BACKLOG 3g: a match longer than the 64 KB tail ceiling is still missed', async () => {
+      // What the tail buffer does NOT fix. A terminator-free line would buffer an
+      // entire response, so past a 64 KB ceiling the tail becomes a window on the
+      // last 64 KB — and a match starting before that window and ending after the
+      // buffer is lost. Needs a line over 64 KB AND a match spanning most of it,
+      // so it is unreachable in prose: this corpus's longest line is 76 bytes.
       const NG = new Netgrep({ enableMemoryCache: false });
       const filler = 'x'.repeat(70_000);
 
@@ -719,6 +713,33 @@ describe('Netgrep integration (real WASM)', () => {
         encoder.encode('dle and then some'),
       ]);
       await expect(NG.search('c', 'nee.*dle')).resolves.toMatchObject({
+        result: true,
+      });
+    });
+
+    it('BACKLOG 3g: `^` can match at a window boundary inside an over-long line', async () => {
+      // The other half of 3g, and a false POSITIVE rather than a false negative.
+      //
+      // Once a line outgrows the ceiling the retained bytes are a window, so the
+      // buffer handed to the engine no longer begins where a line begins — and
+      // the engine has no way to be told that. `^` therefore anchors to the
+      // window's first byte. Same precondition as the misses above: a line longer
+      // than 64 KB, so unreachable in prose.
+      const NG = new Netgrep({ enableMemoryCache: false });
+
+      // Control: one line beginning with 'b', so nothing should match `^a`.
+      serve([encoder.encode(`b${'a'.repeat(70_000)}`)]);
+      await expect(NG.search('a', '^a')).resolves.toMatchObject({
+        result: false,
+      });
+
+      // The residual: the window is discarded once a terminator arrives, but the
+      // buffer that carried it still started mid-line.
+      serve([
+        encoder.encode(`b${'a'.repeat(70_000)}`),
+        encoder.encode('end\n'),
+      ]);
+      await expect(NG.search('b', '^a')).resolves.toMatchObject({
         result: true,
       });
     });
@@ -809,16 +830,12 @@ describe('Netgrep integration (real WASM)', () => {
 
     it('BACKLOG 3f: one NUL byte discards the whole searched block, match included', async () => {
       // `BinaryDetection::quit(b'\x00')` abandons what it was given on the first
-      // NUL. Not "stops at the NUL" — the match is dropped even when it precedes
-      // the NUL, and even on an earlier line.
+      // NUL, so the match is dropped even when it precedes the NUL.
       //
-      // STILL OPEN, but the tail buffer moved where the damage stops: the engine
-      // gets the block of COMPLETE LINES in a chunk, not the chunk, so a NUL's
-      // reach now depends on where the last `\n` falls rather than on where the
-      // network split. Case (c) used to pass with a terminator-free `tail` and
-      // needs one now, or the NUL lands in the held-back partial line and never
-      // shares a block with the match. Same defect, differently shaped blast
-      // radius — see the assertion after it.
+      // STILL OPEN, but the blast radius changed shape: the engine now gets a
+      // chunk's block of COMPLETE LINES, so a NUL's reach depends on where the
+      // last `\n` falls. Case (c) needed a terminator added, or the NUL lands in
+      // the held-back partial line and never shares a block with the match.
       const NG = new Netgrep({ enableMemoryCache: false });
 
       serve([bytes('needle here')]);

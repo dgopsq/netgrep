@@ -71,17 +71,22 @@ and the part that has to wait:
 
 ```ts
 let cut = buffer.lastIndexOf(LINE_FEED) + 1;      // 0 when no line has completed
-const overflowing = buffer.length - cut > cap;
-if (overflowing) cut = buffer.length - cap;
+const windowed = buffer.length - cut > cap;
+if (windowed) cut = buffer.length - cap;
 
 return {
-  searched: overflowing ? buffer : buffer.subarray(0, cut),
+  searchable: windowed ? buffer : buffer.subarray(0, cut),
   tail: buffer.subarray(cut),
+  tailSearched: windowed,
 };
 ```
 
-The streaming loop keeps `tail`, searches `searched` when it is non-empty, and searches the leftover tail once
-when the reader reports `done` — at which point it is a genuine final line rather than a fragment.
+The streaming loop keeps `tail`, searches `searchable` when it is non-empty, and searches the leftover tail when
+the reader reports `done` — at which point it is a genuine final line rather than a fragment.
+
+`tailSearched` is why the flush is conditional. When windowed, `searchable` is the whole buffer and therefore
+already covered the retained bytes, so flushing them again would both rescan up to `cap` bytes and — because a
+windowed tail begins mid-line — let `^` match at its first byte.
 
 `MAX_TAIL_BYTES` is **64 KB and not configurable**. It is a safety valve, not a tuning knob: without it a
 single line with no terminator would buffer an entire 500 MB response. One contract is easier to document than
@@ -89,8 +94,8 @@ a family of them, and the public surface is deliberately small ([`AGENTS.md` §1
 
 | input | regime | guarantee |
 |---|---|---|
-| every line under 64 KB — all prose, Markdown, source | line tail | **a chunk boundary never hides a match** |
-| a line over 64 KB — minified JS, a single-line dump | 64 KB byte window | a match shorter than 64 KB is never hidden |
+| every line under 64 KB — all prose, Markdown, source | line tail | **a chunk boundary is invisible**: it neither hides a match nor invents one |
+| a line over 64 KB — minified JS, a single-line dump | 64 KB byte window | a match shorter than 64 KB is never hidden, but a longer one may be, and `^` may match at a window edge (item **3g**) |
 
 The measurement the issue asked for: the demo corpus is 2.6 MB over 54,496 lines, and its longest line is
 **76 bytes** — every one of the 56 files maxes out between 74 and 76. The ceiling has 862× headroom there, and
@@ -100,22 +105,30 @@ on every chunk of every file.
 
 ### Two things that fall out for free
 
-**`^` and `$` stop lying at boundaries.** Because each chunk was searched as though it were a whole document,
-the seam looked like a line start to `^` and a line end to `$`, so both invented matches — the mirror image of
-3a, never separately tracked, and just as network-dependent:
+**`^` and `$` stop lying at boundaries, for any line under the ceiling.** Because each chunk was searched as
+though it were a whole document, the seam looked like a line start to `^` and a line end to `$`, so both
+invented matches — the mirror image of 3a, never separately tracked, and just as network-dependent:
 
 ```
 serve(['hello won', 'derful world'])   ~ 'won$'     ->  true    # before
                                        ~ '^derful'  ->  true    # before
 ```
 
-Handing the engine only complete lines fixes both directions at once.
+Handing the engine only complete lines fixes both directions at once, *while there are complete lines to hand
+it*. A windowed tail starts mid-line and there is no way to tell the engine so, so `^` anchors to the window's
+first byte — a false positive with the same precondition as 3g's false negative, and now pinned beside it. The
+first version of this change made it worse by also searching the windowed tail alone at end of stream, which
+turned a single-chunk newline-free file into a false positive; `tailSearched` removes that case.
 
-**Every byte is scanned exactly once.** The issue noted that re-searching a byte-window tail means a match
-wholly inside it is found twice — harmless for a boolean, but a problem if
+**Every byte is scanned exactly once — in the line regime.** The issue noted that re-searching a byte-window
+tail means a match wholly inside it is found twice: harmless for a boolean, but a problem if
 [issue #3](https://github.com/dgopsq/netgrep/issues/3) (return the matching line) ever lands, since the same
-line could be reported from two chunks. Complete-line blocks do not overlap, so that is designed out rather
-than deferred.
+line could be reported from two chunks. Complete-line blocks do not overlap, so that is designed out there.
+
+It does **not** hold once a line outgrows the ceiling: `searchable` is then the whole buffer *and* the last
+`cap` bytes are retained, so those bytes are scanned again in the next buffer. The end-of-stream flush no longer
+adds a third pass over them — `splitAtLastLine` reports `tailSearched` and the loop skips a tail it has already
+seen — but within the windowed regime the overlap is inherent. #3 would have to handle it.
 
 ## And the cache, because 3a could not ship without it
 

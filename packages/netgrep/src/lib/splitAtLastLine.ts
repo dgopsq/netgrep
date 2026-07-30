@@ -11,14 +11,22 @@ const LINE_FEED = 0x0a;
  * internal to the streaming loop.
  */
 type BufferSplit = {
-  /** Safe to search. Empty when no complete line has arrived yet. */
-  searched: Uint8Array;
+  /** Safe to hand to the engine. Empty when no complete line has arrived. */
+  searchable: Uint8Array;
+
+  /** Bytes to prepend to the next chunk. */
+  tail: Uint8Array;
 
   /**
-   * Bytes to prepend to the next chunk. NOT yet searched — the caller must
-   * search it when the stream ends, or the final line is lost.
+   * Whether `searchable` already covered `tail`.
+   *
+   * True only in the windowed case, where `searchable` is the whole buffer and
+   * therefore includes the retained bytes. The caller must not search the tail
+   * again when the stream ends: it would rescan up to `cap` bytes, and — because
+   * a windowed tail starts mid-line — would let `^` match at the window's first
+   * byte, inventing a match on a line that does not begin there.
    */
-  tail: Uint8Array;
+  tailSearched: boolean;
 };
 
 /**
@@ -39,22 +47,25 @@ type BufferSplit = {
  * buffer an entire response. Past it, exactness degrades to a plain byte window:
  * a match shorter than `cap` still survives the boundary, a longer one does not.
  * @returns
- * The two halves, as views into `buffer` rather than copies.
+ * The two halves — views into `buffer`, not copies — and whether the tail still
+ * needs searching.
  */
 export function splitAtLastLine(buffer: Uint8Array, cap: number): BufferSplit {
-  // `+ 1` cuts AFTER the terminator, so `searched` is whole lines and `tail`
+  // `+ 1` cuts AFTER the terminator, so `searchable` is whole lines and `tail`
   // starts a fresh one. Absent a terminator this is 0 and everything waits.
   let cut = buffer.lastIndexOf(LINE_FEED) + 1;
 
-  const overflowing = buffer.length - cut > cap;
+  const windowed = buffer.length - cut > cap;
 
-  if (overflowing) cut = buffer.length - cap;
+  if (windowed) cut = buffer.length - cap;
 
   return {
-    // Required, not an optimisation: when overflowing, the bytes between the
-    // last terminator and the new cut leave the tail, so searching only
-    // `[0, cut)` would drop them unscanned and lose a match that arrived whole.
-    searched: overflowing ? buffer : buffer.subarray(0, cut),
+    // Searching the WHOLE buffer when windowed is required, not an optimisation:
+    // the bytes between the last terminator and the new cut leave the tail, so
+    // searching only `[0, cut)` would drop them unscanned and lose a match that
+    // arrived complete in one chunk.
+    searchable: windowed ? buffer : buffer.subarray(0, cut),
     tail: buffer.subarray(cut),
+    tailSearched: windowed,
   };
 }

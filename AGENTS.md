@@ -90,7 +90,8 @@ is exactly why it is in this section rather than in a comment somewhere.
 
 | If you… | Then, in the same PR… |
 |---|---|
-| Fix 3f, 3g, 17 or 18 | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) |
+| Fix 3f | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) — it is the only open defect with one |
+| Fix 3g, 17 or 18 | Nothing on the site to remove: none of them has an entry, for the reasons below. Check that still holds rather than assuming it |
 | Fix 18 | **Do not** re-enable the demo's cache as part of it. That instruction used to live here and has been retracted — see below |
 | Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
 | Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state "one boolean per file" and the 1.15 MB WebAssembly download |
@@ -115,8 +116,9 @@ is exactly why it is in this section rather than in a comment somewhere.
 > [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md).
 
 Two items are deliberately *not* on the site, both because the corpus cannot trigger them: **17** (`$` on CRLF
-input — every file is LF) and **3g** (a match longer than 64 KB spanning a chunk boundary — the longest line in
-the corpus is 76 bytes). If the corpus ever gains a CRLF file or a very long line, each needs a caveat.
+input — every file is LF) and **3g** (inside a line longer than 64 KB, a long match is lost and `^` can match at
+a window edge — the corpus's longest line is 76 bytes). If it ever gains a CRLF file or a very long line, each
+needs a caveat.
 
 **Do not delete a caveat to tidy the page.** The list is short because the defects are few, not because the
 page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
@@ -297,7 +299,7 @@ packages/
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts               the whole public API (~305 lines)
+    src/lib/Netgrep.ts               the whole public API (~300 lines)
     src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
                                      unit-tested on its own. NOT re-exported by
                                      index.ts — see decision 0018
@@ -404,7 +406,7 @@ in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|
-| A match over 64 KB spans a boundary | `Netgrep.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window, so a single match longer than that is still lost at a seam. Needs a line over 64 KB — unreachable in prose. |
+| Anchors and long matches inside a >64 KB line | `Netgrep.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window. Inside such a line a match longer than 64 KB is lost, **and** `^` can match at the window's first byte. Needs a line over 64 KB — unreachable in prose. |
 | One NUL discards the searched block | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
 | `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
 | Concurrent searches of one url both fetch | `Netgrep.ts`, no in-flight tracking | Wasted bandwidth (**18**). The answers and the cache entry are correct. |

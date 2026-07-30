@@ -43,20 +43,24 @@ means inverting its assertion in the same PR.**
 resolution, so fixing it alone would have made 3b fire more often, in the default configuration. 3a left a
 residual, recorded as **3g** below.
 
-### 3g. A match longer than 64 KB can still span a chunk boundary — `packages/netgrep/src/lib/Netgrep.ts`
+### 3g. Anchors and long matches are unreliable inside a line longer than 64 KB — `packages/netgrep/src/lib/Netgrep.ts`
 
 What 3a's fix does not cover. `splitAtLastLine` retains the incomplete trailing *line* between chunks, which is
 exact — a match cannot span a `\n`. But a line with no terminator in it would buffer an entire response, so
-past a 64 KB ceiling the tail degrades to a plain window on the last 64 KB, and a match starting before that
-window and ending after the buffer is still lost.
+past a 64 KB ceiling the tail degrades to a plain window on the last 64 KB. Two consequences, in both
+directions:
+
+- **A match longer than 64 KB is lost**, because it starts before the retained window and ends after the buffer.
+- **`^` can match where no line begins.** A windowed tail starts mid-line and the engine cannot be told so, so
+  it anchors to the window's first byte. A false positive, unlike every other entry in this list.
 
 Needs one line longer than 64 KB **and** a match spanning most of it, so it is unreachable in hand-written
 text: the demo corpus is 2.6 MB of prose whose longest line is 76 bytes. Reachable in minified JavaScript or a
 single-line data dump.
 
-Pinned by `BACKLOG 3a (RESIDUAL)` in `Netgrep.integration.spec.ts`, together with the control case that must
-not regress — the same match arriving in **one** chunk is found, because the buffer is searched whole before
-the window is taken.
+Pinned by the two `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each with the control case that must not
+regress — a match arriving complete in **one** chunk is found, because the buffer is searched whole before the
+window is taken, and `^` does not match when the window is never flushed on its own.
 
 **Deliberately not on the demo site**, for the same reason as item 17: the corpus cannot trigger it. Recorded in
 the comment block of `limitations.tsx` so that stays a decision rather than an omission.

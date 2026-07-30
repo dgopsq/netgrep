@@ -211,13 +211,13 @@ Fixing it also removed the mirror-image false *positives* that were never separa
 in isolation looked to `^` like the start of a line and to `$` like the end of one, so both invented matches at
 a seam.
 
-> **Residual — a single match longer than 64 KB, split across chunks.** A line with no terminator in it would
-> otherwise buffer an entire response, so past a 64 KB ceiling (`MAX_TAIL_BYTES`, not configurable) the tail
-> degrades to a plain window on the last 64 KB. A match starting before that window and ending after the buffer
-> is still lost. It needs one line longer than 64 KB *and* a match spanning most of it, so it is unreachable in
-> hand-written text — the demo corpus is 2.6 MB of prose whose longest line is 76 bytes. Pinned by
-> `BACKLOG 3a (RESIDUAL)` in `Netgrep.integration.spec.ts`, alongside the control case: the same match arriving
-> in **one** chunk is found, because the buffer is searched whole before the window is taken.
+> **Residual (item 3g) — a line longer than 64 KB.** Such a line would otherwise buffer an entire response, so
+> past a 64 KB ceiling (`MAX_TAIL_BYTES`, not configurable) the tail degrades to a plain window on the last
+> 64 KB. Inside such a line, two things break in opposite directions: a match **longer** than 64 KB is lost, and
+> `^` can match at the window's first byte because a windowed tail starts mid-line and the engine cannot be told
+> so. Both need a line longer than 64 KB, so both are unreachable in hand-written text — the demo corpus is
+> 2.6 MB of prose whose longest line is 76 bytes. Pinned by the two `BACKLOG 3g` tests in
+> `Netgrep.integration.spec.ts`, each alongside its control case.
 
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
 the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.

@@ -184,19 +184,13 @@ mod search {
         // so a pattern can never straddle two lines. This is the engine-level
         // half of why netgrep answers "does this pattern occur on some line".
         //
-        // ⚠️ LOAD-BEARING FOR packages/netgrep/src/lib/splitAtLastLine.ts.
+        // ⚠️ LOAD-BEARING FOR packages/netgrep/src/lib/splitAtLastLine.ts,
+        // which carries the incomplete trailing LINE between `fetch` chunks
+        // because a line is the largest unit a match can occupy.
         //
-        // That module carries the incomplete trailing LINE between `fetch`
-        // chunks, which closed BACKLOG 3a. It is *exact* — not a guess at match
-        // length, as issue #20 proposed — for one reason: a line is the largest
-        // unit a match can occupy.
-        //
-        // If this goes red after a dependency bump, BACKLOG 3a IS BACK and no
-        // JavaScript test will notice — the tail would carry one line while
-        // matches spanned more, and boundary misses would resume being silent
-        // and network-dependent. Relaxing an assertion here means the tail has
-        // to grow to cover whatever now matches across lines; it is not a
-        // licence to accept the new behaviour on its own.
+        // If this goes red, BACKLOG 3a is back and no JavaScript test will
+        // notice. Relaxing an assertion here means growing that tail to cover
+        // whatever now matches across lines, not accepting the new behaviour.
         assert!(!matches(b"alpha\nbeta", "alpha.beta"));
         assert!(!matches(b"alpha\nbeta", "(?s)alpha.beta"));
 

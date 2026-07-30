@@ -197,13 +197,13 @@ Netgrep is experimental, and the following are real and **documented rather than
 tests so they cannot change unnoticed; the full analysis is in
 [`docs/ARCHITECTURE.md`](https://github.com/dgopsq/netgrep/blob/main/docs/ARCHITECTURE.md#known-limitations--correctness-caveats).
 
-- **A single match longer than 64 KB can still span a network chunk boundary.** Netgrep holds back the
-  incomplete last *line* of each chunk and prepends it to the next, which is exact — a match can never cross a
-  newline — so ordinary text is unaffected no matter how the network splits the response. The exception is a
-  line with no terminator in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the
-  retained bytes become a plain 64 KB window, and a match longer than the window is lost at the boundary.
-  Newline-free input is also answered more slowly, because nothing can be searched until the ceiling fills or
-  the download ends.
+- **Inside a line longer than 64 KB, results are approximate.** Netgrep holds back the incomplete last *line*
+  of each chunk and prepends it to the next, which is exact — a match can never cross a newline — so ordinary
+  text is unaffected no matter how the network splits the response. The exception is a line with no terminator
+  in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the retained bytes become a
+  plain 64 KB window, so a match **longer** than the window is lost, and `^` can match at a window edge where no
+  line actually begins. Newline-free input is also answered more slowly, because nothing can be searched until
+  the ceiling fills or the download ends.
 - **A file containing a NUL byte reports no match** for the block of lines containing it, even when the match
   came earlier. Binary detection abandons what it is given rather than stopping at the NUL.
 - **`$` does not match on CRLF files.** The line terminator is `\n`, so on Windows-authored text the `\r`
@@ -224,6 +224,10 @@ code; this one describes the gap until the next release.
   incomplete. An entry is now written **only once the whole file has been read**, so a search that resolves
   early caches nothing and the next one re-fetches. `enableMemoryCache: false` is no longer a workaround for
   anything.
+
+  Worth knowing: this means the cache only fills on a search that reads to the end — a miss, or a match on the
+  final line. A URL that matches early is re-fetched every time. That is the trade for never answering from a
+  prefix, and it is why repeat *hits* cost network while repeat *misses* do not.
 
 ## Documentation
 

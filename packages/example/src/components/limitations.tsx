@@ -11,28 +11,19 @@ import { Info } from 'lucide-react';
  *
  * Nothing enforces this. No test fails and CI stays green.
  *
- *   "This demo runs with the cache off"    -> NOT a defect. 3b is fixed, so the
- *                                             cache is safe; it is off because a
- *                                             warm cache stops the timings
- *                                             measuring the network. Do not turn
- *                                             it on to close 18
- *   "Binary files stop at the first NUL"   -> BACKLOG 3f
- *   "One boolean per file"                 -> by design, decision 0003. Stays
+ *   "One boolean per file"               -> by design. Stays
+ *   "This demo runs with the cache off"  -> not a defect: the cache is safe now,
+ *                                           but a warm one stops the timings
+ *                                           measuring the network
+ *   "Binary files stop at the first NUL" -> BACKLOG 3f
  *
- * DELIBERATELY ABSENT, both because the corpus cannot trigger them — and a
- * caveat nobody can reach dilutes a list whose value is that every entry is live:
+ * ABSENT because this corpus cannot trigger them, and an unreachable caveat
+ * dilutes a list whose value is that every entry is live:
  *
  *   Backlog 17  `$` on CRLF input. Every file here is LF.
- *   Backlog 3g  A single match over 64 KB can still span a chunk boundary, all
- *               that remains of 3a. Needs a line over 64 KB; the longest in
- *               these 56 files is 76 bytes.
+ *   Backlog 3g  Needs a line over 64 KB. The longest here is 76 bytes.
  *
  * Add either if the corpus changes shape.
- *
- * "Matches spanning two network chunks are missed" was REMOVED when 3a was
- * fixed. It said "Live on this page", and it no longer is.
- *
- * See AGENTS.md §2.3.
  */
 const CAVEATS = [
   {
