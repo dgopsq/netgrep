@@ -213,15 +213,62 @@ describe('Netgrep integration (real WASM)', () => {
       expect(result).toMatchObject({ result: true });
     });
 
-    it('stops reading as soon as a chunk matches', async () => {
-      // 'One Wiseman' is inside the first 16 bytes, so exactly one read.
+    it('stops reading as soon as a line matches', async () => {
+      // 'One Wiseman' is in the first 16 bytes, but a chunk is searched only up
+      // to its last `\n`, so the answering read is the one that COMPLETES the
+      // line. POEM's first line is 34 bytes, so that is the third 16-byte chunk.
+      // The price of fixing BACKLOG 3a: invisible against real 16-64 KB chunks,
+      // exactly two extra reads against these deliberately tiny ones.
       const chunks = chunked(POEM, 16);
       const state = serve(chunks);
 
       await new Netgrep({ enableMemoryCache: false }).search('url', 'Wiseman');
 
-      expect(state.reads).toBe(1);
-      expect(chunks.length).toBeGreaterThan(1);
+      expect(state.reads).toBe(3);
+
+      // Still resolving early, which is the property that matters: the poem is
+      // eight chunks long and five of them were never asked for.
+      expect(chunks.length).toBeGreaterThan(state.reads);
+    });
+
+    it('finds a pattern straddling a chunk boundary', async () => {
+      // BACKLOG 3a, fixed: the retained tail hides the seam from the engine. The
+      // `documented defects` block has what this used to assert, and the
+      // residual case that survives.
+      serve([encoder.encode('hello won'), encoder.encode('derful world')]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
+      ).resolves.toMatchObject({ result: true });
+    });
+
+    it('does not let a chunk boundary fake a line boundary', async () => {
+      // The mirror image of 3a, never separately tracked: a chunk searched as
+      // though it were a whole document made the seam look like a line start to
+      // `^` and a line end to `$`, so both invented matches wherever the network
+      // happened to split. Whole lines fix both directions at once.
+      const NG = new Netgrep({ enableMemoryCache: false });
+
+      serve([encoder.encode('hello won'), encoder.encode('derful world\n')]);
+      await expect(NG.search('a', 'won$')).resolves.toMatchObject({
+        result: false,
+      });
+
+      serve([encoder.encode('hello won'), encoder.encode('derful world\n')]);
+      await expect(NG.search('b', '^derful')).resolves.toMatchObject({
+        result: false,
+      });
+
+      // The genuine anchors on the same bytes still match.
+      serve([encoder.encode('hello won'), encoder.encode('derful world\n')]);
+      await expect(NG.search('c', '^hello')).resolves.toMatchObject({
+        result: true,
+      });
+
+      serve([encoder.encode('hello won'), encoder.encode('derful world\n')]);
+      await expect(NG.search('d', 'world$')).resolves.toMatchObject({
+        result: true,
+      });
     });
 
     it('matches a pattern spanning multiple lines of one chunk', async () => {
@@ -505,7 +552,17 @@ describe('Netgrep integration (real WASM)', () => {
    * and the site keeps warning about a bug you just fixed. See AGENTS.md §2.3.
    */
   describe('documented defects (asserting current, incorrect behaviour)', () => {
-    it('BACKLOG 3a: misses a pattern straddling a chunk boundary', async () => {
+    it('BACKLOG 3a (FIXED): a match straddling a chunk boundary is found', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: chunks were
+      // searched in isolation with no tail retained, so a pattern split across
+      // the seam matched nothing — silently, and depending on how the network
+      // divided the response.
+      //
+      // `Netgrep.search` now prepends each chunk's incomplete trailing line to
+      // the next. Exact rather than a guess, because a match can never span a
+      // `\n` — see `test_a_match_cannot_span_a_line_terminator` in
+      // packages/search/tests/search.rs. Per the block comment above, inverted in
+      // the same PR that changed it. The residual is pinned separately below.
       const text = 'hello wonderful world';
 
       // Control: the same bytes in one chunk match.
@@ -514,44 +571,51 @@ describe('Netgrep integration (real WASM)', () => {
         new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: true });
 
-      // Split mid-word, and the match vanishes. Chunks are searched in
-      // isolation with no tail retained.
+      // Previously false. This is the case that was broken.
       serve([encoder.encode('hello won'), encoder.encode('derful world')]);
       await expect(
         new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
-      ).resolves.toMatchObject({ result: false });
+      ).resolves.toMatchObject({ result: true });
     });
 
-    it('BACKLOG 3a: the same search answers differently once the cache is warm', async () => {
-      // The cache reassembles the chunks, so the second search sees one buffer
-      // where the first saw fragments — and 3a's false negative disappears.
-      // The same url and the same pattern, two different answers, decided by
-      // whether anyone asked before.
+    it('BACKLOG 3a (FIXED): the answer no longer depends on whether the cache is warm', async () => {
+      // The sharpest way to see 3a: the cache reassembled the chunks, so the
+      // second search saw one buffer where the first saw fragments — same url,
+      // same pattern, two answers, decided by whether anyone had asked before.
       //
-      // This lives here rather than under `in-memory cache` because the first
-      // assertion IS 3a: a fix that retains a tail buffer makes it `true` and
-      // turns this red, and §2.1 says that must happen somewhere labelled.
+      // Both are `true` now, for two different reasons: the tail buffer finds it
+      // first time, and an early resolution no longer leaves an entry to
+      // disagree (BACKLOG 3b, below) — hence two fetches.
       serve(chunked(POEM, 7));
 
       const NG = new Netgrep({ enableMemoryCache: true });
 
       await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
-        result: false,
+        result: true,
       });
 
       await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
         result: true,
       });
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('BACKLOG 3b: a cache poisoned by early resolution answers later searches wrongly', async () => {
-      // 'needle' matches in chunk 2, so search resolves and stops reading.
-      // Only 'alpha needle ' is cached — 'omega' was never downloaded.
+    it('BACKLOG 3b (FIXED): an early resolution leaves no cache entry to poison', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: the cache
+      // was written per chunk, so resolving on the first match left an entry
+      // holding only the PREFIX read so far, unmarked as incomplete — and a later
+      // search for a term further down answered `false` about text never
+      // downloaded.
+      //
+      // The entry is now written only on `done`, so a partial one is never
+      // created. Per the block comment above, inverted in the same PR.
+      //
+      // The newlines matter: without them the match would only be found by the
+      // end-of-stream flush, which is a drained stream, exercising nothing.
       serve([
-        encoder.encode('alpha '),
-        encoder.encode('needle '),
-        encoder.encode('omega'),
+        encoder.encode('alpha\n'),
+        encoder.encode('needle\n'),
+        encoder.encode('omega\n'),
       ]);
 
       const NG = new Netgrep({ enableMemoryCache: true });
@@ -560,37 +624,101 @@ describe('Netgrep integration (real WASM)', () => {
         result: true,
       });
 
-      // 'omega' IS in the file. The cached prefix says otherwise, and the
-      // cache is consulted before the network, so no re-fetch corrects it.
+      // 'omega' IS in the file, and the answer now says so. It costs a second
+      // fetch, which is the correct trade against a confident wrong answer.
       await expect(NG.search('url', 'omega')).resolves.toMatchObject({
+        result: true,
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // Finding 'omega' in the LAST chunk still caches nothing: completeness is
+      // not known until `done`, one read later. Only a search reaching `done`
+      // caches — a miss, or a match found in the flush.
+      await expect(NG.search('url', 'dragon')).resolves.toMatchObject({
         result: false,
       });
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+
+      // That miss drained the stream, so this is answered from memory. The cache
+      // still works; it just no longer lies.
+      await expect(NG.search('url', 'omega')).resolves.toMatchObject({
+        result: true,
+      });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
-    it('BACKLOG 18: concurrent searches of one url double its cache entry', async () => {
+    it('BACKLOG 18: concurrent searches of one url still both fetch', async () => {
       // Nothing tracks a download already in flight, so two searches started
-      // before either resolves both fetch, and both append what they read to
-      // the same cache entry.
+      // before either resolves both fetch. Still open — it wants a per-url
+      // promise registry, which this change did not add.
       //
-      // The waste is the obvious half. The sharp half is that the entry now
-      // holds bytes the file never contained: the two copies are joined with
-      // no separator, so the seam forms a line that exists nowhere, and a
-      // later search matches it.
+      // The sharp half IS fixed, and the second assertion is what used to be
+      // inverted here: the entry was APPENDED to per chunk, joining the file to
+      // itself with no separator and forming a line that existed in no file. It
+      // is now assigned once from a drained stream.
       //
-      // One chunk, so the assertion does not depend on how the two reads
-      // interleave.
+      // One chunk, so this does not depend on how the two reads interleave.
       serve([encoder.encode('needle')]);
 
       const NG = new Netgrep({ enableMemoryCache: true });
 
       await Promise.all([NG.search('url', 'zzz'), NG.search('url', 'zzz')]);
 
-      // No in-flight de-duplication.
+      // No in-flight de-duplication. This half is unchanged.
       expect(mockFetch).toHaveBeenCalledTimes(2);
 
-      // The file is 'needle'. The cache says 'needleneedle'.
+      // Previously true, off a cache that read 'needleneedle'.
       await expect(NG.search('url', '^needleneedle$')).resolves.toMatchObject({
+        result: false,
+      });
+
+      // The file is 'needle', and that is now what the cache holds.
+      await expect(NG.search('url', '^needle$')).resolves.toMatchObject({
+        result: true,
+      });
+    });
+
+    it('BACKLOG 3a (RESIDUAL): a match longer than the 64 KB tail ceiling is still missed', async () => {
+      // What the tail buffer does NOT fix, and why 3a is narrowed rather than
+      // closed outright.
+      //
+      // The tail is normally the incomplete trailing LINE, which is exact. Since
+      // a terminator-free line would otherwise buffer an entire response, past a
+      // 64 KB ceiling the tail degrades to a window on the last 64 KB — so a
+      // match starting before that window and ending after the buffer is lost.
+      //
+      // Needs a line over 64 KB AND a match spanning most of it, so it is
+      // unreachable in hand-written text: the demo corpus is 2.6 MB of prose
+      // whose longest line is 76 bytes.
+      const NG = new Netgrep({ enableMemoryCache: false });
+      const filler = 'x'.repeat(70_000);
+
+      // Control: found in ONE chunk, because the whole buffer is searched before
+      // the window is taken. Easy to get wrong, and wrong here is a regression
+      // rather than a residual — the naive cut searches only up to
+      // `length - 64 KB` and drops the middle unscanned.
+      serve([encoder.encode(`nee${filler}dle`)]);
+      await expect(NG.search('a', 'nee.*dle')).resolves.toMatchObject({
+        result: true,
+      });
+
+      // Split, and 'nee' left the window before 'dle' arrived. The gap that
+      // remains.
+      serve([
+        encoder.encode(`nee${filler}`),
+        encoder.encode('dle and then some'),
+      ]);
+      await expect(NG.search('b', 'nee.*dle')).resolves.toMatchObject({
+        result: false,
+      });
+
+      // A match inside the ceiling survives the same boundary, pinning the bound
+      // rather than merely the failure.
+      serve([
+        encoder.encode(`${filler}nee`),
+        encoder.encode('dle and then some'),
+      ]);
+      await expect(NG.search('c', 'nee.*dle')).resolves.toMatchObject({
         result: true,
       });
     });
@@ -679,10 +807,18 @@ describe('Netgrep integration (real WASM)', () => {
       });
     });
 
-    it('BACKLOG 3f: one NUL byte discards the entire chunk, match included', async () => {
-      // `BinaryDetection::quit(b'\x00')` abandons the chunk on the first NUL.
-      // Not "stops at the NUL" — the match is dropped even when it occurs
-      // BEFORE the NUL, and even on an earlier line.
+    it('BACKLOG 3f: one NUL byte discards the whole searched block, match included', async () => {
+      // `BinaryDetection::quit(b'\x00')` abandons what it was given on the first
+      // NUL. Not "stops at the NUL" — the match is dropped even when it precedes
+      // the NUL, and even on an earlier line.
+      //
+      // STILL OPEN, but the tail buffer moved where the damage stops: the engine
+      // gets the block of COMPLETE LINES in a chunk, not the chunk, so a NUL's
+      // reach now depends on where the last `\n` falls rather than on where the
+      // network split. Case (c) used to pass with a terminator-free `tail` and
+      // needs one now, or the NUL lands in the held-back partial line and never
+      // shares a block with the match. Same defect, differently shaped blast
+      // radius — see the assertion after it.
       const NG = new Netgrep({ enableMemoryCache: false });
 
       serve([bytes('needle here')]);
@@ -695,9 +831,19 @@ describe('Netgrep integration (real WASM)', () => {
         result: false,
       });
 
-      serve([bytes('needle here\n', 0x00, 'tail')]);
+      serve([bytes('needle here\n', 0x00, 'tail\n')]);
       await expect(NG.search('c', 'needle')).resolves.toMatchObject({
         result: false,
+      });
+
+      // The incidental narrowing, pinned so it is not mistaken for the fix: case
+      // (c) minus the final terminator, so the NUL sits in the trailing partial
+      // line and gets its own block. The match survives — because of where the
+      // newline is, which nobody should rely on. 3f is fixed in `lib.rs` or not
+      // at all.
+      serve([bytes('needle here\n', 0x00, 'tail')]);
+      await expect(NG.search('d', 'needle')).resolves.toMatchObject({
+        result: true,
       });
     });
   });

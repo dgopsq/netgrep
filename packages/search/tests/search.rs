@@ -183,8 +183,38 @@ mod search {
         // `.` excludes the line terminator, and no multiline mode is enabled,
         // so a pattern can never straddle two lines. This is the engine-level
         // half of why netgrep answers "does this pattern occur on some line".
+        //
+        // ⚠️ LOAD-BEARING FOR packages/netgrep/src/lib/splitAtLastLine.ts.
+        //
+        // That module carries the incomplete trailing LINE between `fetch`
+        // chunks, which closed BACKLOG 3a. It is *exact* — not a guess at match
+        // length, as issue #20 proposed — for one reason: a line is the largest
+        // unit a match can occupy.
+        //
+        // If this goes red after a dependency bump, BACKLOG 3a IS BACK and no
+        // JavaScript test will notice — the tail would carry one line while
+        // matches spanned more, and boundary misses would resume being silent
+        // and network-dependent. Relaxing an assertion here means the tail has
+        // to grow to cover whatever now matches across lines; it is not a
+        // licence to accept the new behaviour on its own.
         assert!(!matches(b"alpha\nbeta", "alpha.beta"));
         assert!(!matches(b"alpha\nbeta", "(?s)alpha.beta"));
+
+        // The escape hatches, all closed: grep-regex strips the terminator from
+        // character classes rather than trusting the pattern to avoid it.
+        assert!(!matches(b"alpha\nbeta", "alpha[^x]beta"));
+        assert!(!matches(b"alpha\nbeta", r"alpha\sbeta"));
+        assert!(!matches(b"alpha\nbeta", r"alpha[\s\S]beta"));
+        assert!(!matches(b"alpha\nbeta", r"alpha\W beta"));
+
+        // And a literal terminator is REJECTED, not quietly ignored, so a
+        // cross-line match cannot even be asked for.
+        for pattern in [r"alpha\nbeta", "alpha\nbeta", r"alpha\x0abeta"] {
+            assert!(
+                try_search_bytes(b"alpha\nbeta", pattern).is_err(),
+                "{pattern:?} should be rejected, not merely unmatched"
+            );
+        }
     }
 
     // ---------------------------------------------------------------

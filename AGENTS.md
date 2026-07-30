@@ -3,7 +3,7 @@
 Operating guide for AI agents working in the **netgrep** repository.
 Canonical source — `CLAUDE.md` points here. Keep this file authoritative; do not fork its content.
 
-Everything below was verified end-to-end on **2026-07-29** (macOS arm64, Node 24.18.0, Rust 1.97.1).
+Everything below was verified end-to-end on **2026-07-30** (macOS arm64, Node 24.18.0, Rust 1.97.1).
 
 ---
 
@@ -38,14 +38,18 @@ Three things will mislead you if you do not know them.
 ### 2.1 Some tests assert behaviour that is WRONG, on purpose
 
 `packages/netgrep/src/lib/Netgrep.integration.spec.ts` ends with a block titled
-**`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a pattern
-straddling a chunk boundary returning `false`, a NUL byte discarding a chunk, and so on.
-`packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
+**`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a NUL byte
+discarding a block of lines, a match longer than the 64 KB tail ceiling still spanning a chunk boundary, and so
+on. `packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
 the engine, where a failure names `lib.rs` without a browser and a stream in the way.
 
 They are not mistakes and they are not out of date. Their job is to detect *unintended* change during
 dependency work: a test asserting the correct-but-unimplemented behaviour would fail today and tell us
 nothing.
+
+**Several assertions in that block are labelled `(FIXED)` and assert CORRECT behaviour.** They stay, inverted
+in place, with a note saying what they used to claim — that is what the rule below requires, and it is how the
+block records its own history. Do not tidy them out into the suites above.
 
 **If one of them fails, that is a signal, not a nuisance.** Something changed the engine's behaviour. Find out
 what, decide whether the new behaviour is right, and if it is, **invert the assertion in the same PR** with a
@@ -86,22 +90,33 @@ is exactly why it is in this section rather than in a comment somewhere.
 
 | If you… | Then, in the same PR… |
 |---|---|
-| Fix 3a, 3b, 3f, 17 or 18 | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) |
-| Fix **both** 3b and 18 | Also re-enable the cache in `packages/example/src/hooks/use-corpus-search.ts` and delete the "This demo runs with the cache off" caveat — the workaround exists only because of those two |
+| Fix 3f, 3g, 17 or 18 | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) |
+| Fix 18 | **Do not** re-enable the demo's cache as part of it. That instruction used to live here and has been retracted — see below |
 | Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
 | Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state "one boolean per file" and the 1.15 MB WebAssembly download |
 
-**The four caveats currently on the site map to backlog items like this**, so you can find yours quickly:
+**The three caveats currently on the site map to backlog items like this**, so you can find yours quickly:
 
 | Caveat on the site | Backlog |
 |---|---|
 | One boolean per file | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md). Will never be "fixed" |
-| Matches spanning two network chunks are missed | **3a** |
-| This demo runs with the cache off | **3b** and **18** |
+| This demo runs with the cache off | *none* — a choice about what the page measures, see below |
 | Binary files stop at the first NUL | **3f** |
 
-Item **17** (`$` on CRLF input) is deliberately *not* on the site: every file in the demo corpus is LF, so it
-cannot be triggered there. If the corpus ever gains a CRLF file, it needs a caveat.
+> [!WARNING]
+> **Do not turn the demo's cache on to close item 18.** This section used to say that fixing 3b and 18 meant
+> re-enabling it and deleting the caveat. 3b is fixed and 18 no longer corrupts the entry, so the safety half
+> of that instruction is satisfied — but the cache stays off for a reason that has nothing to do with defects:
+> **the page measures the network.** A miss drains the stream, which is exactly the condition for caching, so
+> with the cache on every missing file would be answered from memory from the second query onward and the
+> `StatsBar` would report a `Record` lookup as a download. Read the comment in
+> `packages/example/src/hooks/use-corpus-search.ts` before changing it, and treat it as a decision about the
+> demo rather than a consequence of a library fix. See
+> [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md).
+
+Two items are deliberately *not* on the site, both because the corpus cannot trigger them: **17** (`$` on CRLF
+input — every file is LF) and **3g** (a match longer than 64 KB spanning a chunk boundary — the longest line in
+the corpus is 76 bytes). If the corpus ever gains a CRLF file or a very long line, each needs a caveat.
 
 **Do not delete a caveat to tidy the page.** The list is short because the defects are few, not because the
 page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
@@ -151,7 +166,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **59 tests**: 30 unit in Node, 29 integration in headless Chromium |
+| Test TS | `pnpm test` | Vitest — **77 tests**: 45 unit in Node, 32 integration in headless Chromium |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
@@ -282,7 +297,10 @@ packages/
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts               the whole public API (~225 lines)
+    src/lib/Netgrep.ts               the whole public API (~305 lines)
+    src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
+                                     unit-tested on its own. NOT re-exported by
+                                     index.ts — see decision 0018
     src/lib/data/*.ts                5 type definitions, one per file
     src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
     src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop,
@@ -386,16 +404,23 @@ in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|
-| Chunk-boundary false negatives | `Netgrep.ts` search loop | A match spanning two `fetch` chunks is never found. Silent, non-deterministic. |
-| Poisoned partial cache | `Netgrep.ts` cache paths | Early resolution caches a prefix; later searches answer `false` for text never downloaded. |
-| One NUL discards the chunk | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
+| A match over 64 KB spans a boundary | `Netgrep.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window, so a single match longer than that is still lost at a seam. Needs a line over 64 KB — unreachable in prose. |
+| One NUL discards the searched block | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
 | `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
-| Concurrent searches double a cache entry | `Netgrep.ts`, no in-flight tracking | Two searches of one url started together both fetch and both append, so the entry holds the file twice — joined with no separator, forming a line the file never had. |
+| Concurrent searches of one url both fetch | `Netgrep.ts`, no in-flight tracking | Wasted bandwidth (**18**). The answers and the cache entry are correct. |
 
 The last two were found while broadening the test suite on 2026-07-29 and are backlog items 17 and 18.
 
-The first two **interact** — fixing either naively (by draining the stream) destroys the early-resolution
-property that is the whole point of the project. See
+**Two entries left this table on 2026-07-30**, both closed by
+[decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md): chunk-boundary false negatives and the
+poisoned partial cache. They had to be fixed together, though not for the reason recorded here — the shared
+"draining the stream destroys early resolution" is a failure mode of naive fixes, not a coupling. The real
+coupling was that the boundary defect *suppressed* early resolution, so closing it alone would have made the
+cache defect fire more often, in the default configuration.
+
+That decision also narrowed the two rows that remain: what the engine is handed is now a block of complete
+lines rather than a network chunk, which changed the shape of the NUL defect's blast radius, and the cache
+entry is assigned from a drained stream rather than appended to, which removed the corrupting half of 18. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#known-limitations--correctness-caveats) and
 [decision 0002](docs/decisions/0002-search-while-downloading.md).
 
@@ -412,6 +437,30 @@ property that is the whole point of the project. See
 - `.editorconfig` is authoritative for whitespace.
 - Comments should explain *why*, especially where the code looks wrong but is not. The repository has several
   such places, and they are commented for a reason.
+- **Keep them terse. Density is right; length is not.** Comment the same places, in fewer words: state the
+  point in the first sentence and stop, prefer one dense sentence to three, and cut restatement and
+  scene-setting. A long comment buries the thing it exists to say. Applies to TSDoc bodies and test comments
+  too, not just inline `//`.
+- **Comments must stand alone. Do not send the reader to a document to find the point.** No `see decision
+  0018`, no `see caveat 2`, no `AGENTS.md §2.3` standing in for the reason. Say the thing:
+  *"Deliberately not configurable — a safety valve for input netgrep is not aimed at, not a tuning knob."*
+  **Test it by deleting the reference.** If the comment still teaches you what you needed, it was never
+  carrying weight; if it collapses, write the missing sentence instead of the pointer.
+
+  This is not the same rule as the one above, and it wins where they pull against each other: brevity is not a
+  licence to replace an explanation with a citation. The long form still belongs in
+  [`docs/decisions/`](docs/decisions/) — that is what keeps comments short — but the comment has to make sense
+  to someone who never opens it.
+
+  **Why:** cross-references rot silently and asymmetrically. Nothing checks them, and the code is edited far
+  more often than the prose about it, so the pointer outlives the thing it pointed at. On 2026-07-30 four
+  decision records, `ARCHITECTURE.md` and §2.3 of this file were all still describing a defect that had just
+  been fixed. A comment that needed one of them to be read would have been actively misleading.
+
+  **The one exception is a bare backlog item number**, which is a stable label rather than an explanation —
+  `// BACKLOG 3a: searching these in isolation misses a word that continues in the next chunk.` The numbers
+  never change (see [`docs/BACKLOG.md`](docs/BACKLOG.md)) and §2.1's defect-test traceability is built on them.
+  The sentence after the label still has to do the explaining.
 
 ---
 

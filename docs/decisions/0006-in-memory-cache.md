@@ -18,8 +18,9 @@ const defaultConfig: NetgrepConfig = { enableMemoryCache: true };
 ```
 
 On a cache hit, `search_bytes` runs once over the stored bytes and resolves immediately, skipping `fetch`
-entirely (the cache-hit branch at the top of `Netgrep.search`). While streaming, each chunk is appended via
-`upsertMemoryCache`.
+entirely (the cache-hit branch at the top of `Netgrep.search`). While streaming, chunks are collected and the
+entry is written once, when the reader reports `done` — see the amendment below; this used to append per chunk
+via `upsertMemoryCache`.
 
 The cache is per-instance, so a consumer can scope or discard it by managing the `Netgrep` object's lifetime.
 
@@ -48,3 +49,26 @@ point of [0002](0002-search-while-downloading.md).
 
 A correct design tracks completeness per entry: partial entries may be used to *resume* a download, never to
 *answer* a query.
+
+## Amendment (2026-07-30) — defects 1 and 3 are fixed, by a smaller change than the one proposed above
+
+See [0018](0018-line-oriented-tail-buffer.md). **The entry is written only when the reader reports `done`**, so:
+
+- **Defect 1 is gone.** A partial entry is never created, rather than created and flagged. That is narrower than
+  the completeness tracking recommended above, and deliberately so — a partial entry cannot resume a download
+  either, and nothing in the library needed it to. The cost is a re-fetch where there used to be a wrong
+  answer. Note that a match in the *final* chunk still caches nothing: the stream is not known to be complete
+  until `done`, which is one read later.
+- **Defect 3 is gone.** Deferring the write requires collecting chunks and joining once, which is exactly what
+  that defect asked for. Chunks are also only collected when the cache is *enabled* — before this, a search with
+  `enableMemoryCache: false` was paying to retain a whole file for a cache it never wrote to.
+- **Defect 2 remains** and is now backlog item 19.
+
+The "cannot be fixed independently of the chunk-boundary bug" claim above held up, though not for the reason
+given. Draining the stream is a failure mode of naive fixes to either, not a coupling. The real coupling ran the
+other way: the chunk-boundary bug was *suppressing* early resolution, because a search whose match straddled a
+boundary missed and therefore drained. Fixing it alone would have left more searches resolving early and more
+prefixes cached — a regression in the default configuration.
+
+One consequence for callers: **`enableMemoryCache: false` is no longer a workaround for a correctness defect.**
+It is now only a memory/bandwidth trade.

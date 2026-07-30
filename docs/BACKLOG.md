@@ -10,7 +10,7 @@ items move to the bottom rather than disappearing.
 Rules that apply to all of it: dependency changes are never a side effect of other work, and releases are
 human-triggered only. See [`../AGENTS.md` §6](../AGENTS.md#6-hard-rules).
 
-Verified against the repository on **2026-07-29** (macOS arm64, Node 24.18.0, Rust 1.97.1).
+Verified against the repository on **2026-07-30** (macOS arm64, Node 24.18.0, Rust 1.97.1).
 
 ---
 
@@ -33,32 +33,38 @@ means inverting its assertion in the same PR.**
 > array of `packages/example/src/components/limitations.tsx`. Leave it alone and the site goes on warning
 > the world about a bug you just fixed.
 >
-> **3a, 3b, 3f and 18 each have a caveat there. 3b and 18 also keep the demo's cache switched off** — fix
-> both and the workaround goes too. Nothing checks this for you; CI will be green either way. See
+> **3f has a caveat there. 18 keeps the demo's cache switched off** — though as of 0018 that is a *choice*
+> rather than a workaround, because a warm cache stops the page's timings measuring the network. Nothing checks
+> this for you; CI will be green either way. See
 > [`../AGENTS.md` §2.3](../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 
-**3a and 3b interact — do not fix either in isolation**, and 3b and 18 want the same per-url promise
-registry.
+**3a and 3b were fixed together on 2026-07-30** — see the *Done* table and
+[decision 0018](decisions/0018-line-oriented-tail-buffer.md). They had to be: 3a was suppressing early
+resolution, so fixing it alone would have made 3b fire more often, in the default configuration. 3a left a
+residual, recorded as **3g** below.
 
-### 3a. Chunk-boundary false negatives — `packages/netgrep/src/lib/Netgrep.ts`
+### 3g. A match longer than 64 KB can still span a chunk boundary — `packages/netgrep/src/lib/Netgrep.ts`
 
-Each `fetch` chunk is searched independently, so a pattern spanning two chunks is never matched. Silent wrong
-answer, non-deterministic because it depends on network chunking.
+What 3a's fix does not cover. `splitAtLastLine` retains the incomplete trailing *line* between chunks, which is
+exact — a match cannot span a `\n`. But a line with no terminator in it would buffer an entire response, so
+past a 64 KB ceiling the tail degrades to a plain window on the last 64 KB, and a match starting before that
+window and ending after the buffer is still lost.
 
-Needs a retained tail buffer prepended to the next chunk. The buffer size is the design question: the maximum
-match length of an arbitrary regex is not derivable from the pattern, so it has to be a configured cap.
+Needs one line longer than 64 KB **and** a match spanning most of it, so it is unreachable in hand-written
+text: the demo corpus is 2.6 MB of prose whose longest line is 76 bytes. Reachable in minified JavaScript or a
+single-line data dump.
 
-### 3b. Poisoned partial cache — `packages/netgrep/src/lib/Netgrep.ts`
+Pinned by `BACKLOG 3a (RESIDUAL)` in `Netgrep.integration.spec.ts`, together with the control case that must
+not regress — the same match arriving in **one** chunk is found, because the buffer is searched whole before
+the window is taken.
 
-Resolving on first match leaves the cache holding only a prefix of the file, unmarked as incomplete. A later
-search for a different pattern reads that prefix and returns `false` for text never downloaded.
+**Deliberately not on the demo site**, for the same reason as item 17: the corpus cannot trigger it. Recorded in
+the comment block of `limitations.tsx` so that stays a decision rather than an omission.
 
-Needs a completeness flag per entry: partial entries may resume a download, never answer a query.
+Not obviously worth fixing. Raising the ceiling trades memory for a case nobody has hit; removing it means
+buffering without bound. Left recorded rather than planned.
 
-A naive fix for either 3a or 3b — always draining the stream — destroys the early-resolution property that is
-the entire point of the project. See [decision 0002](decisions/0002-search-while-downloading.md).
-
-### 3f. A single NUL byte discards the whole chunk — `packages/search/src/lib.rs`
+### 3f. A single NUL byte discards the whole searched block — `packages/search/src/lib.rs`
 
 `BinaryDetection::quit(b'\x00')` does not merely stop at the NUL; it abandons the entire chunk. A match is
 dropped even when it occurs *before* the NUL, and even on an earlier line.
@@ -72,6 +78,11 @@ dropped even when it occurs *before* the NUL, and even on an earlier line.
 Quitting on binary input is a reasonable ripgrep default; the surprise is that a boolean API cannot
 distinguish "binary, not searched" from "no match". Options: `BinaryDetection::none()`, or surfacing the
 distinction — which is an API change and therefore out of scope today.
+
+Decision 0018 changed its blast radius without fixing it. The engine is handed the block of complete lines in a
+chunk rather than the chunk, so how far a NUL reaches now depends on where the last `\n` falls, and a match on
+an earlier line survives *if* the NUL lands in the held-back partial line. Incidental, and pinned in both
+directions so it is not mistaken for a fix. **Fix it in `lib.rs` or not at all.**
 
 ### 17. `$` never matches on CRLF input — `packages/search/src/lib.rs`
 
@@ -92,25 +103,29 @@ change, so it wants its own tested commit.
 Found on 2026-07-29 while broadening the test suite. Pinned in the `documented_defects` module of
 `packages/search/tests/search.rs`.
 
-### 18. Concurrent searches of one url double its cache entry — `packages/netgrep/src/lib/Netgrep.ts`
+### 18. Concurrent searches of one url both fetch it — `packages/netgrep/src/lib/Netgrep.ts`
 
 Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
-`fetch`, and both `upsertMemoryCache` what they read into the same entry.
+`fetch`, so the file is downloaded twice.
 
-The duplicate request is the cheap half. The expensive half is that the entry then holds bytes the file never
-contained: the copies are joined with no separator, so the seam forms a line that exists nowhere.
+`searchBatchWithCallback` makes this easy to hit — it starts every search eagerly with no concurrency limit, so
+a corpus listing one url twice reaches it immediately. The demo hits it across *runs* rather than within one: a
+keystroke aborts run N while run N+1 starts, so two searches of each url overlap.
+
+A per-url promise registry fixes it: the second caller awaits the first instead of fetching.
+
+**Amended 2026-07-30 — the expensive half is already fixed.** This entry used to record that the entry held
+bytes the file never contained, because each search *appended* what it read:
 
 ```
 file:   "needle"
-cache:  "needleneedle"        after two concurrent searches
+cache:  "needleneedle"        before decision 0018
         ~ "^needleneedle$"  ->  true
 ```
 
-`searchBatchWithCallback` makes this easy to hit — it starts every search eagerly with no concurrency limit,
-so a corpus listing one url twice reaches it immediately.
-
-A per-url promise registry fixes both halves: the second caller awaits the first instead of fetching. That is
-the same registry a fix for 3b would want, so the two are worth doing together.
+[Decision 0018](decisions/0018-line-oriented-tail-buffer.md) writes the entry once, assigned from a drained
+stream, so both searches now store the same complete bytes. What is left is a wasted request. That also means
+this no longer shares a fix with 3b, which is closed.
 
 Found on 2026-07-29 while broadening the test suite. Pinned in `Netgrep.integration.spec.ts`.
 
@@ -151,10 +166,13 @@ Removing it means patching `grep-searcher`, i.e. reintroducing the fork that was
 
 ## P3 — Papercuts
 
-### 11. `upsertMemoryCache` is O(n²)
+### 19. The cache has no eviction, size cap or TTL — `packages/netgrep/src/lib/Netgrep.ts`
 
-Reallocates and copies the whole accumulated buffer per chunk. Collect chunks in an array and join once. The
-cache also has no eviction, size cap or TTL — it retains every file searched for the lifetime of the instance.
+It retains the full bytes of every file searched for the lifetime of the `Netgrep` instance. A long-lived page
+searching a large corpus grows monotonically.
+
+This is what remained of item **11** after [decision 0018](decisions/0018-line-oriented-tail-buffer.md) fixed
+its O(n²) half; renumbered rather than reopened, because item numbers are stable and 11 is now in *Done*.
 
 ---
 
@@ -165,6 +183,9 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 3a | Chunk-boundary false negatives | **Fixed, and the design question in [issue #20](https://github.com/dgopsq/netgrep/issues/20) had a wrong premise.** That issue said the tail size must be a configured cap because the maximum match length of an arbitrary regex is not derivable from the pattern. True — but it is derivable from the *data*: a match can never span a `\n`, because grep-regex strips the terminator out of character classes and rejects patterns containing a literal one. So the exact carry-over is the incomplete trailing **line**, and no cap is needed for correctness. `MAX_TAIL_BYTES` (64 KB, not configurable) exists only so a line with no terminator cannot buffer a 500 MB response; past it the tail degrades to a byte window, which is item **3g**. Fixing it also removed the never-tracked mirror-image false *positives*, where a seam looked like a line start to `^` and a line end to `$`. Early resolution became line-granular, which costs two extra reads in one test and nothing against real 16–64 KB chunks. Four assertions inverted. See [0018](decisions/0018-line-oriented-tail-buffer.md). |
+| 3b | Poisoned partial cache | **Fixed, and it had to ship with 3a.** Not for the reason recorded here — "a naive fix drains the stream" is a shared failure mode of bad fixes, not a coupling. The real one: 3a was *suppressing* early resolution, so closing it alone would have left more searches resolving early, more prefixes cached, and a regression in the default configuration. The fix is smaller than the completeness flag this entry proposed: write the entry only when the reader reports `done`, so a partial one is never created. A partial entry cannot resume a download either, and nothing needed it to. Note a match in the *final* chunk still caches nothing — `done` is one read later. |
+| 11 | `upsertMemoryCache` is O(n²) | **Fixed** as a side effect of 3b, because "collect chunks and join once" is what deferring the write requires. Chunks are also only collected when the cache is *on*, so a search with it off no longer retains the whole file — it had been paying the memory cost for a cache it was not using. The no-eviction half of this entry is not fixed and is now item **19**. |
 | 3c | Panic on invalid pattern | **Fixed.** `search_bytes` returns `Result<bool, JsError>`, so a stray `(` — or a literal newline, which the `\n` line terminator forbids — is a rejected promise carrying the regex crate's own diagnostic instead of `RuntimeError: unreachable`. The generated TypeScript signature did not change, so `Netgrep.ts` needed no edit. The engine is now split into a plain-Rust `try_search_bytes` and a two-line wasm wrapper, because `JsError` cannot be constructed on a native target and the Rust suite runs natively. Three assertions inverted. See [0016](decisions/0016-compiled-matcher-memo.md). |
 | 12 | Regex recompiled per chunk | **Fixed, and it was not a papercut.** A one-entry `thread_local` cache of the last compiled pattern; compile failures cached alongside successes. Over 800 16 KB chunks: a literal 91.2ms → 2.2ms, a Unicode class 2.9s → 20.6ms. Compilation was **97–99% of the total cost**, not the P3 nuisance this entry called it. The compiled-matcher *handle* this entry recommended was considered and rejected — it puts `.free()` on four exit paths of a promise executor and breaks a package whose whole surface is one function. See [0016](decisions/0016-compiled-matcher-memo.md). |
 | 13 | `MemSink` does not short-circuit | **Fixed.** `Ok(false)` stops at the first match; `match_count: u64` became `found: bool`. On chunks where every line matches, 16.4ms → 1.3ms at 16 KB and 61.9ms → 1.8ms at 64 KB; neutral on a single late match. Behaviourally unobservable — all 59 tests pass either way — so measurement is the only evidence it does anything. |

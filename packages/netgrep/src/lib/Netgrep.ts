@@ -4,6 +4,7 @@ import type { NetgrepConfig } from './data/NetgrepConfig.js';
 import type { NetgrepInput } from './data/NetgrepInput.js';
 import type { NetgrepResult } from './data/NetgrepResult.js';
 import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
+import { splitAtLastLine } from './splitAtLastLine.js';
 
 /**
  * The default configuration used by `netgrep`.
@@ -11,6 +12,37 @@ import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
 const defaultConfig: NetgrepConfig = {
   enableMemoryCache: true,
 };
+
+/**
+ * Ceiling on the bytes retained between two `fetch` chunks.
+ *
+ * The tail is normally the incomplete trailing *line*, which `splitAtLastLine`
+ * keeps in full — 76 bytes at worst in the demo's 2.6 MB corpus. Only
+ * terminator-free input reaches this ceiling, and there the guarantee weakens
+ * from "a boundary never hides a match" to "a boundary never hides a match
+ * shorter than 64 KB".
+ *
+ * Deliberately not configurable: a safety valve for input netgrep is not aimed
+ * at, not a tuning knob, and one contract is easier to describe than a family.
+ */
+const MAX_TAIL_BYTES = 64 * 1024;
+
+/**
+ * Join a list of byte chunks into one buffer.
+ */
+function concatBytes(chunks: Array<Uint8Array>): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const joined = new Uint8Array(total);
+
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  return joined;
+}
 
 /**
  * The WASM module has to be instantiated before `search_bytes` can be called.
@@ -70,6 +102,19 @@ export class Netgrep {
     await wasmReady;
 
     return new Promise((resolve, reject) => {
+      // The incomplete final line seen so far, unsearchable until the rest of
+      // it arrives. Closes BACKLOG 3a; see `splitAtLastLine`. Annotated because
+      // `subarray` yields an `ArrayBufferLike` view, which the type inferred
+      // from this initialiser would reject.
+      let tail: Uint8Array = new Uint8Array(0);
+
+      // Joined ONCE at the end rather than reallocated per chunk, which used to
+      // make this O(n²) — BACKLOG 11. Left empty when the cache is off: the
+      // search itself never needs more than the tail, so collecting anyway would
+      // retain all 500 MB of a 500 MB file for nothing.
+      const chunks: Array<Uint8Array> = [];
+      const caching = this.config.enableMemoryCache;
+
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>,
       ) => {
@@ -77,31 +122,45 @@ export class Netgrep {
           // If the reader is actually done
           // let's quit this job returning `false`.
           if (done) {
-            resolve({ url, pattern, result: false, metadata });
+            // The stream ended, so the held-back tail is a genuine final line
+            // rather than a fragment. Nothing has searched it yet: skipping it
+            // would lose the last line of every file not ending in a newline.
+            const result = tail.length > 0 && search_bytes(tail, pattern);
+
+            this.commitMemoryCache(url, chunks);
+
+            resolve({ url, pattern, result, metadata });
             return;
           }
 
-          // Execute the search in the current chunk of bytes
-          // using the underneath WASM core module.
-          const u8Array = new Uint8Array(value);
-          const result = search_bytes(u8Array, pattern);
+          if (caching) chunks.push(value);
 
-          // Store the `Uint8Array` in the memory cache
-          // if it's enabled.
-          if (this.config.enableMemoryCache) {
-            this.upsertMemoryCache(url, u8Array);
-          }
+          // Prepend the held-back tail, then hand the engine only whole lines.
+          const { searched, tail: nextTail } = splitAtLastLine(
+            tail.length > 0 ? concatBytes([tail, value]) : value,
+            MAX_TAIL_BYTES,
+          );
+
+          tail = nextTail;
+
+          // A chunk with no terminator in it searches nothing and grows the tail.
+          const result = searched.length > 0 && search_bytes(searched, pattern);
 
           if (result) {
             resolve({ url, pattern, result: true, metadata });
           } else {
-            handleReader(reader);
+            // `.catch` because this promise is not chained to the executor's:
+            // without it, a rejection from any chunk after the first (dropped
+            // connection, abort, invalid pattern first reaching the engine late)
+            // goes unhandled and the search never settles.
+            handleReader(reader).catch(reject);
           }
         });
       };
 
-      // Search the content in the memory cache
-      // if it's enabled.
+      // Search the content in the memory cache if it's enabled. No tail buffer
+      // needed: entries are only written from a drained stream, so an entry is
+      // the whole file in one buffer with no boundaries to lose a match across.
       if (this.config.enableMemoryCache && this.memoryCache[url]) {
         const result = search_bytes(this.memoryCache[url], pattern);
         resolve({ url, pattern, result, metadata });
@@ -209,15 +268,22 @@ export class Netgrep {
   }
 
   /**
-   * Upsert a slice of bytes into the in-memory cache.
+   * Store a fully downloaded file in the in-memory cache.
+   *
+   * ONLY EVER CALLED ON A DRAINED STREAM — that is the whole point. Writing per
+   * chunk meant an early resolution left a *prefix* with nothing marking it
+   * incomplete, so a later search for a term further down answered `false` about
+   * text never downloaded (BACKLOG 3b). Waiting for `done` means a partial entry
+   * is never created rather than flagged.
+   *
+   * Assigns rather than appends, so two concurrent searches of one url overwrite
+   * each other with identical files instead of concatenating the file to itself
+   * and forming a line that exists nowhere. Their duplicate fetch is BACKLOG 18,
+   * still open.
    */
-  private upsertMemoryCache(url: string, bytes: Uint8Array) {
-    const currentBlockLength = this.memoryCache[url]?.length || 0;
-    const joinedArray = new Uint8Array(currentBlockLength + bytes.length);
+  private commitMemoryCache(url: string, chunks: Array<Uint8Array>) {
+    if (!this.config.enableMemoryCache) return;
 
-    if (this.memoryCache[url]) joinedArray.set(this.memoryCache[url]);
-
-    joinedArray.set(bytes, currentBlockLength);
-    this.memoryCache[url] = joinedArray;
+    this.memoryCache[url] = concatBytes(chunks);
   }
 }

@@ -29,26 +29,21 @@ export type SearchState = {
 };
 
 /**
- * THE MEMORY CACHE IS OFF, DELIBERATELY.
+ * THE MEMORY CACHE IS OFF, DELIBERATELY — AND NO LONGER BECAUSE IT IS UNSAFE.
  *
- * Two of the library's documented P1 defects only exist when it is on, and both
- * produce visibly wrong answers on a page where people type one query after
- * another:
+ * The poisoned partial cache (backlog 3b) is FIXED: entries are written only once
+ * the whole file has been read. Backlog 18 no longer corrupts anything either —
+ * two concurrent searches of one url still both fetch, which is wasteful, but
+ * they write identical complete bytes rather than joining the file to itself.
  *
- *   - Poisoned partial cache (backlog 3b). `search` resolves on the first match,
- *     so the cache keeps only the PREFIX it happened to read. A later query for
- *     a term further down the same file is then answered `false` from text that
- *     was never downloaded.
- *   - Concurrent searches double a cache entry (backlog 18). Nothing tracks a
- *     download already in flight, so two searches of one url started together
- *     both append what they read — joining the file to itself with no
- *     separator, forming a line that exists nowhere.
+ * It stays off because THIS PAGE MEASURES THE NETWORK. A miss drains the stream,
+ * which is exactly the condition for caching, so with the cache on the StatsBar
+ * would time a `Record` lookup and present it as a download from the second query
+ * onward — and those numbers are the page's only evidence for its claim.
  *
- * Turning it off costs little here: the corpus is 2.6 MB and the browser's own
- * HTTP cache serves repeat queries. It does not affect the property this page
- * exists to show — a match still resolves the moment it is seen, mid-download.
- *
- * See docs/BACKLOG.md and AGENTS.md §7.
+ * So do not turn this on while closing backlog 18: it is a decision about what
+ * the demo measures, not about whether the cache works. Leaving it off is cheap —
+ * 2.6 MB, and the browser's own HTTP cache serves repeats.
  */
 const netgrep = new Netgrep({ enableMemoryCache: false });
 

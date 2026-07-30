@@ -273,6 +273,30 @@ describe('Netgrep', () => {
       );
     });
 
+    it('caches nothing when the search resolved before the stream ended', async () => {
+      // BACKLOG 3b. Writing per chunk left an entry holding only the chunks read
+      // before the match, unmarked as a prefix, so a later search for anything
+      // further down answered `false` from text never downloaded. The entry is
+      // now written on `done` only: an early resolution leaves none and the next
+      // search re-fetches, which is the right trade against a wrong answer.
+      mockSearch.mockReturnValue(true);
+      mockFetch.mockImplementation(() =>
+        Promise.resolve({
+          body: genReadableStreamFromChunks([
+            encoder.encode('needle\n'),
+            encoder.encode('omega\n'),
+          ]),
+        }),
+      );
+
+      const instance = new Netgrep({ enableMemoryCache: true });
+
+      await instance.search('partial', pattern);
+      await instance.search('partial', pattern);
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('does not share its cache with another instance', async () => {
       mockSearch.mockReturnValue(true);
 
@@ -295,12 +319,15 @@ describe('Netgrep', () => {
     });
 
     it('stops reading as soon as a chunk matches', async () => {
+      // The terminators matter: a chunk is searched only up to its last `\n`, so
+      // a newline-free fixture would search nothing until the stream ended and
+      // this would test the opposite of what it says. See `splitAtLastLine`.
       mockFetch.mockImplementation(() =>
         Promise.resolve({
           body: genReadableStreamFromChunks([
-            encoder.encode('one'),
-            encoder.encode('two'),
-            encoder.encode('three'),
+            encoder.encode('one\n'),
+            encoder.encode('two\n'),
+            encoder.encode('three\n'),
           ]),
         }),
       );
@@ -314,6 +341,78 @@ describe('Netgrep', () => {
         result: true,
       });
       expect(mockSearch).toHaveBeenCalledTimes(2);
+    });
+
+    it('holds a chunk back until its line is complete, then searches it whole', async () => {
+      // The cost of fixing BACKLOG 3a: early resolution is line-granular now.
+      // A split word reaches the engine ONCE, joined, rather than twice in
+      // halves that match nothing — but the answer arrives one chunk later.
+      mockFetch.mockImplementation(() =>
+        Promise.resolve({
+          body: genReadableStreamFromChunks([
+            encoder.encode('hello won'),
+            encoder.encode('derful world\n'),
+          ]),
+        }),
+      );
+
+      mockSearch.mockReturnValue(true);
+
+      await expect(NG.search(url, pattern)).resolves.toMatchObject({
+        result: true,
+      });
+
+      // Not once per chunk: the first had no complete line in it.
+      expect(mockSearch).toHaveBeenCalledTimes(1);
+      expect(mockSearch).toHaveBeenCalledWith(
+        encoder.encode('hello wonderful world\n'),
+        pattern,
+      );
+    });
+
+    it('searches the final line even when nothing terminates it', async () => {
+      // A file not ending in a newline leaves a tail no chunk will complete, so
+      // it is searched on `done`. Forgetting that loses every such last line.
+      mockFetch.mockImplementation(() =>
+        Promise.resolve({
+          body: genReadableStreamFromChunks([
+            encoder.encode('first\n'),
+            encoder.encode('unterminated'),
+          ]),
+        }),
+      );
+
+      mockSearch.mockReturnValueOnce(false).mockReturnValueOnce(true);
+
+      await expect(NG.search(url, pattern)).resolves.toMatchObject({
+        result: true,
+      });
+      expect(mockSearch).toHaveBeenLastCalledWith(
+        encoder.encode('unterminated'),
+        pattern,
+      );
+    });
+
+    it('does not retain the file when the cache is off', async () => {
+      // Chunks are collected for the cache only. Holding them with the cache off
+      // would keep all 500 MB of a 500 MB file — worse than the O(n²) append it
+      // replaced. Observable as the engine never seeing a joined buffer.
+      mockSearch.mockReturnValue(false);
+      mockFetch.mockImplementation(() =>
+        Promise.resolve({
+          body: genReadableStreamFromChunks([
+            encoder.encode('alpha\n'),
+            encoder.encode('beta\n'),
+          ]),
+        }),
+      );
+
+      await NG.search('uncached-retain', pattern);
+
+      // One call per line, never a joined buffer, and no cache entry after.
+      expect(mockSearch).toHaveBeenCalledTimes(2);
+      await NG.search('uncached-retain', pattern);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
