@@ -167,7 +167,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **83 tests**: 47 unit in Node, 36 integration in headless Chromium |
+| Test TS | `pnpm test` | Vitest — **84 tests**: 48 unit in Node, 36 integration in headless Chromium |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |

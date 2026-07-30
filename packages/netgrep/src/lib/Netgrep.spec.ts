@@ -345,6 +345,46 @@ describe('Netgrep', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
+    it('does not serialise waiters that all have to fetch anyway', async () => {
+      // A caller waits ONCE. Waiting until no download is in flight instead
+      // would make each waiter queue behind the last, so callers that used to
+      // fetch in parallel would fetch one after another — for the same number
+      // of requests, since an early match caches nothing for anyone to share.
+      //
+      // Overlap rather than elapsed time, so this pins the shape and not the
+      // machine it runs on.
+      let open = 0;
+      let peak = 0;
+
+      mockSearch.mockReturnValue(true);
+      mockFetch.mockImplementation(() => {
+        open += 1;
+        peak = Math.max(peak, open);
+
+        return Promise.resolve({
+          body: new ReadableStream({
+            pull(controller) {
+              controller.enqueue(encoder.encode('needle\n'));
+              controller.close();
+              open -= 1;
+            },
+          }),
+        });
+      });
+
+      const instance = new Netgrep({ enableMemoryCache: true });
+
+      await Promise.all([
+        instance.search('herd', pattern),
+        instance.search('herd', pattern),
+        instance.search('herd', pattern),
+      ]);
+
+      // The first goes alone; the two that wake behind it go together.
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(peak).toBeGreaterThan(1);
+    });
+
     it('stops reading as soon as a chunk matches', async () => {
       // The terminators matter: a chunk is searched only up to its last `\n`, so
       // a newline-free fixture would search nothing until the stream ended and

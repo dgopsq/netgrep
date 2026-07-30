@@ -65,13 +65,9 @@ export class Netgrep {
   /**
    * Downloads currently in flight, keyed by url — BACKLOG 18.
    *
-   * Only ever populated when the memory cache is on. A second concurrent caller
-   * waits for the first and answers from the entry the first one writes, so the
-   * bytes it needs are exactly the bytes the cache holds. With the cache off
-   * there is nothing to hand over — sharing would mean either retaining every
-   * chunk of a file nobody asked to keep, or teeing the response stream and
-   * with it the first caller's abort signal — so waiting would add latency and
-   * save no request at all.
+   * Populated only when the memory cache is on, because the cache entry is what
+   * a second caller is handed. With the cache off there is nothing to hand over
+   * and waiting would save no request.
    */
   private readonly inFlight: Record<string, Promise<unknown>> = {};
 
@@ -111,17 +107,14 @@ export class Netgrep {
     await wasmReady;
 
     if (this.config.enableMemoryCache) {
-      // A `while` rather than an `if`: waking to a cold cache is normal — the
-      // download ahead may have matched early and cached nothing, or failed —
-      // and by then a third caller can already be re-fetching. Queue behind
-      // that one too instead of opening a second request beside it.
-      //
-      // Its rejection is swallowed because the recourse to a failed download
-      // is the same as the recourse to a miss: fetch below, with this caller's
-      // own signal rather than the one that just aborted.
-      while (this.inFlight[url]) {
-        await this.inFlight[url].catch(() => undefined);
-      }
+      // Waited on ONCE, not until the url is quiet. Looping until no download
+      // is in flight would serialise callers that used to fetch in parallel,
+      // and buy no fewer requests. The rejection is swallowed because the
+      // recourse to a failed download is the recourse to a miss: fetch below,
+      // with this caller's own signal.
+      const ahead = this.inFlight[url];
+
+      if (ahead) await ahead.catch(() => undefined);
 
       // Search the content in the memory cache if it's enabled. No tail buffer
       // needed: entries are only written from a drained stream, so an entry is
@@ -143,9 +136,10 @@ export class Netgrep {
     if (this.config.enableMemoryCache) {
       this.inFlight[url] = running;
 
+      // Two waiters can wake together and both register, so the identity check
+      // matters: an overwritten search must not delete its successor's entry.
       // Both handlers, so this never becomes a rejection of its own — the
-      // caller holds `running` and answers for that one. Registered before any
-      // waiter can attach, so the entry is gone by the time one resumes.
+      // caller holds `running` and answers for that one.
       const settle = () => {
         if (this.inFlight[url] === running) delete this.inFlight[url];
       };

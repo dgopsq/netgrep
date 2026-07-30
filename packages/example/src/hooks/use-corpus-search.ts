@@ -32,16 +32,15 @@ export type SearchState = {
  * THE MEMORY CACHE IS OFF, DELIBERATELY — AND NO LONGER BECAUSE IT IS UNSAFE.
  *
  * The poisoned partial cache (backlog 3b) is FIXED: entries are written only once
- * the whole file has been read. So is the duplicate download of backlog 18 — but
- * only for instances running with the cache ON, since a shared cache entry is
- * what the second search is answered from. This page therefore still fetches
- * each url twice when a keystroke overlaps two runs, and that is accepted.
+ * the whole file has been read. So is the duplicate download of backlog 18, for
+ * instances running with the cache ON — though not for this page's overlapping
+ * runs even so, because a keystroke ABORTS the previous search, and an aborted
+ * download leaves no entry for the next one to share. That is accepted.
  *
- * Because it stays off, and it stays off because THIS PAGE MEASURES THE NETWORK.
- * A miss drains the stream, which is exactly the condition for caching, so with
- * the cache on the StatsBar would time a `Record` lookup and present it as a
- * download from the second query onward — and those numbers are the page's only
- * evidence for its claim.
+ * It stays off because THIS PAGE MEASURES THE NETWORK. A miss drains the stream,
+ * which is exactly the condition for caching, so with the cache on the StatsBar
+ * would time a `Record` lookup and present it as a download from the second query
+ * onward — and those numbers are the page's only evidence for its claim.
  *
  * A decision about what the demo measures, then, not about whether the cache
  * works. Leaving it off is cheap — 2.6 MB, and the browser's own HTTP cache

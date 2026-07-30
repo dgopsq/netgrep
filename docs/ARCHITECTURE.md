@@ -178,10 +178,10 @@ Two things about that shape are load-bearing, and both are [decision
   the cache is enabled, so a search with it off holds one chunk plus the tail.
 
 The two `cache enabled` branches at the top are [decision
-0019](decisions/0019-in-flight-fetch-registry.md), and the second one is the reason the first is a *loop* in
-the code rather than a single check: a waiter can wake to a cold cache — the search it waited on may have
-matched early, or failed — by which time a third caller is already re-fetching, and it should queue behind that
-one rather than open a request beside it.
+0019](decisions/0019-in-flight-fetch-registry.md), and the second exists because the first is not a guarantee:
+a waiter can wake to a cold cache, since the search it waited on may have matched early or failed. It then
+fetches for itself rather than waiting again — queueing until the url is quiet would serialise callers that
+used to fetch in parallel without saving a single request.
 
 Errors are normalised to strings by `serializeError` — `Error.message`, or `JSON.stringify` for
 non-`Error` throws. The recursive `handleReader` call carries a `.catch(reject)`: the promise it returns is not

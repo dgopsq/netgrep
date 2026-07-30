@@ -25,9 +25,8 @@ what was left was purely a wasted request.
 A per-instance registry of searches currently in flight, keyed by url exactly as the cache is:
 
 ```ts
-while (this.inFlight[url]) {
-  await this.inFlight[url].catch(() => undefined);
-}
+const ahead = this.inFlight[url];
+if (ahead) await ahead.catch(() => undefined);
 
 const cached = this.memoryCache[url];
 if (cached) return { url, pattern, result: search_bytes(cached, pattern), metadata };
@@ -47,13 +46,18 @@ inside it.
 
 Three details are load-bearing:
 
-- **A `while`, not an `if`.** Waking to a cold cache is normal, not exceptional — the download ahead may have
-  matched early and cached nothing, or failed outright — and by then a third caller can already be re-fetching.
-  With an `if` that third search and the waking waiter would run side by side, which is the original defect
-  with more steps.
+- **A caller waits once, not until the url is quiet.** Waking to a cold cache is normal, not exceptional — the
+  download ahead may have matched early and cached nothing, or failed outright. The first version of this
+  change looped until `inFlight[url]` was empty, so that a waker who found a *successor* already fetching would
+  queue behind that one too. That was wrong, and measurably: it bought no fewer requests — in the early-match
+  case every caller fetches under either rule — while turning N callers that used to fetch in parallel into N
+  fetches one after another. Waiting once costs at most one extra round regardless of N, which is the price of
+  attempting the de-duplication at all.
 - **The waiter swallows the rejection it waits on.** Its recourse to a failed download is the same as its
   recourse to a miss: fetch below. Inheriting the failure would be wrong twice over — it never asked for that
   request, and the signal that aborted it is not the waiter's signal.
+- **The cleanup checks identity.** Two waiters can wake together and both register, the second overwriting the
+  first. `settle` deletes only its own entry, so an overwritten search cannot remove its successor's.
 - **The registered promise is `running` itself**, with cleanup attached as `running.then(settle, settle)`.
   Both handlers, so the registry never adds a rejection nobody is listening to; the caller holds `running` and
   answers for that one. `settle` deletes only its own entry, never a successor's.
@@ -93,10 +97,15 @@ once. No change to either method.
 instance that has no eviction, size cap or TTL — item **19**, unchanged by this and mildly more reachable
 because of it.
 
-**One extra `await` on the cache-on path, and none on the fast path.** The `while` condition is a property
-read, so a search with no concurrent duplicate is scheduled exactly as before. That matters more than it
-sounds: the read-count and fetch-count assertions across both suites are sensitive to sequencing, and none of
-them moved.
+**Nothing changes on the fast path**, where no download of the url is in flight: the check is a property read,
+so a search with no concurrent duplicate is scheduled exactly as before. That matters more than it sounds — the
+read-count and fetch-count assertions across both suites are sensitive to sequencing, and none of them moved.
+
+**Concurrent callers whose predecessor caches nothing pay one extra round.** They wait for the first download,
+find a cold cache, and then all fetch together. Measured with the engine stubbed and a 20 ms body, six
+simultaneous searches that all match early: 6 requests either way, one round (~21 ms) before this change and
+two (~42 ms) after, for three callers and for six alike. Bounded at one round, not proportional to the number
+of callers — which it *was* in the looping version this record's Decision section describes rejecting.
 
 ## What this does NOT fix
 
@@ -108,8 +117,16 @@ the boundary is asserted rather than merely described.
 early resolves without writing an entry and its waiter has to fetch after all. One request saved is the common
 case, not a guarantee. Pinned by `lets a waiter fetch for itself when the download ahead cached nothing`.
 
-**The demo, which is unaffected and stays that way.** It runs with the cache off, so its overlapping runs still
-fetch twice. Turning the cache on would fix that and break the page: a miss drains the stream, which is exactly
-the condition for caching, so the `StatsBar` would start timing a `Record` lookup and presenting it as a
-download. The page measures the network — see the comment in `use-corpus-search.ts` and
+**The demo, which is unaffected — and would be even with the cache on.** Item 18 named two triggers, and this
+closes one of them. `searchBatchWithCallback` over a corpus listing one url twice is fixed. The demo's overlap
+is not, and the flag is only the first reason: a keystroke *aborts* run N, so run N's search rejects, its
+registry entry is removed, and run N+1 wakes to a cold cache and fetches anyway — having first waited for the
+abort to unwind. De-duplication needs the download ahead to *finish*, and an aborted one by definition does
+not. Sharing a live download across the abort is the tee this record already rejected, for the same reason:
+run N+1 would inherit run N's cancelled signal.
+
+The demo would therefore keep double-fetching even if the cache were switched on — and it stays off regardless,
+because a miss drains the stream, which is exactly the condition for caching, so the `StatsBar` would start
+timing a `Record` lookup and presenting it as a download. The page measures the network — see the comment in
+`use-corpus-search.ts` and
 [`AGENTS.md` §2.3](../../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
