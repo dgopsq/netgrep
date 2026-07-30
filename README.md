@@ -193,30 +193,41 @@ instance. See the limitation below before relying on it.
 
 ## Known limitations
 
-Netgrep is experimental, and the following are real, present in the published package, and **documented
-rather than fixed**. They are pinned by tests so they cannot change unnoticed; the full analysis is in
+Netgrep is experimental, and the following are real and **documented rather than fixed**. They are pinned by
+tests so they cannot change unnoticed; the full analysis is in
 [`docs/ARCHITECTURE.md`](https://github.com/dgopsq/netgrep/blob/main/docs/ARCHITECTURE.md#known-limitations--correctness-caveats).
 
-- **A match spanning two network chunks is missed.** Chunks are searched as they arrive and are never
-  overlapped, so a pattern straddling the boundary is invisible. This is a silent `false`, and because it
-  depends on how the network happens to chunk the response it is not reproducible on demand. Short patterns
-  in reasonably sized files are unlikely to hit it; it is not impossible.
-- **The cache can answer a later search wrongly.** A search resolves the moment a chunk matches and stops
-  downloading, so the cache is left holding only the beginning of the file, with nothing marking it
-  incomplete. A later search on the same URL for a *different* pattern reads that partial copy and can
-  return `false` for text further down the file. Set `enableMemoryCache: false` if this matters more than
-  the network savings.
-- **A file containing a NUL byte reports no match** for the chunk containing it, even when the match came
-  earlier. Binary detection abandons the whole chunk rather than stopping at the NUL.
+- **Inside a line longer than 64 KB, results are approximate.** Netgrep holds back the incomplete last *line*
+  of each chunk and prepends it to the next, which is exact — a match can never cross a newline — so ordinary
+  text is unaffected no matter how the network splits the response. The exception is a line with no terminator
+  in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the retained bytes become a
+  plain 64 KB window, so a match **longer** than the window is lost, and `^` can match at a window edge where no
+  line actually begins. Newline-free input is also answered more slowly, because nothing can be searched until
+  the ceiling fills or the download ends.
+- **A file containing a NUL byte reports no match** for the block of lines containing it, even when the match
+  came earlier. Binary detection abandons what it is given rather than stopping at the NUL.
 - **`$` does not match on CRLF files.** The line terminator is `\n`, so on Windows-authored text the `\r`
   sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
-- **Two concurrent searches of the same URL are not de-duplicated.** Both download, and both append to the
-  same cache entry, so it ends up holding the file twice with no separator between the copies — which can
-  make a later search match a line the file never contained. Await one search of a URL before starting
-  another, or set `enableMemoryCache: false`.
+- **Two concurrent searches of the same URL are not de-duplicated.** Both download the file. The answers are
+  correct and the cache entry is correct; the second request is simply wasted. Await one search of a URL before
+  starting another if that matters.
 
-The first two exist because searching *while downloading* is the entire point of the project — the naive
-fixes for both are to wait for the full file, which is the thing netgrep is built not to do.
+### Fixed, and not yet in a published release
+
+Both of these are fixed on `main` and **still present in the version on npm**. The list above describes the
+code; this one describes the gap until the next release.
+
+- **A match spanning two network chunks used to be missed** — a silent `false` that depended on how the network
+  chunked the response. See the first limitation above for what remains of it.
+- **The cache could answer a later search wrongly.** A search resolves the moment it finds a match and stops
+  downloading, which used to leave the cache holding only the beginning of the file with nothing marking it
+  incomplete. An entry is now written **only once the whole file has been read**, so a search that resolves
+  early caches nothing and the next one re-fetches. `enableMemoryCache: false` is no longer a workaround for
+  anything.
+
+  Worth knowing: this means the cache only fills on a search that reads to the end — a miss, or a match on the
+  final line. A URL that matches early is re-fetched every time. That is the trade for never answering from a
+  prefix, and it is why repeat *hits* cost network while repeat *misses* do not.
 
 ## Documentation
 

@@ -183,8 +183,32 @@ mod search {
         // `.` excludes the line terminator, and no multiline mode is enabled,
         // so a pattern can never straddle two lines. This is the engine-level
         // half of why netgrep answers "does this pattern occur on some line".
+        //
+        // ⚠️ LOAD-BEARING FOR packages/netgrep/src/lib/splitAtLastLine.ts,
+        // which carries the incomplete trailing LINE between `fetch` chunks
+        // because a line is the largest unit a match can occupy.
+        //
+        // If this goes red, BACKLOG 3a is back and no JavaScript test will
+        // notice. Relaxing an assertion here means growing that tail to cover
+        // whatever now matches across lines, not accepting the new behaviour.
         assert!(!matches(b"alpha\nbeta", "alpha.beta"));
         assert!(!matches(b"alpha\nbeta", "(?s)alpha.beta"));
+
+        // The escape hatches, all closed: grep-regex strips the terminator from
+        // character classes rather than trusting the pattern to avoid it.
+        assert!(!matches(b"alpha\nbeta", "alpha[^x]beta"));
+        assert!(!matches(b"alpha\nbeta", r"alpha\sbeta"));
+        assert!(!matches(b"alpha\nbeta", r"alpha[\s\S]beta"));
+        assert!(!matches(b"alpha\nbeta", r"alpha\W beta"));
+
+        // And a literal terminator is REJECTED, not quietly ignored, so a
+        // cross-line match cannot even be asked for.
+        for pattern in [r"alpha\nbeta", "alpha\nbeta", r"alpha\x0abeta"] {
+            assert!(
+                try_search_bytes(b"alpha\nbeta", pattern).is_err(),
+                "{pattern:?} should be rejected, not merely unmatched"
+            );
+        }
     }
 
     // ---------------------------------------------------------------

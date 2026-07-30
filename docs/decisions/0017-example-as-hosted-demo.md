@@ -70,6 +70,11 @@ cache serves repeats — and does not touch the early-resolution property the pa
 Defect 3a (chunk-boundary false negatives) is **not** avoidable this way and is live on the page. It is named
 in the site's own "Known limitations" section, along with the boolean-only result and the NUL-byte behaviour.
 
+> **Amended 2026-07-30.** 3a and 3b are fixed ([0018](0018-line-oriented-tail-buffer.md)), so the
+> chunk-boundary caveat has been removed from the page. The cache is still off, but no longer as a workaround:
+> a warm cache would stop the page's timings measuring the network, which is the one thing it exists to show.
+> The reasoning in this section is left as written, because it is why the site said what it said.
+
 ### Why Vite rather than staying on webpack
 
 shadcn's tooling assumes Vite or Next. Beyond that: the example being on webpack was incidental coverage that
@@ -88,8 +93,8 @@ netgrep does and what it costs, and not sell it; it does not ask the demo to arg
 fold.
 
 So the hero states the capability plainly and the honesty moved down into a **Scope** section, which is still
-on the page and still names every live defect — including chunk-boundary false negatives, which affect this
-very demo. The costs are still stated: the stats bar reports the corpus size and the 1.15 MB WebAssembly
+on the page and still names every live defect. When this was written that included chunk-boundary false
+negatives, which affected the demo directly; that one is fixed and its caveat is gone. The costs are still stated: the stats bar reports the corpus size and the 1.15 MB WebAssembly
 download on every query. The competitor comparison survives too, repositioned from self-deprecation to
 routing: "if you need ranking and snippets, an index is the right tool."
 

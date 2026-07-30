@@ -11,18 +11,19 @@ import { Info } from 'lucide-react';
  *
  * Nothing enforces this. No test fails and CI stays green.
  *
- *   "Matches spanning two network chunks"  -> BACKLOG 3a
- *   "This demo runs with the cache off"    -> BACKLOG 3b + 18. Fixing BOTH also
- *                                             means re-enabling the cache in
- *                                             use-corpus-search.ts and removing
- *                                             this entry
- *   "Binary files stop at the first NUL"   -> BACKLOG 3f
- *   "One boolean per file"                 -> by design, decision 0003. Stays
+ *   "One boolean per file"               -> by design. Stays
+ *   "This demo runs with the cache off"  -> not a defect: the cache is safe now,
+ *                                           but a warm one stops the timings
+ *                                           measuring the network
+ *   "Binary files stop at the first NUL" -> BACKLOG 3f
  *
- * Backlog 17 (`$` on CRLF input) is deliberately absent: every file in the
- * corpus is LF, so it cannot happen here. Add it if that ever changes.
+ * ABSENT because this corpus cannot trigger them, and an unreachable caveat
+ * dilutes a list whose value is that every entry is live:
  *
- * See AGENTS.md §2.3.
+ *   Backlog 17  `$` on CRLF input. Every file here is LF.
+ *   Backlog 3g  Needs a line over 64 KB. The longest here is 76 bytes.
+ *
+ * Add either if the corpus changes shape.
  */
 const CAVEATS = [
   {
@@ -30,12 +31,8 @@ const CAVEATS = [
     body: 'netgrep tells you whether a pattern occurs in a file, not where. No line numbers, match positions, snippets or ranking. If you need those, a prebuilt index — Pagefind, Lunr, FlexSearch — is the right tool.',
   },
   {
-    title: 'Matches spanning two network chunks are missed',
-    body: 'Each fetch chunk is searched on its own, so a pattern straddling the seam between two of them is not found. Which chunk a match lands in depends on how the network split the response, so the same query can behave differently twice. Live on this page.',
-  },
-  {
     title: 'This demo runs with the cache off',
-    body: 'netgrep can hold downloaded bytes in memory, and does by default. Two open defects make that unsafe for a page taking one query after another, so the demo disables it and re-reads the corpus each time — 2.6 MB, served from the browser cache on repeats.',
+    body: 'netgrep can hold downloaded bytes in memory, and does by default. The demo turns it off so the timings above keep measuring the network rather than a warm buffer — searching while downloading is the thing this page exists to show. It re-reads the corpus each time: 2.6 MB, served from the browser cache on repeats.',
   },
   {
     title: 'Binary files stop at the first NUL',

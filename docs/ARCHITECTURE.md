@@ -39,7 +39,7 @@ below are documented rather than hidden, and why the API has stayed a boolean.
 ┌───────────────────────────▼─────────────────────────────────────┐
 │ packages/netgrep  — @netgrep/netgrep (TypeScript, ESM)           │
 │   streaming, batching, in-memory cache, abort, error shaping     │
-│   awaits init() once, then calls search_bytes per chunk          │
+│   awaits init() once, then search_bytes per block of whole lines │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
@@ -112,6 +112,11 @@ third is `regex-automata`'s DFA and Unicode tables.
 
 `src/lib/Netgrep.ts` is the entire public surface. `src/lib/data/` holds five types, one per file.
 
+`src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` is
+`export * from './lib/Netgrep.js'`, so anything exported from that file would become public API. It is a
+separate module rather than a private function so that its edge cases can be unit-tested directly, with a
+tiny cap, instead of only through a >64 KB fixture in a browser.
+
 ### Public API
 
 | Method | Returns | Semantics |
@@ -134,81 +139,132 @@ search(url, pattern)
   ├─ await wasmReady          ← init() started once at module load
   │
   ├─ cache enabled AND cache[url] exists?
-  │     └─ yes → search_bytes(cache[url], pattern) → resolve   ← see caveat 2
+  │     └─ yes → search_bytes(cache[url], pattern) → resolve
+  │              (always the WHOLE file — entries are only written from a
+  │               drained stream, so there are no boundaries inside one)
   │
   └─ fetch(url, { signal })
        └─ res.body.getReader()
             └─ handleReader(reader)   ── recursive
                  ├─ read() → { value, done }
-                 ├─ done          → resolve(result: false)
-                 ├─ search_bytes(chunk, pattern)   ← see caveat 1
-                 ├─ cache enabled → append chunk to cache[url]
+                 │
+                 ├─ done → search_bytes(tail, pattern)  ← the final line, which
+                 │         │                              nothing has looked at
+                 │         ├─ cache enabled → cache[url] = join(chunks)
+                 │         └─ resolve(result)
+                 │
+                 ├─ cache enabled → chunks.push(value)
+                 ├─ splitAtLastLine(tail ++ value, 64 KB)
+                 │    ├─ searched ← whole lines
+                 │    └─ tail     ← the incomplete trailing line, held back
+                 ├─ searched non-empty → search_bytes(searched, pattern)
                  ├─ matched       → resolve(result: true)   ← stops reading
                  └─ not matched   → recurse
 ```
 
+Two things about that shape are load-bearing, and both are [decision
+0018](decisions/0018-line-oriented-tail-buffer.md):
+
+- **The engine only ever sees whole lines.** A match cannot span a `\n`, so the incomplete trailing line is the
+  exact carry-over between chunks — which is why a boundary cannot hide a match, and why it cannot fake a line
+  start for `^` or a line end for `$` either. `splitAtLastLine` falls back to a 64 KB byte window when a line
+  outgrows the ceiling, which is the one case where a match can still be lost (caveat 1).
+- **The cache is written once, at `done`.** Resolving early therefore caches *nothing*, rather than caching a
+  prefix that later answers questions about text it never downloaded (caveat 2). Chunks are only collected when
+  the cache is enabled, so a search with it off holds one chunk plus the tail.
+
 Errors are normalised to strings by `serializeError` — `Error.message`, or `JSON.stringify` for
-non-`Error` throws.
+non-`Error` throws. The recursive `handleReader` call carries a `.catch(reject)`: the promise it returns is not
+chained to the one the executor was handed, so without it a rejection from any chunk after the first would be
+an unhandled rejection and the search would never settle.
 
 ---
 
 ## Known limitations & correctness caveats
 
-All verified against the source in this repository, and each is **pinned by a test that asserts the current,
-wrong behaviour** — in `Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the
-`documented_defects` module of `packages/search/tests/search.rs`. See
+All verified against the source in this repository, and each is **pinned by a test** — in
+`Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the `documented_defects` module
+of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
+`(FIXED)` there were inverted in place when the defect was closed. See
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) before touching
 any of them.
 
-**Documented, not fixed.** Caveats 1 and 2 interact: fixing either one naively reintroduces or worsens the
-other.
+**Documented, not fixed.** Caveats 1 and 2 were both closed on 2026-07-30 by
+[decision 0018](decisions/0018-line-oriented-tail-buffer.md), and they had to be closed together: caveat 1 was
+suppressing early resolution, so fixing it alone would have made caveat 2 fire more often, in the default
+configuration. Caveat 1's *residual* is what remains, and is described below.
 
-### 1. Chunk-boundary false negatives — `Netgrep.ts`, the `search_bytes` call in `handleReader`
+### 1. Chunk-boundary false negatives — FIXED, with a residual
 
-`search_bytes(u8Array, pattern)` is called with **one chunk at a time**, and chunks are never overlapped or
-joined before searching. A pattern that straddles the boundary between two `fetch` chunks is never seen by the
-matcher.
+`search_bytes` used to be called with **one chunk at a time**, never overlapped or joined, so a pattern
+straddling the boundary between two `fetch` chunks was never seen by the matcher. A silent wrong answer whose
+trigger depended on how the network split the response.
 
-Silent wrong answer: `result: false` for a file that does contain the pattern. Whether it triggers depends on
-network chunking, so it is non-deterministic across runs and effectively untestable by luck.
+`Netgrep.search` now retains the **incomplete trailing line** of everything read so far and prepends it to the
+next chunk, handing the engine only whole lines (`splitAtLastLine`). That is exact rather than approximate,
+because a match can never span a `\n` — grep-regex strips the terminator out of character classes and rejects
+patterns containing a literal one. The invariant is asserted by
+`test_a_match_cannot_span_a_line_terminator`, which names its JavaScript dependant in a comment: **if that
+test breaks, this caveat is back and no JavaScript test will notice.**
 
-*Any fix requires retaining a tail buffer of at least `pattern.length - 1` bytes (more for regex patterns,
-where the maximum match length is not knowable from the pattern alone) and prepending it to the next chunk.*
+Fixing it also removed the mirror-image false *positives* that were never separately tracked. A chunk searched
+in isolation looked to `^` like the start of a line and to `$` like the end of one, so both invented matches at
+a seam.
 
-### 2. Poisoned partial cache — `Netgrep.ts`, `handleReader` and the cache-hit branch of `search`
+> **Residual (item 3g) — a line longer than 64 KB.** Such a line would otherwise buffer an entire response, so
+> past a 64 KB ceiling (`MAX_TAIL_BYTES`, not configurable) the tail degrades to a plain window on the last
+> 64 KB. Inside such a line, two things break in opposite directions: a match **longer** than 64 KB is lost, and
+> `^` can match at the window's first byte because a windowed tail starts mid-line and the engine cannot be told
+> so. Both need a line longer than 64 KB, so both are unreachable in hand-written text — the demo corpus is
+> 2.6 MB of prose whose longest line is 76 bytes. Pinned by the two `BACKLOG 3g` tests in
+> `Netgrep.integration.spec.ts`, each alongside its control case.
 
-`upsertMemoryCache` appends each chunk as it arrives, but the loop **resolves and stops reading the moment a
-chunk matches**. The cache is then left holding only the *prefix* of the file downloaded so far, with no
-marker that it is incomplete.
+Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
+the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.
 
-A later search on the same URL for a different pattern takes the cache-hit branch at the top of `search` and
-searches that truncated prefix — returning `false` for text that was never downloaded.
+### 2. Poisoned partial cache — FIXED
 
-Reproduction: search a large file for a term near the top (populates a short prefix), then search the same URL
-for a term near the bottom → `false`.
+`upsertMemoryCache` appended each chunk as it arrived, but the loop **resolves and stops reading the moment a
+match is found**, so the cache was left holding only the *prefix* downloaded so far, with no marker that it was
+incomplete. A later search for a different pattern took the cache-hit branch and searched that truncated
+prefix, returning `false` for text that was never downloaded.
 
-*Any fix needs a completeness flag per cache entry, so partial entries are only ever used to resume, never to
-answer.*
+The entry is now written **only when the reader reports `done`**, so a partial one is never created rather than
+created and flagged. An early resolution therefore caches nothing and the next search re-fetches — a wasted
+request in place of a confident wrong answer. Note that a match in the *final* chunk still caches nothing: the
+stream is not known to be complete until `done`, which is one read later.
 
-### 3. Unbounded cache growth — `Netgrep.ts`, `upsertMemoryCache`
+This is narrower than the completeness flag originally proposed here, and deliberately so: a partial entry
+cannot resume a download either, and nothing needed it to.
+
+### 3. Unbounded cache growth — `Netgrep.ts`, the `memoryCache` record
 
 The cache is a plain `Record<string, Uint8Array>` with no eviction, no size cap and no TTL. It retains the
-full bytes of every file searched for the lifetime of the `Netgrep` instance. `upsertMemoryCache` also
-reallocates and copies the whole accumulated buffer **per chunk**, making cache population O(n²) in bytes.
+full bytes of every file searched for the lifetime of the `Netgrep` instance.
+
+The O(n²) population this caveat also described is gone: chunks are collected in an array and joined once, and
+they are only collected at all when the cache is enabled — so a search with it off retains one chunk plus the
+tail rather than the whole file.
 
 ### 4. No completion signal from `searchBatchWithCallback`
 
 It returns `void` and starts every search eagerly with no concurrency limit. Callers cannot await it, cannot
 detect completion, and a batch of N URLs opens N simultaneous connections.
 
-### 5. One NUL byte discards the whole chunk — `lib.rs`, `BinaryDetection::quit`
+### 5. One NUL byte discards the whole searched block — `lib.rs`, `BinaryDetection::quit`
 
-`BinaryDetection::quit(b'\x00')` does not stop *at* the NUL — it abandons the entire chunk. A match is
+`BinaryDetection::quit(b'\x00')` does not stop *at* the NUL — it abandons everything it was handed. A match is
 dropped even when it occurs before the NUL, and even on an earlier line. Any remote file containing a stray
 NUL therefore reports "no match" for content that is demonstrably present.
 
 Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
 "binary, not searched" from "no match", because the API is a boolean.
+
+Decision 0018 changed the *shape* of this without fixing it. What the engine is handed is no longer the network
+chunk but the block of complete lines within it, so how far a NUL reaches now depends on where the last `\n`
+falls rather than on where the network split the response — and a match on an earlier line survives *if* the
+NUL happens to land in the held-back partial line. Both behaviours are pinned, so that accident is not mistaken
+for a fix.
 
 ### 6. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
 
@@ -220,17 +276,17 @@ Silent, and it depends on who wrote the file rather than on anything the caller 
 `RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
 deliberate task rather than a drive-by.
 
-### 7. Concurrent searches of one url double its cache entry — `Netgrep.ts`, `search`
+### 7. Concurrent searches of one url both fetch it — `Netgrep.ts`, `search`
 
 Nothing tracks a download already in flight. Two searches of the same url started before either resolves both
-`fetch`, and both append what they read to the same cache entry.
+`fetch`, so the file is downloaded twice.
 
-The waste is the obvious half. The sharp half is that the entry then holds bytes the file never contained:
-the copies are joined with no separator, so the seam forms a line that exists nowhere and a later search
-matches it. A file of `needle` caches as `needleneedle`, and `^needleneedle$` answers `true`.
+The waste is what remains. The sharp half was fixed by decision 0018: the cache entry used to be *appended* to
+per chunk, so the two copies were joined with no separator and the seam formed a line that existed nowhere — a
+file of `needle` cached as `needleneedle`, and `^needleneedle$` answered `true`. The entry is now assigned once
+from a drained stream, so both searches write the same complete bytes.
 
-*A fix needs a per-url promise registry so the second caller awaits the first, which also removes the
-duplicate request.*
+*A fix for the remaining half needs a per-url promise registry so the second caller awaits the first.*
 
 ---
 
@@ -308,12 +364,13 @@ components straight out of `rust-toolchain.toml`.
 
 | Suite | Runner | What it covers |
 |---|---|---|
-| `Netgrep.spec.ts` | Vitest in **Node**, 30 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 29 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `splitAtLastLine.spec.ts` | Vitest in **Node**, 11 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
+| `Netgrep.spec.ts` | Vitest in **Node**, 34 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 32 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
 | `packages/search/tests/search.rs` | `cargo test`, native, 28 tests | `try_search_bytes` as pure Rust — bytes in, bool out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, and the compiled-matcher cache. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
-The split between the first three is deliberate: anything that depends only on the bytes is cheapest to pin
+The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin
 in Rust, where a failure names the engine; anything about streaming, batching or caching belongs in the
 TypeScript suites. They overlap at exactly one point — smart case — because it is the behaviour most likely
 to move silently under a dependency bump, and knowing *which* layer moved is worth one duplicated assertion.

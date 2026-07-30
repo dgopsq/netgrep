@@ -37,10 +37,10 @@ most common way to lose an hour here.
 All from the repository root. [AGENTS.md §4](AGENTS.md#4-commands) has the full list and the caveats.
 
 ```bash
-pnpm test          # Vitest — 58 tests (30 in Node, 28 in headless Chromium)
+pnpm test          # Vitest — 77 tests (45 in Node, 32 in headless Chromium)
 pnpm test:unit     # just the Node half — no WASM build and no browser needed
 pnpm test:browser  # just the browser half
-pnpm test:rust     # cargo test — 25 tests, native, no browser
+pnpm test:rust     # cargo test — 28 tests, native, no browser
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # Biome (JS/TS) and clippy (-D warnings); lint:js / lint:rust run one each
 pnpm format        # Biome, writes in place
@@ -130,15 +130,19 @@ Then, in rough order of how likely each is to bite:
 
 - **Some tests assert behaviour that is deliberately wrong.** `Netgrep.integration.spec.ts` ends with a block
   titled *documented defects*, and `packages/search/tests/search.rs` with a `documented_defects` module. They
-  pin known bugs — a match straddling a chunk boundary returning `false`, a NUL byte discarding a chunk. If
-  one fails, something changed the engine; work out what, and if the new behaviour is right, **invert the
+  pin known bugs — a NUL byte discarding a block of lines, a match longer than the 64 KB tail ceiling still
+  spanning a chunk boundary. Several are labelled `(FIXED)` and assert *correct* behaviour, inverted in place
+  with a note about what they used to claim; that is the block recording its own history, not clutter. If one
+  fails, something changed the engine; work out what, and if the new behaviour is right, **invert the
   assertion in the same PR** with a note. Do not quietly "fix" the test.
   [AGENTS.md §2.1](AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) has the full story.
 - **Fixing a defect also means updating the demo site.** <https://netgrep.diegopasquali.com/> lists the
   defects that affect its visitors, so a fix that leaves the list alone ships a page warning about a bug
   that no longer exists. Remove the entry from the `CAVEATS` array in
-  `packages/example/src/components/limitations.tsx` in the same PR — and if you fix both 3b and 18, re-enable
-  the demo's cache too. **No test catches this**, which is why it is worth remembering.
+  `packages/example/src/components/limitations.tsx` in the same PR. **No test catches this**, which is why it
+  is worth remembering. (Note the demo's cache stays off even though the defects that justified it are fixed —
+  it is off so the page's timings keep measuring the network. Do not switch it on as a side effect of closing
+  backlog 18.)
   [AGENTS.md §2.3](AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 - **Do not bump dependencies as a side effect.** A version change is its own deliberate, tested change. If a
   tool suggests one while you are doing something else, add it to `docs/BACKLOG.md`.
@@ -147,7 +151,13 @@ Then, in rough order of how likely each is to bite:
 - **ESM only, and relative imports carry a `.js` extension** even though the sources are `.ts`.
   `moduleResolution` is `nodenext`, which requires it.
 - **Comments explain *why*.** Several places in this repository look wrong and are not; they are commented
-  for a reason. Keep that density.
+  for a reason. Keep that density — but keep them short: make the point in the first sentence and stop.
+- **And keep them standalone.** A comment should not send you to a document to find out what it means — no
+  `see decision 0018`, no `see caveat 2`. Delete the reference and check the comment still stands; if it does
+  not, write the missing sentence rather than the pointer. Cross-references rot and nothing checks them. Bare
+  backlog item numbers are fine, since they are stable labels rather than explanations. Long-form rationale
+  still lives in [`docs/decisions/`](docs/decisions/) — that is what keeps comments short — but the comment has
+  to make sense without it.
 
 Releases fire from pushed git tags and publish under the maintainer's npm token. **Version bumps and
 publishing are maintainer-only** — please do not include them in a pull request.

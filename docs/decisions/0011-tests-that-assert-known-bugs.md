@@ -4,13 +4,16 @@
 
 ## Context
 
-netgrep has known, unfixed correctness bugs: a pattern straddling a `fetch` chunk boundary is missed, a
-partial cache answers later queries, a single NUL byte discards a chunk, `$` misses on CRLF input. (The
-invalid-pattern trap was on this list until 2026-07-29; see the second amendment below.) They are documented in [`../ARCHITECTURE.md`](../ARCHITECTURE.md#known-limitations--correctness-caveats)
-and tracked in [`../BACKLOG.md`](../BACKLOG.md).
+netgrep has known, unfixed correctness bugs: a single NUL byte discards a block of lines, `$` misses on CRLF
+input, concurrent searches of one url both fetch it, and a match longer than the 64 KB tail ceiling can still
+span a chunk boundary. (The invalid-pattern trap was on this list until 2026-07-29, and the chunk-boundary and
+partial-cache bugs until 2026-07-30; see the amendments below.) They are documented in
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md#known-limitations--correctness-caveats) and tracked in
+[`../BACKLOG.md`](../BACKLOG.md).
 
-Fixing them is out of scope for dependency work: the first two interact, and a naive fix to either destroys
-the early-resolution property that is the entire point of the project ([0002](0002-search-while-downloading.md)).
+Fixing them is out of scope for dependency work, and for a long time the chunk-boundary and partial-cache bugs
+looked mutually entangled besides — a naive fix to either destroys the early-resolution property that is the
+entire point of the project ([0002](0002-search-while-downloading.md)).
 
 That left a gap. A large dependency migration — `wasm-bindgen` across 44 minor versions, a ripgrep fork
 dropped, a whole JS toolchain replaced — needed to support the claim "behaviour is identical". Nothing in the
@@ -61,3 +64,22 @@ assertion was inverted in the same PR. That is the mechanism working exactly as 
 > asserting `rejects.toThrow('unreachable')` became one asserting a real diagnostic plus the thing the trap
 > had made impossible to assert — that the same instance still answers correctly afterwards. Both keep their
 > `BACKLOG 3c` label with a `(FIXED)` marker and a note saying what they used to claim, following 3e.
+
+> **Amended a third time (2026-07-30).** BACKLOG **3a** (chunk-boundary false negatives) and **3b** (poisoned
+> partial cache) were fixed by [0018](0018-line-oriented-tail-buffer.md), and four assertions were inverted in
+> the same PR. Two things about that are worth recording, because neither is what this record anticipated.
+>
+> **The defect tests carried the design, not just the bug.** 3a had two pinned assertions, and the second — the
+> same search answering differently once the cache was warm — was the one that made the 3a/3b coupling
+> concrete. Reading them together is what surfaced that fixing 3a alone would make 3b fire *more* often, since
+> 3a had been suppressing the early resolution that poisons the cache. A prose note in the backlog would not
+> have shown that; two assertions sitting in the same block did.
+>
+> **One test failed that was not supposed to be affected at all.** The 3f (NUL byte) assertion for a match on
+> an earlier line went green, because the engine is now handed a block of complete lines rather than a network
+> chunk, and in that fixture the NUL fell outside the block. 3f is **not** fixed — the same bytes with a
+> trailing newline still lose the match. The response was to keep the defect pinned with an accurate fixture
+> *and* add an assertion for the incidental change, so the accident is recorded rather than mistaken for a fix.
+> This is the case §2.1's instructions do not quite cover: a defect test can go green because a *different*
+> change moved the boundary the defect operates on, and the right answer is neither "invert it" nor "restore
+> the old fixture and say nothing".
