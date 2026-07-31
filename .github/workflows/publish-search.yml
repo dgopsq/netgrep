@@ -26,16 +26,10 @@ jobs:
     steps:
       # There is deliberately no test gate here — release.yml runs the whole
       # graph before release-please tags anything, and repeating it in each
-      # publish workflow would run it four times per release. That does leave
-      # the manual trigger as a button that publishes whatever ref was picked,
-      # so the ref is checked instead.
-      - name: Refuse a manual run from anywhere but main
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
-        run: |
-          echo '::error::Manual publish is only allowed from main, not ${{ github.ref }}.'
-          exit 1
-
+      # publish workflow would run it four times per release. The guard below is
+      # what that costs: it holds a manual publish to main.
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/require-main
 
       # Rebuilt here rather than taken from the `wasm-pkg` artefact the test
       # workflow uploaded. The artefact would be the exact bytes that passed,

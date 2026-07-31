@@ -25,15 +25,9 @@ jobs:
 
     steps:
       # No test gate here either; release.yml runs the whole graph before
-      # anything is tagged. That does leave the manual trigger as a button that
-      # publishes whatever ref was picked, so the ref is checked instead.
-      - name: Refuse a manual run from anywhere but main
-        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
-        run: |
-          echo '::error::Manual publish is only allowed from main, not ${{ github.ref }}.'
-          exit 1
-
+      # anything is tagged, and the guard below is what that costs.
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/require-main
 
       # Rebuilt rather than taken from the test workflow's `wasm-pkg` artefact —
       # see the note in publish-search.yml. The WASM is needed even though this
