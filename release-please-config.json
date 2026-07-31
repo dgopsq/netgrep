@@ -16,7 +16,6 @@
       "release-type": "rust",
       "component": "search",
       "//": "Cargo.toml is the source of truth, but scripts/verify-pack.mjs fails the build when it disagrees with the npm wrapper — and post_build.js, which normally syncs them, does not run in CI's `bundle` job. So both must move in the same commit.",
-      "//Cargo.lock": "The Rust updater only looks for a lock inside the package directory; this workspace keeps one at the root. Without this entry Cargo.toml moves and the lock does not, and cargo silently rewrites it on the next build.",
       "extra-files": [
         {
           "type": "json",
@@ -80,6 +79,7 @@
   },
 
   "//plugins": "@netgrep/netgrep depends on @netgrep/search via `workspace:*`, which pnpm rewrites to an EXACT version at pack time — so a search release nobody pairs with a netgrep release reaches no consumer. Locking the two versions together makes that pin correct by construction. The cost is a no-op republish of one package when only the other changed.",
+  "//cargo-workspace": "Updates the WORKSPACE-ROOT Cargo.lock, which the rust strategy alone misses — it only looks for a lock inside the package directory, and a stale lock means cargo rewrites it on the next build after every release. An `extra-files` toml entry cannot do this job: jsonpath-plus disables filter expressions, so `$.package[?(@.name=='search')].version` matched nothing and wrote nothing, silently. It warns that the root Cargo.toml has no [package.name]; that is correct, it is a virtual workspace, and the plugin proceeds.",
   "plugins": [
     {
       "type": "cargo-workspace"
