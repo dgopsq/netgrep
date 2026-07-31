@@ -26,7 +26,7 @@
         {
           "type": "toml",
           "path": "/Cargo.lock",
-          "jsonpath": "$.package[?(@.name='search')].version"
+          "jsonpath": "$.package[?(@.name=='search')].version"
         }
       ],
       "changelog-sections": [
