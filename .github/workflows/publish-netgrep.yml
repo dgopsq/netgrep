@@ -1,7 +1,11 @@
 on:
-  push:
-    tags:
-      - netgrep-**
+  # Called by release.yml after publish-search.yml has finished: `workspace:*`
+  # resolves to an exact version at pack time, so this package does not install
+  # until that one is on npm. Also runnable by hand, because re-running
+  # release.yml does not retry a failed publish: release-please reports
+  # release_created: false once the release exists, and every publish job skips.
+  workflow_call:
+  workflow_dispatch:
 
 name: Publish @netgrep/netgrep
 
@@ -9,18 +13,21 @@ permissions:
   contents: read
 
 jobs:
-  # Runs the whole split job graph. `needs` below gates on the called workflow
-  # as a whole, so a job added there gates this one too, with nothing to change
-  # here.
-  test-and-lint:
-    uses: ./.github/workflows/test-and-lint.yml
-
   publish:
-    needs: test-and-lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    permissions:
+      contents: read
+      # Provenance: npm records which workflow, commit and repository built this
+      # tarball, checkable afterwards with `npm audit signatures`.
+      id-token: write
+
     steps:
+      # No test gate here either; release.yml runs the whole graph before
+      # anything is tagged, and the guard below is what that costs.
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/require-main
 
       # Rebuilt rather than taken from the test workflow's `wasm-pkg` artefact —
       # see the note in publish-search.yml. The WASM is needed even though this
@@ -36,11 +43,14 @@ jobs:
       - run: pnpm build:wasm
       - run: pnpm build
 
-      - uses: JS-DevTools/npm-publish@v1
+      # v3's default `strategy: upgrade` is what `greater-version-only: true`
+      # meant on v1, so a re-run over an already-published version is a no-op
+      # rather than a failure. The input was renamed, not dropped.
+      - uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
-          greater-version-only: true
+          provenance: true
           # Hand-written manifest; the Nx tsc executor used to synthesise one
           # into dist/.
           package: ./packages/netgrep/package.json

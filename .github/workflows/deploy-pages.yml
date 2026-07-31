@@ -1,7 +1,9 @@
 on:
-  push:
-    branches:
-      - main
+  # Called by release.yml when ANY component released. This used to fire on
+  # every push to main, which meant the published demo ran unreleased code and
+  # its Scope section could describe a library no one could install. It now
+  # deploys what was just released.
+  workflow_call:
   # So a failed deploy can be retried, and the site can be re-published from
   # main without an empty commit.
   workflow_dispatch:
@@ -25,20 +27,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Gates the deploy on the whole test graph. `needs` below depends on the
-  # called workflow as a whole, so a job added there gates this one too, with
-  # nothing to change here — the same arrangement the two publish workflows use.
-  test-and-lint:
-    uses: ./.github/workflows/test-and-lint.yml
-
   deploy:
-    needs: test-and-lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     # `pages` and `id-token` are what `deploy-pages` needs to mint its OIDC
-    # token; they are scoped to this job so the test workflow above does not
-    # run with them.
+    # token, declared on the job so the rest of a caller's run does not get them.
     permissions:
       contents: read
       pages: write
@@ -49,7 +43,10 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      # No test gate here: release.yml runs the whole graph before release-please
+      # tags, and the guard below is what that costs.
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/require-main
 
       # The WASM is rebuilt rather than taken from the test workflow's
       # `wasm-pkg` artefact, for the reason recorded in publish-search.yml.

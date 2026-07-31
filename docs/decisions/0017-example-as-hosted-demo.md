@@ -216,3 +216,20 @@ the contract every shadcn component is written against: delete the unused names 
 in resolves them to nothing and renders unstyled, which is an unpleasant thing to debug. The distinction drawn
 is that unused CSS variables cost a few bytes in a file this repository owns, whereas an unused *dependency*
 costs install time, lockfile surface and a place on the maintenance path this decision just created.
+
+---
+
+## Amendment: the site deploys on release, not on every push to `main` (2026-07-31)
+
+The `Deploy` row above is out of date. `deploy-pages.yml` no longer triggers on `push: main`; it is called by
+`release.yml` when any component releases, and the test gate now sits in the caller rather than inside it.
+
+This record's whole argument is that the site's value is its accuracy, and deploying from `main` quietly
+worked against that: the demo ran unreleased code, so its Scope section could describe a library that was not
+on npm. Both npm packages sat at `0.1.5` for months while the site showed `main`. It now shows what a visitor
+can actually install.
+
+The cost is a lag that did not exist before. A demo-only change ships when it releases, which requires it to
+be typed `fix(example):` or `feat(example):` — `docs:` neither releases nor deploys, and a site fix typed that
+way waits for some other component to release. Nothing enforces that. See
+[0021](0021-release-please.md).

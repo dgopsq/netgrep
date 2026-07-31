@@ -13,7 +13,12 @@ Item numbers are stable and referenced from code comments and other documents. *
 items move to the bottom rather than disappearing.
 
 Rules that apply to all of it: dependency changes are never a side effect of other work, and releases are
-human-triggered only. See [`../AGENTS.md` §6](../AGENTS.md#6-hard-rules).
+human-triggered only — the human act being the merge of release-please's release PR. See
+[`../AGENTS.md` §6](../AGENTS.md#6-hard-rules).
+
+**Type your commits with the release in mind.** `chore:` neither releases nor appears in a changelog, so
+maintenance that changes the published bytes belongs under `fix(search):`, and a change a visitor can see on
+the demo belongs under `fix(example):`. AGENTS.md §6 rules 2 and 3 explain why.
 
 Verified against the repository on **2026-07-30** (macOS arm64, Node 24.18.0, Rust 1.97.1).
 
@@ -167,6 +172,25 @@ searching a large corpus grows monotonically.
 
 This is what remained of item **11** after [decision 0018](decisions/0018-line-oriented-tail-buffer.md) fixed
 its O(n²) half; renumbered rather than reopened, because item numbers are stable and 11 is now in *Done*.
+
+### 20. `NPM_TOKEN` is a long-lived credential — `.github/workflows/publish-*.yml`
+
+Both publishes authenticate with a maintainer token stored as a repository secret, which does not expire
+until someone rotates it. npm's **trusted publishing** replaces it with a short-lived OIDC token minted per
+run, leaving no credential in the repository at all.
+
+Deliberately deferred rather than done alongside release-please: the first release-please run was already the
+largest release this repository has ever cut, and stacking a second new authentication mechanism onto it
+would have made a failure ambiguous between the two. `provenance: true` shipped in the meantime, so the
+tarballs already carry an attestation naming the workflow and commit that built them — this item is only
+about removing the token.
+
+Two things to establish before starting, neither of which is answerable from the docs: whether npm matches
+the trusted publisher on the `workflow_ref` (top-level) or `job_workflow_ref` (reusable file) claim, and
+whether the publish action performs the OIDC exchange at all. The answer to the first decides whether
+`release.yml` or `publish-*.yml` is the registered publisher — and since only one can be, **it will break the
+`workflow_dispatch` retry path for npm**, which exists precisely because a failed publish cannot be retried
+by re-running `release.yml`.
 
 ---
 

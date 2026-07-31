@@ -163,8 +163,40 @@ Then, in rough order of how likely each is to bite:
   still lives in [`docs/decisions/`](docs/decisions/) — that is what keeps comments short — but the comment has
   to make sense without it.
 
-Releases fire from pushed git tags and publish under the maintainer's npm token. **Version bumps and
-publishing are maintainer-only** — please do not include them in a pull request.
+## Commit messages decide what gets released
+
+This repository uses [Conventional Commits](https://www.conventionalcommits.org/), and since releases are cut
+by [release-please](https://github.com/googleapis/release-please) they are not just a convention any more —
+the type in your subject line decides whether your change ships at all.
+
+| Type | Releases? | In the changelog? |
+|---|---|---|
+| `fix:` | patch | yes |
+| `feat:` | minor | yes |
+| `feat!:` / `BREAKING CHANGE:` | minor, while the version is `0.x` | yes, called out |
+| `perf:`, `refactor:`, `build:`, `deps:` | patch | yes |
+| `chore:`, `docs:`, `ci:`, `test:`, `style:` | no | no |
+
+Two traps worth knowing before you pick one:
+
+- **Toolchain or dependency work that changes the published bytes is a `fix`, not a `chore`.** Dropping the
+  ripgrep fork moved the `.wasm` by ~342 KB and silently fixed a bug; committed as `chore:` it would neither
+  release nor appear anywhere a consumer looks.
+- **A change to the demo that a visitor can see is `fix(example):` or `feat(example):`, not `docs:`.** The
+  site deploys on release, so a `docs:`-typed copy fix will sit on `main` until something else releases.
+  `docs:` is for repository documentation.
+
+Scope by package — `search`, `netgrep`, `example` — though release-please picks the component from the paths
+you touched, not from the scope.
+
+## Releases
+
+Releases are cut by release-please. It keeps a "chore: release main" pull request up to date as commits land;
+merging it tags, publishes both npm packages and deploys the demo, in one run and in that order.
+
+**Version bumps and publishing are maintainer-only** — please do not include them in a pull request. Do not
+edit versions in `Cargo.toml`, `package.json` or `.release-please-manifest.json` by hand either; those files
+are written by the bot, and an edit makes them drift in a way `pnpm verify:pack` fails on.
 
 ## Where things live
 

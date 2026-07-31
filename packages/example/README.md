@@ -30,8 +30,13 @@ base-path mistake fails here rather than only after deploying.
 
 ## Deployment
 
-`.github/workflows/deploy-pages.yml`, on every push to `main`, gated on the full `test-and-lint.yml` graph.
-Nothing is deployed from a red build.
+`.github/workflows/deploy-pages.yml`, called by `release.yml` when any package releases — so the site shows
+what was released rather than what was merged. `release.yml` runs the full `test-and-lint.yml` graph before
+anything is tagged, so nothing is deployed from a red build.
+
+It used to deploy on every push to `main`, which meant the demo ran code no consumer could install. A
+demo-only change therefore has to be committed as `fix(example):` or `feat(example):` to ship — `docs:`
+neither releases nor deploys.
 
 The custom domain lives in **Settings → Pages → Custom domain**, not in this repository: a deploy driven by
 a GitHub Actions workflow ignores a `CNAME` file in the artifact, so there is deliberately none in `public/`.

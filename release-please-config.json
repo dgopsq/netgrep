@@ -1,0 +1,69 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+
+  "//": "Tags match the four already in the repo (search-0.1.5, netgrep-0.1.5): component included, no `v`. release-please would otherwise write search-v0.2.0 next to search-0.1.5.",
+  "include-component-in-tag": true,
+  "include-v-in-tag": false,
+
+  "//separate-pull-requests": "One PR covering every component. Three PRs would have to be merged in dependency order by hand, which is the ordering problem release.yml exists to remove.",
+  "separate-pull-requests": false,
+
+  "//bump-minor-pre-major": "A breaking change gives 0.3.0, not 1.0.0. 1.0.0 is a claim this project does not make by accident — reaching it needs an explicit `Release-As: 1.0.0` footer.",
+
+  "//changelog-sections": "`hidden` decides what RELEASES, not only what is listed: release-please skips a release whose notes come out empty, and any visible type that is not feat or breaking falls through to a patch bump. Hiding a type is therefore how `chore` and `docs` ship nothing. Set once here; every component inherits it.",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features" },
+    { "type": "fix", "section": "Bug fixes" },
+    { "type": "perf", "section": "Performance" },
+    { "type": "refactor", "section": "Internal changes" },
+    { "type": "build", "section": "Build & toolchain" },
+    { "type": "deps", "section": "Dependencies" },
+    { "type": "chore", "hidden": true },
+    { "type": "docs", "hidden": true },
+    { "type": "ci", "hidden": true },
+    { "type": "test", "hidden": true },
+    { "type": "style", "hidden": true }
+  ],
+  "bump-minor-pre-major": true,
+
+  "packages": {
+    "packages/search": {
+      "release-type": "rust",
+      "component": "search",
+      "//": "Cargo.toml is the source of truth, but scripts/verify-pack.mjs fails the build when it disagrees with the npm wrapper — and post_build.js, which normally syncs them, does not run in CI's `bundle` job. So both must move in the same commit.",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
+
+    "packages/netgrep": {
+      "release-type": "node",
+      "component": "netgrep"
+    },
+
+    "packages/example": {
+      "release-type": "node",
+      "component": "example",
+      "//": "Private and never published. It is a component so that a demo-only change produces a release, which is what triggers the Pages deploy — without one the live site would freeze until a library change happened along. Its version means `which build of the site`, nothing more.",
+      "//initial-version": "There is no example-* tag, so this is a first release — and release-please's default first version is 1.0.0, which would put the demo a major ahead of the library it demonstrates.",
+      "initial-version": "0.1.0"
+    }
+  },
+
+  "//plugins": "@netgrep/netgrep depends on @netgrep/search via `workspace:*`, which pnpm rewrites to an EXACT version at pack time — so a search release nobody pairs with a netgrep release reaches no consumer. Locking the two versions together makes that pin correct by construction. The cost is a no-op republish of one package when only the other changed.",
+  "//cargo-workspace": "Updates the WORKSPACE-ROOT Cargo.lock; the rust strategy only looks for a lock inside the package directory, and a stale one gets rewritten by cargo on the next build after every release. An `extra-files` toml entry cannot replace this — jsonpath-plus disables filter expressions, so the path matched nothing and wrote nothing, silently. Its warning that the root Cargo.toml has no [package.name] is expected: that file is a virtual workspace.",
+  "plugins": [
+    {
+      "type": "cargo-workspace"
+    },
+    {
+      "type": "linked-versions",
+      "groupName": "netgrep",
+      "components": ["search", "netgrep"]
+    }
+  ]
+}

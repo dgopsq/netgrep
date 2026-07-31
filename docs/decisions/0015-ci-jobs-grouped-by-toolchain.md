@@ -108,3 +108,21 @@ rediscovered.
 **Superseded within this PR:** the nine-job version described above. It is recorded here rather than
 forgotten because the measurement is the useful part — *parallelising CI in this repository does not make it
 faster*, and the next person to reach for it should know that before spending the runner time.
+
+---
+
+## Amendment: `main` is checked once, and the tag gates are gone (2026-07-31)
+
+Two statements above have been overtaken by [0021](0021-release-please.md).
+
+**"A push to `main` and a release tag are gates"** — there are no release tags to gate on any more. Nothing
+triggers on a tag: release-please tags with `GITHUB_TOKEN`, which GitHub refuses to trigger workflows from.
+The `concurrency` rule is unchanged and still right, because a run called by `release.yml` carries the
+caller's `push` event and decides whether release-please may tag.
+
+**`test-and-lint.yml` lost its `push: main` trigger.** It runs on pull requests and by `workflow_call`. That
+removed a duplication this record did not notice: a push to `main` ran the whole graph twice, once here and
+once inside `deploy-pages.yml`, in two concurrency groups that could not cancel one another.
+
+The note about the publish workflows rebuilding the WASM still holds, and so does the reasoning — they are now
+reusable workflows called by `release.yml`, and they still rebuild.

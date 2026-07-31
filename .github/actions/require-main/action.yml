@@ -1,0 +1,18 @@
+name: 'Require main'
+
+description: >
+  Fail a manually dispatched run whose ref is not `main`. The release-facing
+  workflows carry no test gate of their own — `release.yml` runs the graph once
+  before anything is tagged — so `workflow_dispatch` would otherwise publish, or
+  deploy, whatever ref the operator picked.
+
+runs:
+  using: composite
+  steps:
+    # `github.event_name` inside a called workflow is the CALLER's event, so
+    # this is inert on the orchestrated path and fires only on a real dispatch.
+    - if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+      run: |
+        echo '::error::Manual runs are only allowed from main, not ${{ github.ref }}.'
+        exit 1
+      shell: bash

@@ -1,0 +1,107 @@
+on:
+  push:
+    branches:
+      - main
+
+name: Release
+
+# Merging release-please's PR is what releases. Nothing here fires on a tag:
+# release-please creates tags with GITHUB_TOKEN, and GitHub refuses to trigger
+# workflows from events pushed with that token, so a `push: tags` trigger would
+# silently never run. Publishing therefore happens in THIS run, off the action's
+# outputs.
+#
+# That also settles the ordering rule. `@netgrep/netgrep` depends on
+# `@netgrep/search` via `workspace:*`, which pnpm rewrites to an exact version
+# at pack time, so the wrapper does not install until the core is on npm. Two
+# tag-triggered workflows would race; `needs` cannot.
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Runs BEFORE release-please, which is the reverse of the usual wiring. The
+  # action tags unconditionally, so with the usual order a red `main` leaves a
+  # tag and a public GitHub Release for a version that never reached npm. Here a
+  # tag only ever exists for a commit that went green.
+  #
+  # This is also the only thing checking `main` now: test-and-lint.yml used to
+  # carry its own `push: main` trigger, which ran the whole graph a second time
+  # alongside deploy-pages.yml's copy of it.
+  test-and-lint:
+    uses: ./.github/workflows/test-and-lint.yml
+
+  release-please:
+    needs: test-and-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Scoped to this job so the called workflows above and below do not run with
+    # write access.
+    permissions:
+      contents: write
+      pull-requests: write
+
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      search_released: ${{ steps.release.outputs['packages/search--release_created'] }}
+      netgrep_released: ${{ steps.release.outputs['packages/netgrep--release_created'] }}
+
+    steps:
+      # config-file and manifest-file default to release-please-config.json and
+      # .release-please-manifest.json, which is where they live.
+      - id: release
+        uses: googleapis/release-please-action@v4
+
+  # `id-token: write` is granted here, not just inside the called workflow: a
+  # reusable workflow cannot escalate past its caller, so without this the job
+  # fails asking for a permission it is only allowed as `none`.
+  publish-search:
+    needs: release-please
+    if: needs.release-please.outputs.search_released == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-search.yml
+    secrets: inherit
+
+  # `needs: publish-search` is the ordering rule, enforced. The two are locked to
+  # one version by the linked-versions plugin, so they always release together
+  # and this never skips for want of a search release.
+  publish-netgrep:
+    needs:
+      - release-please
+      - publish-search
+    if: needs.release-please.outputs.netgrep_released == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-netgrep.yml
+    secrets: inherit
+
+  # Deploys on ANY component's release, not just the library's — an example-only
+  # release has to reach the site, and a library release has to reach it too, or
+  # the demo would sit on a build of a library it no longer matches.
+  #
+  # `always()` because the publish jobs are legitimately skipped when only the
+  # example released; the `contains` guards then stop a FAILED publish from
+  # being treated the same way as a skipped one.
+  deploy:
+    needs:
+      - release-please
+      - publish-search
+      - publish-netgrep
+    if: >-
+      always()
+      && needs.release-please.outputs.releases_created == 'true'
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-pages.yml

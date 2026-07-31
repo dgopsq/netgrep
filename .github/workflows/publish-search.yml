@@ -1,7 +1,11 @@
 on:
-  push:
-    tags:
-      - search-**
+  # Called by release.yml when release-please created a `search-*` release, and
+  # runnable by hand from the Actions UI when a publish failed after the tag was
+  # already created — re-running release.yml would not help, because
+  # release-please reports release_created: false the second time and every
+  # publish job skips.
+  workflow_call:
+  workflow_dispatch:
 
 name: Publish @netgrep/search
 
@@ -9,18 +13,23 @@ permissions:
   contents: read
 
 jobs:
-  # Runs the whole split job graph. `needs` below gates on the called workflow
-  # as a whole, so a job added there gates this one too, with nothing to change
-  # here.
-  test-and-lint:
-    uses: ./.github/workflows/test-and-lint.yml
-
   publish:
-    needs: test-and-lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    permissions:
+      contents: read
+      # Provenance: npm records which workflow, commit and repository built this
+      # tarball, checkable afterwards with `npm audit signatures`.
+      id-token: write
+
     steps:
+      # There is deliberately no test gate here — release.yml runs the whole
+      # graph before release-please tags anything, and repeating it in each
+      # publish workflow would run it four times per release. The guard below is
+      # what that costs: it holds a manual publish to main.
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/require-main
 
       # Rebuilt here rather than taken from the `wasm-pkg` artefact the test
       # workflow uploaded. The artefact would be the exact bytes that passed,
@@ -36,11 +45,14 @@ jobs:
           version: 'v0.13.1'
       - run: pnpm build:wasm
 
-      - uses: JS-DevTools/npm-publish@v1
+      # v3's default `strategy: upgrade` is what `greater-version-only: true`
+      # meant on v1, so a re-run over an already-published version is a no-op
+      # rather than a failure. The input was renamed, not dropped.
+      - uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
-          greater-version-only: true
+          provenance: true
           # The hand-written wrapper manifest is what gets published, not the
           # one wasm-pack generates into pkg/. Its version is synced from
           # Cargo.toml by scripts/post_build.js.

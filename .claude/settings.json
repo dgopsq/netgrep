@@ -65,7 +65,13 @@
       "Bash(git push origin main:*)",
       "Bash(git push origin master:*)",
       "Bash(git push --tags:*)",
-      "Bash(git push origin --tags:*)"
+      "Bash(git push origin --tags:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh release create:*)",
+      "Bash(gh release edit:*)",
+      "Bash(gh release delete:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh api:*)"
     ]
   }
 }

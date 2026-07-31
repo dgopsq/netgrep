@@ -356,9 +356,11 @@ that only webpack supported, and that failed *silently* under Vite — see
 
 | Workflow | Trigger | Action |
 |---|---|---|
-| `test-and-lint.yml` | push/PR to `main`, or called | Five jobs plus an aggregate — see below |
-| `publish-search.yml` | tag `search-**` | test-and-lint → `build:wasm` → npm publish `packages/search/package.json` |
-| `publish-netgrep.yml` | tag `netgrep-**` | test-and-lint → `build:wasm` → `build` → npm publish `packages/netgrep/package.json` |
+| `test-and-lint.yml` | PR to `main`, or called | Five jobs plus an aggregate — see below |
+| `release.yml` | push to `main` | test-and-lint → release-please → publishes → deploy |
+| `publish-search.yml` | called, or dispatched | `build:wasm` → npm publish `packages/search/package.json` |
+| `publish-netgrep.yml` | called, or dispatched | `build:wasm` → `build` → npm publish `packages/netgrep/package.json` |
+| `deploy-pages.yml` | called, or dispatched | `build:wasm` → `build` → `build:example` → Pages |
 
 `test-and-lint.yml` groups its work **by toolchain**, which is what a job actually pays to install:
 
@@ -380,9 +382,31 @@ reason to have more jobs. A job-per-command version was built and measured first
 ~110s sequential, at twice the runner time. See
 [decision 0015](decisions/0015-ci-jobs-grouped-by-toolchain.md).
 
-Both publish workflows use `greater-version-only: true`, so a forgotten version bump makes the publish a
-silent no-op rather than a loud failure. They rebuild the WASM rather than take the tested artefact, on
-purpose — the trade-off is noted in `publish-search.yml`.
+`release.yml` is the release pipeline. It runs the test graph, then release-please, then the two publishes in
+dependency order, then the deploy — all in one run, gated on release-please's `*--release_created` outputs
+rather than on tags. Three properties of it are load-bearing:
+
+- **Tests run before release-please.** The action tags unconditionally, so the conventional order leaves a
+  tag and a public GitHub Release for a version that never reached npm.
+- **Nothing triggers on a tag.** release-please tags with `GITHUB_TOKEN`, and GitHub will not trigger a
+  workflow from an event pushed with it, so a `push: tags` trigger would silently never fire.
+- **`publish-netgrep` needs `publish-search`**, because `workspace:*` resolves to an exact version at pack
+  time and the wrapper does not install before the core is on npm.
+
+The three called workflows also accept `workflow_dispatch`, because a publish that fails *after* the tag
+exists cannot be retried by re-running `release.yml` — release-please reports `release_created: false` the
+second time and every publish job skips. They carry no test gate of their own, so each refuses a manual run
+whose ref is not `main`.
+
+Both publish workflows use `JS-DevTools/npm-publish@v3`, whose default `strategy: upgrade` makes a re-run
+over an already-published version a no-op rather than a failure, and both set `provenance: true`, so npm
+records which workflow and commit built the tarball. They rebuild the WASM rather than take the tested
+artefact, on purpose — the trade-off is noted in `publish-search.yml`.
+
+Versions come from `release-please-config.json`: `search` and `netgrep` are locked to one number by the
+`linked-versions` plugin, `example` versions on its own, and the `cargo-workspace` plugin updates the
+workspace-root `Cargo.lock` — which the `rust` strategy alone misses, because it only looks for a lock inside
+the package directory.
 
 `verify:pack` exists because every other check inspects the working tree, while the tarball is the only
 artefact a consumer ever receives. That gap is how a published package containing no WASM became possible.

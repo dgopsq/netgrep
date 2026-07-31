@@ -1,7 +1,4 @@
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -10,9 +7,14 @@ on:
 name: Test and lint workflow
 
 # A superseded run has nothing left to tell us, so cancel it — but only on pull
-# requests. A push to `main` and a release tag both arrive as `push`, and those
-# runs are gates rather than feedback; cancelling one would report a green
-# commit that was never fully checked.
+# requests. Called from release.yml the event is the caller's `push`, and that
+# run is a gate rather than feedback: it decides whether release-please may tag,
+# so cancelling one would tag a commit that was never fully checked.
+#
+# This no longer triggers on `push: main` at all. release.yml calls it on every
+# push to main instead, so main is still checked exactly once — it used to be
+# checked twice, here and again inside deploy-pages.yml, in two concurrency
+# groups that could not cancel each other.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
