@@ -1,7 +1,10 @@
 on:
-  push:
-    tags:
-      - netgrep-**
+  # Called by release.yml after publish-search.yml has finished: `workspace:*`
+  # resolves to an exact version at pack time, so this package does not install
+  # until that one is on npm. Also runnable by hand — see publish-search.yml for
+  # why re-running release.yml is not a retry.
+  workflow_call:
+  workflow_dispatch:
 
 name: Publish @netgrep/netgrep
 
@@ -9,17 +12,27 @@ permissions:
   contents: read
 
 jobs:
-  # Runs the whole split job graph. `needs` below gates on the called workflow
-  # as a whole, so a job added there gates this one too, with nothing to change
-  # here.
-  test-and-lint:
-    uses: ./.github/workflows/test-and-lint.yml
-
   publish:
-    needs: test-and-lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    permissions:
+      contents: read
+      # Provenance: npm records which workflow, commit and repository built this
+      # tarball, checkable afterwards with `npm audit signatures`.
+      id-token: write
+
     steps:
+      # No test gate here either; release.yml runs the whole graph before
+      # anything is tagged. See publish-search.yml. That does leave the manual
+      # trigger as a button that publishes whatever ref was picked, so the ref
+      # is checked instead.
+      - name: Refuse a manual run from anywhere but main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo '::error::Manual publish is only allowed from main, not ${{ github.ref }}.'
+          exit 1
+
       - uses: actions/checkout@v4
 
       # Rebuilt rather than taken from the test workflow's `wasm-pkg` artefact —
@@ -36,11 +49,14 @@ jobs:
       - run: pnpm build:wasm
       - run: pnpm build
 
-      - uses: JS-DevTools/npm-publish@v1
+      # v3's default `strategy: upgrade` is what `greater-version-only: true`
+      # meant on v1, so a re-run over an already-published version is a no-op
+      # rather than a failure. The input was renamed, not dropped.
+      - uses: JS-DevTools/npm-publish@v3
         with:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
-          greater-version-only: true
+          provenance: true
           # Hand-written manifest; the Nx tsc executor used to synthesise one
           # into dist/.
           package: ./packages/netgrep/package.json
