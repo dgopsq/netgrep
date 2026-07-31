@@ -15,7 +15,7 @@ reasoning got wrong.
 |---|---|---|
 | [0001](0001-fork-ripgrep-for-wasm.md) | Depend on a fork of ripgrep to reach `wasm32` | **Superseded** — fork dropped; the problem stopped existing |
 | [0002](0002-search-while-downloading.md) | Search each HTTP chunk as it arrives | Accepted — the project's defining property |
-| [0003](0003-boolean-only-results.md) | Return a boolean, not match details | Accepted |
+| [0003](0003-boolean-only-results.md) | Return a boolean, not match details | Accepted — amended by 0020 (**the first matching line is available on request**; everything else is still refused) |
 | [0004](0004-two-package-split.md) | Ship two npm packages, not one | Accepted — amended |
 | [0005](0005-esm-only-distribution.md) | ESM only | Accepted — amended; **a bundler is no longer configured** |
 | [0006](0006-in-memory-cache.md) | Cache downloaded bytes in memory, on by default | Accepted — amended by 0018 (**an entry is written only from a drained stream**, which closed the poisoned-prefix defect) and by 0019 (**the flag now also decides whether concurrent downloads of one url are shared**) |
@@ -32,6 +32,7 @@ reasoning got wrong.
 | [0017](0017-example-as-hosted-demo.md) | The example becomes the hosted demo, and goes back on the maintenance path | Accepted — **reverses the example's frozen-dependency exemption**; amended — custom domain, base path now `/` |
 | [0018](0018-line-oriented-tail-buffer.md) | Retain the incomplete trailing *line* between chunks, and cache only a drained stream | Accepted — closes the chunk-boundary and poisoned-cache defects; **amends 0006** |
 | [0019](0019-in-flight-fetch-registry.md) | De-duplicate concurrent downloads of one url, but only when the cache is on | Accepted — closes the duplicate-fetch defect; **the cache entry is the handover**, so with the cache off both callers still fetch |
+| [0020](0020-the-matching-line.md) | Return the first matching line, opt-in per search | Accepted — **the first widening of the public API**; **amends 0003**, and names the match details still refused |
 
 ## Format
 

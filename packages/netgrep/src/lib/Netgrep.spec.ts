@@ -96,20 +96,30 @@ function serveExcept(failing: string, message = 'nope') {
 // `vi.hoisted` is required, not stylistic: `vi.mock` is lifted above the module
 // body, and its factory runs while `./Netgrep.js` is being imported — before a
 // plain `const` here would have been initialised.
-const { mockSearch } = vi.hoisted(() => ({ mockSearch: vi.fn() }));
+const { mockSearch, mockSearchLine } = vi.hoisted(() => ({
+  mockSearch: vi.fn(),
+  mockSearchLine: vi.fn(),
+}));
 
 const mockFetch = vi.fn();
 
-// Mocking the `search_bytes` function. `default` stands in for the WASM
+// Mocking the engine's two entry points. `default` stands in for the WASM
 // module's `init()`, which Netgrep awaits before every search.
 //
 // The arguments are forwarded rather than dropped so that tests can assert
 // WHICH bytes reached the engine — the only way to tell a cache hit from a
-// re-fetch that happened to return the same thing.
+// re-fetch that happened to return the same thing — and, for
+// `search_bytes_line`, which cap did.
+//
+// Both are mocked even though most tests touch only one, because WHICH of them
+// a search calls is itself behaviour: `captureLine` is meant to leave the
+// boolean path untouched, and that is only assertable if the other is
+// observable.
 vi.mock('@netgrep/search', () => {
   return {
     default: () => Promise.resolve(),
     search_bytes: (...args: Array<unknown>) => mockSearch(...args),
+    search_bytes_line: (...args: Array<unknown>) => mockSearchLine(...args),
   };
 });
 
@@ -761,6 +771,226 @@ describe('Netgrep', () => {
           signal: controller.signal,
         });
       }
+    });
+  });
+
+  /**
+   * `captureLine` — BACKLOG 19, decision 0020.
+   *
+   * What a captured line CONTAINS is the engine's business and is pinned in
+   * `packages/search/tests/search.rs`; what reaches it through the real
+   * boundary is `Netgrep.integration.spec.ts`. What is left for here is the
+   * wiring, and the wiring is where this feature can go wrong quietly: calling
+   * the wrong entry point, mistaking an empty line for a miss, or handing Rust
+   * a `usize` it cannot hold.
+   */
+  describe('Netgrep::captureLine', () => {
+    const NG = new Netgrep({ enableMemoryCache: false });
+    const url = 'url';
+    const pattern = 'pattern';
+
+    beforeEach(() => {
+      mockFetch.mockClear();
+      mockSearch.mockClear();
+      mockSearchLine.mockClear();
+
+      mockFetch.mockImplementation(() =>
+        Promise.resolve({ body: genReadableStreamFromString('test\n') }),
+      );
+    });
+
+    it('leaves the boolean path completely alone by default', async () => {
+      mockSearch.mockReturnValue(true);
+
+      const result = await NG.search(url, pattern);
+
+      // The whole promise of the opt-in: not called, so nothing was allocated,
+      // decoded or copied out of WebAssembly.
+      expect(mockSearchLine).not.toHaveBeenCalled();
+      expect(mockSearch).toHaveBeenCalled();
+
+      // And the key is absent rather than `null`, so `'line' in result` agrees
+      // with what the type says.
+      expect(result).not.toHaveProperty('line');
+    });
+
+    it('returns the line the engine found', async () => {
+      mockSearchLine.mockReturnValue('a matching line');
+
+      const result = await NG.search(url, pattern, undefined, {
+        captureLine: true,
+      });
+
+      expect(mockSearch).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        url,
+        pattern,
+        result: true,
+        line: 'a matching line',
+        metadata: undefined,
+      });
+    });
+
+    it('reports no match as `result: false` and `line: null`', async () => {
+      mockSearchLine.mockReturnValue(undefined);
+
+      await expect(
+        NG.search(url, pattern, undefined, { captureLine: true }),
+      ).resolves.toMatchObject({ result: false, line: null });
+    });
+
+    it('treats an EMPTY line as a match, not a miss', async () => {
+      // ⚠️ The trap this whole design has to survive. A pattern matching an
+      // empty line returns `''`, which is falsy — `if (line)` in the streaming
+      // loop would turn a match into a miss, silently, and only for blank
+      // lines.
+      mockSearchLine.mockReturnValue('');
+
+      await expect(
+        NG.search(url, pattern, undefined, { captureLine: true }),
+      ).resolves.toMatchObject({ result: true, line: '' });
+    });
+
+    it('answers from the memory cache with a line too', async () => {
+      const cached = new Netgrep({ enableMemoryCache: true });
+
+      // The first search must MISS. Since decision 0018 the cache is only ever
+      // written from a drained stream, so a search that resolves early leaves
+      // nothing behind — a match would re-fetch here and the assertion below
+      // would be about the wrong thing.
+      mockSearchLine.mockReturnValueOnce(undefined);
+      mockSearchLine.mockReturnValue('from the cached buffer');
+
+      await cached.search(url, pattern, undefined, { captureLine: true });
+      const second = await cached.search(url, pattern, undefined, {
+        captureLine: true,
+      });
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(second).toMatchObject({
+        result: true,
+        line: 'from the cached buffer',
+      });
+    });
+
+    describe('the cap', () => {
+      const capOf = (call: number) => mockSearchLine.mock.calls[call][2];
+
+      beforeEach(() => mockSearchLine.mockReturnValue('x'));
+
+      it('defaults to 4096', async () => {
+        await NG.search(url, pattern, undefined, { captureLine: true });
+
+        expect(capOf(0)).toBe(4096);
+      });
+
+      it('passes a caller-supplied value through', async () => {
+        await NG.search(url, pattern, undefined, {
+          captureLine: true,
+          maxLineBytes: 120,
+        });
+
+        expect(capOf(0)).toBe(120);
+      });
+
+      it('clamps values a Rust `usize` could not hold', async () => {
+        // Not rejected, because wasm-bindgen does not validate the number: a
+        // negative would be reinterpreted as an enormous positive and a
+        // fraction would be truncated somewhere less visible than here.
+        for (const maxLineBytes of [0, -1, -4096, 0.5]) {
+          await NG.search(url, pattern, undefined, {
+            captureLine: true,
+            maxLineBytes,
+          });
+        }
+
+        expect([capOf(0), capOf(1), capOf(2), capOf(3)]).toEqual([1, 1, 1, 1]);
+      });
+
+      it('floors a fractional value rather than passing it on', async () => {
+        await NG.search(url, pattern, undefined, {
+          captureLine: true,
+          maxLineBytes: 12.7,
+        });
+
+        expect(capOf(0)).toBe(12);
+      });
+    });
+
+    describe('in a batch', () => {
+      it('carries the line onto every result', async () => {
+        mockSearchLine.mockReturnValue('found here');
+
+        const results = await NG.searchBatch(
+          [{ url: 'a' }, { url: 'b' }],
+          pattern,
+          {
+            captureLine: true,
+          },
+        );
+
+        expect(results).toMatchObject([
+          { url: 'a', result: true, line: 'found here', error: null },
+          { url: 'b', result: true, line: 'found here', error: null },
+        ]);
+      });
+
+      it('gives a failed url `line: null`, never a line', async () => {
+        // An error is not a match, so a caller who narrows on `result` must not
+        // find a line waiting here.
+        mockSearchLine.mockReturnValue('found here');
+        serveExcept('broken');
+
+        const results = await NG.searchBatch(
+          [{ url: 'ok' }, { url: 'broken' }],
+          pattern,
+          { captureLine: true },
+        );
+
+        expect(results).toMatchObject([
+          { url: 'ok', result: true, line: 'found here', error: null },
+          { url: 'broken', result: false, line: null, error: 'nope' },
+        ]);
+      });
+
+      it('omits `line` from a failed url when it was never asked for', async () => {
+        mockSearch.mockReturnValue(true);
+        serveExcept('broken');
+
+        const results = await NG.searchBatch([{ url: 'broken' }], pattern);
+
+        expect(results[0]).not.toHaveProperty('line');
+      });
+    });
+
+    /**
+     * Type-level assertions. These run no code — a `@ts-expect-error` that
+     * stops being an error fails `pnpm typecheck`, which is the point: the
+     * shape of the result is the feature's main safety property, and nothing
+     * at runtime can check it.
+     */
+    it('states in the type whether a line was asked for', async () => {
+      const plain = await NG.search(url, pattern);
+      const _result: boolean = plain.result;
+      // @ts-expect-error no `line` key exists without `captureLine`
+      plain.line;
+
+      const captured = await NG.search(url, pattern, undefined, {
+        captureLine: true,
+      });
+
+      if (captured.result) {
+        // Narrowed to `string` — no null check, because a line exists exactly
+        // when there was a match.
+        const _line: string = captured.line;
+      } else {
+        const _none: null = captured.line;
+      }
+
+      // @ts-expect-error a cap governs nothing without `captureLine`
+      await NG.search(url, pattern, undefined, { maxLineBytes: 100 });
+
+      expect(true).toBe(true);
     });
   });
 });

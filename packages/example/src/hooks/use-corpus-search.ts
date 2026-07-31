@@ -8,9 +8,28 @@ import { storyUrl } from '@/lib/story-url';
  */
 export type StoryStatus = 'idle' | 'searching' | 'match' | 'miss' | 'error';
 
+/**
+ * How much of a matching line the demo asks for.
+ *
+ * Well under the library's 4 KB default, because this page renders the line in
+ * two clamped rows and anything past that is copied out of WebAssembly only to
+ * be hidden by CSS. The corpus is prose — its longest line is 76 bytes — so in
+ * practice nothing here is ever truncated; the cap is here because a demo that
+ * ignores its own documented knobs teaches the wrong thing.
+ */
+const MAX_LINE_BYTES = 240;
+
 export type SearchState = {
   /** Status per story id. */
   statuses: Record<string, StoryStatus>;
+  /**
+   * The first matching line, per story id, for stories that matched.
+   *
+   * Kept across runs for the same reason `statuses` is — see the
+   * stale-while-revalidate note below. A card's line is replaced when that
+   * card's own new answer arrives, not when the query changes.
+   */
+  lines: Record<string, string>;
   /** The order the grid renders in — see `settle()` below. */
   order: string[];
   matched: number;
@@ -62,6 +81,7 @@ const alphabetical = stories.map((story) => story.id);
 function idleState(order: string[]): SearchState {
   return {
     statuses: {},
+    lines: {},
     order,
     matched: 0,
     resolved: 0,
@@ -170,6 +190,11 @@ export function useCorpusSearch(pattern: string): SearchState {
               ? 'match'
               : 'miss';
 
+          // Read off the discriminant rather than off `status`: narrowing
+          // `result.result` is what gives `result.line` its `string` type, and
+          // the derived `status` above carries none of that.
+          const line = result.result ? result.line : null;
+
           const statuses = { ...prev.statuses, [id]: status };
           const matched = prev.matched + (status === 'match' ? 1 : 0);
           const resolved = prev.resolved + 1;
@@ -177,6 +202,9 @@ export function useCorpusSearch(pattern: string): SearchState {
 
           return {
             statuses,
+            // A miss leaves the previous line in place, exactly as it leaves
+            // the previous status: the card is repainted by its own answer.
+            lines: line === null ? prev.lines : { ...prev.lines, [id]: line },
             order: done ? settle(statuses) : prev.order,
             matched,
             resolved,
@@ -190,7 +218,11 @@ export function useCorpusSearch(pattern: string): SearchState {
           };
         });
       },
-      { signal: controller.signal },
+      {
+        signal: controller.signal,
+        captureLine: true,
+        maxLineBytes: MAX_LINE_BYTES,
+      },
     );
 
     return () => controller.abort();

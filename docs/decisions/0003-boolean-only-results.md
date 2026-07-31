@@ -1,6 +1,9 @@
 # 0003 — Return a boolean, not match details
 
-**Status:** Accepted.
+**Status:** Accepted, then **amended by [0020](0020-the-matching-line.md)** (2026-07-30), which added the
+first matching line as an opt-in. The default is still a boolean and the reasoning below still explains why;
+what changed is that "and nothing else" became "unless you ask". Read 0020 for what is returned today, and for
+the list of match details that remain refused.
 
 ## Context
 
@@ -28,8 +31,10 @@ a remote file."*
 ## Consequences
 
 - Minimal WASM/JS boundary traffic: one pointer, one length, one bool.
-- No snippets, no highlighting, no ranking, no match counts — so netgrep cannot back a results UI that shows
-  *where* or *how often* a term appears without a second pass in JavaScript.
+- ~~No snippets, no highlighting, no ranking, no match counts — so netgrep cannot back a results UI that shows
+  *where* or *how often* a term appears without a second pass in JavaScript.~~ **Amended 2026-07-30** by
+  [0020](0020-the-matching-line.md): the first matching line is available on request, which removes the second
+  pass for the snippet case. Highlighting, ranking and match counts are still refused, and 0020 says why.
 - Because only membership is needed, the searcher can stop at the first match. Combined with
   [0002](0002-search-while-downloading.md), that is what makes early resolution possible at all.
 - ~~`MemSink` counting rather than short-circuiting is slightly wasteful — `Sink::matched` returns `Ok(true)`

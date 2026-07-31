@@ -1,8 +1,13 @@
 # Maintenance backlog
 
 **Project status: maintained, conservative.** This list is scoped to keeping netgrep correct, buildable and
-releasable. It contains **no feature work** — no new APIs, no match details, no Node.js support. If something
-here seems to need a new feature, stop and ask rather than expanding scope.
+releasable, and everything currently *open* on it is a defect or a piece of health work.
+
+**Feature work is not planned here.** It starts as an issue, is argued there, and lands with a decision record
+that also says what it does *not* open the door to — see
+[`../AGENTS.md` §1](../AGENTS.md#1-what-this-project-is). A completed feature is recorded in *Done* below like
+anything else, so the numbering stays a single sequence. If an item here seems to need a new feature, stop and
+open an issue rather than expanding its scope.
 
 Item numbers are stable and referenced from code comments and other documents. **Do not renumber.** Completed
 items move to the bottom rather than disappearing.
@@ -47,20 +52,26 @@ residual, recorded as **3g** below.
 
 What 3a's fix does not cover. `splitAtLastLine` retains the incomplete trailing *line* between chunks, which is
 exact — a match cannot span a `\n`. But a line with no terminator in it would buffer an entire response, so
-past a 64 KB ceiling the tail degrades to a plain window on the last 64 KB. Two consequences, in both
+past a 64 KB ceiling the tail degrades to a plain window on the last 64 KB. Three consequences, in both
 directions:
 
 - **A match longer than 64 KB is lost**, because it starts before the retained window and ends after the buffer.
 - **`^` can match where no line begins.** A windowed tail starts mid-line and the engine cannot be told so, so
   it anchors to the window's first byte. A false positive, unlike every other entry in this list.
+- **A captured line is a mid-line fragment.** Added by item 19: with `captureLine` on, the string returned for
+  a match inside an over-long line begins at whatever byte the window fell on, so it is not a line. `result` is
+  still right. Returning `null` instead was rejected in [decision 0020](decisions/0020-the-matching-line.md) —
+  it would cost every consumer a null check on a branch the type has already narrowed, to describe a case only
+  minified input reaches.
 
 Needs one line longer than 64 KB **and** a match spanning most of it, so it is unreachable in hand-written
 text: the demo corpus is 2.6 MB of prose whose longest line is 76 bytes. Reachable in minified JavaScript or a
 single-line data dump.
 
-Pinned by the two `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each with the control case that must not
-regress — a match arriving complete in **one** chunk is found, because the buffer is searched whole before the
-window is taken, and `^` does not match when the window is never flushed on its own.
+Pinned by the three `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each with the control case that must
+not regress — a match arriving complete in **one** chunk is found, because the buffer is searched whole before
+the window is taken; `^` does not match when the window is never flushed on its own; and a line captured from a
+single chunk starts where the line starts.
 
 **Deliberately not on the demo site**, for the same reason as item 17: the corpus cannot trigger it. Recorded in
 the comment block of `limitations.tsx` so that stays a decision rather than an omission.
@@ -111,9 +122,10 @@ Found on 2026-07-29 while broadening the test suite. Pinned in the `documented_d
 
 ## P2 — Health
 
-### 14. The `.wasm` is ~1.15 MB, up 10.6% from the 2022 build
+### 14. The `.wasm` is ~1.16 MB, up 12.1% from the 2022 build
 
-1,038,608 → 1,148,922 bytes. Accounted for (all measured 2026-07-28, release builds through `wasm-pack`):
+1,038,608 → 1,164,691 bytes. Accounted for (dependency rows measured 2026-07-28, release builds through
+`wasm-pack`):
 
 | change | bytes |
 |---|---|
@@ -122,10 +134,14 @@ Found on 2026-07-29 while broadening the test suite. Pinned in the `documented_d
 | removing `wee_alloc` | +6,839 |
 | moving `[profile.release]` to the workspace root | −155,469 |
 | `codegen-units = 1`, `panic = 'abort'` | −76,166 |
-| **net** | **+110,314** |
+| `search_bytes_line` and its line post-processing (item 19, 2026-07-30) | +15,769 |
+| **net** | **+126,083** |
 
 The bulk is upstream — newer `regex-automata` carries larger DFA and Unicode tables — and is not really
-reducible without giving up the modern crates. Roughly 480 KB gzipped over the wire.
+reducible without giving up the modern crates. Roughly 502 KB gzipped over the wire.
+
+The demo's `StatsBar` states this number to visitors, so it moves when this does — see
+[`../AGENTS.md` §2.3](../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 
 Remaining levers, none taken: `opt-level = 'z'` (a further ~27 KB, at some throughput cost in a
 regex-scanning hot path); `wasm-opt -Oz`; disabling `grep-regex`'s Unicode support, which would change
@@ -161,6 +177,7 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 19 | Return the matching line alongside the boolean | **Shipped, and only because 3a landed first.** [Issue #19](https://github.com/dgopsq/netgrep/issues/19) proposed it against a `MemSink` that no longer existed — item 13 had already made it short-circuit, so the "closes 13 for free" argument was void and the sketch's ~10 lines were a diff already applied. What made it worth doing instead was [0018](decisions/0018-line-oriented-tail-buffer.md): before it, each chunk was searched alone, so a first occurrence straddling a seam was missed and the line returned was silently the file's *second* match, varying with how the network split the response. With whole lines delivered in order, the line is the file's first matching line under any chunking — pinned across six chunk sizes — and the warm cache agrees with a cold fetch. Opt-in via `captureLine`, a **second** WASM export so `search_bytes` is untouched and the boolean path allocates nothing, capped in Rust before the copy (`maxLineBytes`, default 4096), terminator stripped, decoded lossily. The flag's effect is in the type: no `line` key at all when off, and `result` is a discriminant when on. Left a residual in **3g** — inside an over-long line the "line" is a fragment. `.wasm` +15,769 bytes. 16 Rust tests, 20 TypeScript. See [0020](decisions/0020-the-matching-line.md), which also names the match details refused alongside it. |
 | 18 | Concurrent searches of one url both fetch | **Fixed, for cache-on instances only — and that is the whole design rather than a shortcut.** A per-url registry of in-flight searches; a second caller of the same url waits on the first and answers from the entry it writes. The entry *is* the handover, so with the cache **off** there is nothing to hand over: sharing would mean either retaining every chunk of a file nobody asked to keep — the cost [0018](decisions/0018-line-oriented-tail-buffer.md) had just removed — or teeing the response stream and with it the first caller's abort signal. So with the cache off both callers still fetch, deliberately, and a test pins it. Two more residuals, both pinned: a first caller that matches early resolves without draining, writes no entry, and its waiter fetches after all — one saved request is the common case, not a guarantee; and a failed download is not inherited by its waiter, which retries with its own signal. `searchBatch` and `searchBatchWithCallback` inherit the de-duplication for free, since both go through `search`. The demo is untouched: it runs with the cache off on purpose, because the page measures the network. See [0019](decisions/0019-in-flight-fetch-registry.md). |
 | 3a | Chunk-boundary false negatives | **Fixed, and the design question in [issue #20](https://github.com/dgopsq/netgrep/issues/20) had a wrong premise.** That issue said the tail size must be a configured cap because the maximum match length of an arbitrary regex is not derivable from the pattern. True — but it is derivable from the *data*: a match can never span a `\n`, because grep-regex strips the terminator out of character classes and rejects patterns containing a literal one. So the exact carry-over is the incomplete trailing **line**, and no cap is needed for correctness. `MAX_TAIL_BYTES` (64 KB, not configurable) exists only so a line with no terminator cannot buffer a 500 MB response; past it the tail degrades to a byte window, which is item **3g**. Fixing it also removed the never-tracked mirror-image false *positives*, where a seam looked like a line start to `^` and a line end to `$`. Early resolution became line-granular, which costs two extra reads in one test and nothing against real 16–64 KB chunks. Four assertions inverted. See [0018](decisions/0018-line-oriented-tail-buffer.md). |
 | 3b | Poisoned partial cache | **Fixed, and it had to ship with 3a.** Not for the reason recorded here — "a naive fix drains the stream" is a shared failure mode of bad fixes, not a coupling. The real one: 3a was *suppressing* early resolution, so closing it alone would have left more searches resolving early, more prefixes cached, and a regression in the default configuration. The fix is smaller than the completeness flag this entry proposed: write the entry only when the reader reports `done`, so a partial one is never created. A partial entry cannot resume a download either, and nothing needed it to. Note a match in the *final* chunk still caches nothing — `done` is one read later. |

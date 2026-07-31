@@ -94,6 +94,7 @@ export function App() {
               <StoryCard
                 story={story}
                 status={state.statuses[story.id] ?? 'idle'}
+                line={state.lines[story.id]}
               />
             </li>
           ))}

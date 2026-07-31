@@ -11,8 +11,8 @@ each file resolve as it downloads. Its known limitations are listed on the page,
 > **This is an experiment, not a recommendation.** Netgrep is almost certainly not the best way to add search
 > to your site. A prebuilt index — [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
 > [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service — will usually be smaller,
-> faster and far more capable: it can rank results, show snippets and tell you *where* a term appears, none
-> of which netgrep does.
+> faster and far more capable: it can rank results and tell you *where* a term appears, neither of which
+> netgrep does. Netgrep can hand you the first matching line, and that is the end of what it knows.
 >
 > What this project explores is a narrower question: what happens if you take ripgrep's actual search engine,
 > compile it to WebAssembly, and run it over HTTP against files *while they are still downloading*? The
@@ -30,7 +30,7 @@ At the moment Netgrep is just going to tell whether a pattern is present on a re
 
 - **A browser.** Netgrep needs `fetch` with a readable response body stream. There is no Node.js support.
 - **ESM.** The package is distributed as ESM only — there is no CommonJS `require` entry point.
-- **A ~1.15 MB WebAssembly download** (~480 KB gzipped), fetched once per page load. Most of it is the regex
+- **A ~1.16 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is the regex
   engine's Unicode tables. This is the main cost of the approach, and it is worth weighing against your
   corpus size before adopting it.
 
@@ -124,6 +124,45 @@ A single search resolves to a result carrying the answer and whatever metadata y
 }
 ```
 
+### The matching line
+
+Pass `captureLine` and the result also carries the **first matching line** of the file. Nothing else changes,
+and a search without it costs exactly what it always did — the engine has a separate entry point, so the
+boolean path allocates nothing and copies no string out of WebAssembly.
+
+```ts
+const output = await NG.search(url, 'Sherlock', undefined, { captureLine: true });
+
+if (output.result) {
+  console.log(output.line); // `string` — no null check needed
+}
+```
+
+The flag's effect is in the type, so TypeScript tells you which shape you have:
+
+| Called with | Type of the result |
+|---|---|
+| no config, or `{ captureLine: false }` | `{ url, pattern, result: boolean, metadata? }` — **there is no `line` key**, and reading one is a compile error |
+| `{ captureLine: true }` | `result` becomes a discriminant: `{ result: true, line: string }` or `{ result: false, line: null }` |
+
+`maxLineBytes` caps it, defaulting to **4096**. The truncation happens inside WebAssembly, before the copy, so
+pointing netgrep at minified JavaScript costs you a snippet rather than a megabyte per file. The cut is taken
+on a UTF-8 character boundary, and setting the cap without `captureLine` is a compile error.
+
+Three things to know about the string:
+
+- **The line terminator is stripped** — a trailing `\n`, and a `\r` immediately before it — so you can render
+  it directly.
+- **An empty line is a match.** `line` can be `""` when the pattern matches a blank line, and `""` is falsy.
+  Branch on `result`, never on `line`.
+- **Decoding is lossy.** Bytes that are not valid UTF-8 — a latin-1 file, say — become `U+FFFD`. The match
+  itself is unaffected; the engine works on bytes.
+
+Line numbers, byte offsets, match counts, every matching line, context lines and highlight ranges are all
+deliberately absent, and each was considered and refused —
+[decision 0020](docs/decisions/0020-the-matching-line.md) says why for each. If you need them, you need an
+index.
+
 The batch methods add an `error` field, and this is the part worth reading twice:
 
 ```ts
@@ -201,16 +240,20 @@ tests so they cannot change unnoticed; the full analysis is in
   of each chunk and prepends it to the next, which is exact — a match can never cross a newline — so ordinary
   text is unaffected no matter how the network splits the response. The exception is a line with no terminator
   in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the retained bytes become a
-  plain 64 KB window, so a match **longer** than the window is lost, and `^` can match at a window edge where no
-  line actually begins. Newline-free input is also answered more slowly, because nothing can be searched until
-  the ceiling fills or the download ends.
+  plain 64 KB window, so a match **longer** than the window is lost, `^` can match at a window edge where no
+  line actually begins, and a line captured with `captureLine` is a mid-line fragment rather than a line —
+  `result` stays correct in that last case. Newline-free input is also answered more slowly, because nothing can
+  be searched until the ceiling fills or the download ends.
 - **A file containing a NUL byte reports no match** for the block of lines containing it, even when the match
   came earlier. Binary detection abandons what it is given rather than stopping at the NUL.
 - **`$` does not match on CRLF files.** The line terminator is `\n`, so on Windows-authored text the `\r`
   sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
-- **Two concurrent searches of the same URL are not de-duplicated.** Both download the file. The answers are
-  correct and the cache entry is correct; the second request is simply wasted. Await one search of a URL before
-  starting another if that matters.
+- **Concurrent searches of one URL are only de-duplicated when the cache is on.** With
+  `enableMemoryCache: true` the second caller waits for the first and is answered from the entry it writes.
+  With the cache off there is no entry to hand over, so both download the file — the answers are still correct,
+  the second request is simply wasted. Two residuals even with the cache on: a first caller that matches early
+  resolves without reading to the end, so it writes no entry and its waiter fetches after all; and a failed
+  download is not inherited, so the waiter retries with its own signal.
 
 ### Fixed, and not yet in a published release
 
@@ -219,6 +262,12 @@ code; this one describes the gap until the next release.
 
 - **A match spanning two network chunks used to be missed** — a silent `false` that depended on how the network
   chunked the response. See the first limitation above for what remains of it.
+- **Concurrent searches of one URL both downloaded it**, and both appended what they read to the same cache
+  entry — so the entry held the file twice, joined with no separator, forming a line the file never contained.
+  A per-URL registry of in-flight downloads now makes the second caller wait for the first. See the limitation
+  above for the case that remains.
+- **The matching line was not available at all.** `captureLine` is new; the version on npm returns a boolean
+  and nothing else.
 - **The cache could answer a later search wrongly.** A search resolves the moment it finds a match and stops
   downloading, which used to leave the cache holding only the beginning of the file with nothing marking it
   incomplete. An entry is now written **only once the whole file has been read**, so a search that resolves

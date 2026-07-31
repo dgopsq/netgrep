@@ -77,7 +77,7 @@ as ESM, copies the version out of `Cargo.toml`, **and deletes the `.gitignore` w
 `pkg/`** — that file contains `*`, npm honours it, and it is what emptied the tarball. Do not skip the
 second step.
 
-→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.15 MB), `index.d.ts`,
+→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.16 MB), `index.d.ts`,
 `package.json`. Gitignored.
 
 **What gets published is `packages/search/package.json`**, a hand-written wrapper with `"files": ["pkg"]` —

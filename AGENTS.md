@@ -11,23 +11,40 @@ Everything below was verified end-to-end on **2026-07-30** (macOS arm64, Node 24
 
 netgrep is a port of [ripgrep](https://github.com/BurntSushi/ripgrep) to WebAssembly that searches remote
 files **over HTTP while they are still downloading**. It answers exactly one question: *does this pattern
-occur in the file at this URL?* — a boolean, nothing more.
+occur in the file at this URL?* — a boolean, plus, if the caller asks for it, the first matching line
+([decision 0020](docs/decisions/0020-the-matching-line.md)). Nothing more: no line numbers, no offsets, no
+match counts, no ranking.
 
 The intended use case is a client-side search over a small, static, file-based corpus (e.g. Markdown posts
 emitted by a static site generator), instead of standing up an index-based search backend.
 
 **It is an experiment, and the README says so first.** netgrep is not claimed to be a good way to build
 search — a prebuilt index (Pagefind, Lunr, FlexSearch, a hosted service) is usually smaller, faster and more
-capable, and can rank, snippet and locate matches, none of which netgrep does. What the project explores is
-the narrower question of whether ripgrep's real engine can usefully run over HTTP against files as they
-download. Keep that framing when you touch user-facing text: describe what it does and what it costs, and do
-not sell it.
+capable, and can rank and locate matches, neither of which netgrep does. What the project explores is the
+narrower question of whether ripgrep's real engine can usefully run over HTTP against files as they download.
+Keep that framing when you touch user-facing text: describe what it does and what it costs, and do not sell
+it.
 
-**Project status: maintained, conservative.** The toolchain is current and CI is green. Keep it that way:
-fix defects, keep dependencies from rotting, keep it working for existing consumers. **Do not add features.**
-The public API is deliberately small — a boolean per URL — and widening it (match positions, line numbers,
-Node support) is a design conversation, not a task to pick up. See [`docs/BACKLOG.md`](docs/BACKLOG.md) for
-sanctioned work.
+**Project status: maintained, conservative.** The toolchain is current and CI is green. Keep it that way: fix
+defects, keep dependencies from rotting, keep it working for existing consumers. That is still the bulk of the
+work, and [`docs/BACKLOG.md`](docs/BACKLOG.md) is where it is listed.
+
+**A feature needs an issue and a decision record before it needs a diff.** This rule used to read "do not add
+features", full stop. It was changed when [0020](docs/decisions/0020-the-matching-line.md) shipped the first
+widening of the API, because a project cannot ship a feature under a document forbidding them — but the
+friction is the point and it is kept. So:
+
+- **Open an issue and argue it there first.** The proposal that became 0020 was
+  [#19](https://github.com/dgopsq/netgrep/issues/19), and the argument in it changed the design twice before
+  any code was written. Do not skip to a pull request.
+- **The record ships with the change**, in the same PR — including a *Rejected alongside* section naming what
+  the feature does **not** open the door to. Every widening makes the next ask more reasonable; writing the
+  refusals down at the moment of acceptance is the only brake this repository has.
+- **The API is still deliberately small.** A boolean per URL, plus the matching line on request. Line numbers,
+  byte offsets, match counts, all-matches, context lines, highlight ranges and ranking have each been
+  considered and refused — see 0020's table before re-opening any of them. Node support is untouched by this
+  and remains a design conversation.
+- **If it changes what a result contains or costs, §2.3 applies**: the published demo has to agree with it.
 
 ---
 
@@ -93,13 +110,13 @@ is exactly why it is in this section rather than in a comment somewhere.
 | Fix 3f | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) — it is the only open defect with one |
 | Fix 3g or 17 | Nothing on the site to remove: neither has an entry, for the reasons below. Check that still holds rather than assuming it |
 | Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
-| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state "one boolean per file" and the 1.15 MB WebAssembly download |
+| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state the scope of a result and the 1.16 MB WebAssembly download |
 
 **The three caveats currently on the site map to backlog items like this**, so you can find yours quickly:
 
 | Caveat on the site | Backlog |
 |---|---|
-| One boolean per file | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md). Will never be "fixed" |
+| No ranking, no positions | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md) as amended by [0020](docs/decisions/0020-the-matching-line.md). Will never be "fixed". It was titled "One boolean per file" until `captureLine` made that false |
 | This demo runs with the cache off | *none* — a choice about what the page measures, see below |
 | Binary files stop at the first NUL | **3f** |
 
@@ -162,7 +179,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 |---|---|---|
 | Prepare a checkout | `pnpm bootstrap` | Install + WASM + browser. Idempotent — see §4.1 |
 | New worktree | `pnpm worktree <branch>` | `git worktree add` beside this checkout, then bootstrap it |
-| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.15 MB `index_bg.wasm` |
+| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.16 MB `index_bg.wasm` |
 | Build TS | `pnpm build` | → `packages/netgrep/dist/` |
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
@@ -287,9 +304,11 @@ Three packages, ~530 lines of first-party source. pnpm workspaces link them; the
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         ~135 lines, mostly comment. Exports one function:
-                       search_bytes(&[u8], &str) -> Result<bool, JsError>, which caches
-                       the last compiled matcher. See decision 0016
+    src/lib.rs         ~250 lines, mostly comment. Exports two functions, sharing
+                       one compiled-matcher memo (decision 0016):
+                         search_bytes(&[u8], &str) -> Result<bool, JsError>
+                         search_bytes_line(&[u8], &str, usize)
+                             -> Result<Option<String>, JsError>   see decision 0020
     tests/search.rs    plain native `cargo test` — no browser, no WebDriver.
                        Ends with a `documented_defects` module; read §2.1 first
     scripts/post_build.js   fixes up the generated pkg/ (see below)
@@ -356,7 +375,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 | Goal | File |
 |---|---|
 | Matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
-| What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts` |
+| What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md) first — it lists what has already been refused |
 | Streaming, batching, caching, abort behaviour | `packages/netgrep/src/lib/Netgrep.ts` |
 | A config option | `packages/netgrep/src/lib/data/NetgrepConfig.ts` or `NetgrepSearchConfig.ts` |
 | Build or release steps | root `package.json` scripts, `packages/*/package.json` scripts, `.github/workflows/` |
