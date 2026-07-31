@@ -60,8 +60,7 @@ pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError> {
 ///
 /// A separate export rather than a change to `search_bytes`, so a caller that
 /// only wants membership goes on paying for membership only — no allocation,
-/// no decode, no string crossing the boundary. See
-/// [decision 0020](../../../docs/decisions/0020-the-matching-line.md).
+/// no decode, no string crossing the boundary.
 ///
 /// Throws the same way `search_bytes` does when the pattern will not compile.
 #[wasm_bindgen]
@@ -140,12 +139,24 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
         .map_err(|error| error.to_string())
 }
 
-/// Run a compiled matcher over one chunk of bytes.
-fn search_with(matcher: &RegexMatcher, chunk: &[u8]) -> bool {
-    let mut searcher = SearcherBuilder::new()
+/// Build a searcher with netgrep's fixed reading semantics: quit on a NUL, and
+/// do not count lines.
+///
+/// Shared by both entry points rather than spelled out in each. They must agree
+/// — a caller who adds `captureLine` to an existing search is entitled to the
+/// same answer — and binary detection in particular decides whether a whole
+/// block is abandoned, so a divergence here would be a difference in `result`,
+/// not merely in what is returned alongside it.
+fn build_searcher() -> Searcher {
+    SearcherBuilder::new()
         .binary_detection(BinaryDetection::quit(b'\x00'))
         .line_number(false)
-        .build();
+        .build()
+}
+
+/// Run a compiled matcher over one chunk of bytes.
+fn search_with(matcher: &RegexMatcher, chunk: &[u8]) -> bool {
+    let mut searcher = build_searcher();
 
     let mut sink = MemSink { found: false };
 
@@ -183,10 +194,7 @@ impl Sink for MemSink {
 /// Run a compiled matcher over one block of bytes, keeping the first matching
 /// line.
 fn search_line_with(matcher: &RegexMatcher, chunk: &[u8], max_line_bytes: usize) -> Option<String> {
-    let mut searcher = SearcherBuilder::new()
-        .binary_detection(BinaryDetection::quit(b'\x00'))
-        .line_number(false)
-        .build();
+    let mut searcher = build_searcher();
 
     let mut sink = LineSink { first: None };
 

@@ -775,7 +775,7 @@ describe('Netgrep', () => {
   });
 
   /**
-   * `captureLine` — BACKLOG 19, decision 0020.
+   * `captureLine` — BACKLOG 19.
    *
    * What a captured line CONTAINS is the engine's business and is pinned in
    * `packages/search/tests/search.rs`; what reaches it through the real
@@ -905,6 +905,43 @@ describe('Netgrep', () => {
         }
 
         expect([capOf(0), capOf(1), capOf(2), capOf(3)]).toEqual([1, 1, 1, 1]);
+      });
+
+      it('clamps DOWN too, because the conversion wraps rather than saturates', async () => {
+        // ⚠️ The upper bound is the sharp one. The number reaches the engine
+        // through ToUint32, so 2³² and above arrive as 0 — and a cap of 0
+        // returns an empty string for every match, which is precisely how a
+        // match on an empty line is reported. Unbounded, asking for a huge cap
+        // produced the one answer this API cannot afford to be ambiguous about.
+        for (const maxLineBytes of [2 ** 32, 2 ** 40, 0xffffffff]) {
+          await NG.search(url, pattern, undefined, {
+            captureLine: true,
+            maxLineBytes,
+          });
+        }
+
+        expect([capOf(0), capOf(1), capOf(2)]).toEqual([
+          0xffffffff, 0xffffffff, 0xffffffff,
+        ]);
+      });
+
+      it('reads `Infinity` as "no cap", and `NaN` as no request at all', async () => {
+        await NG.search(url, pattern, undefined, {
+          captureLine: true,
+          maxLineBytes: Number.POSITIVE_INFINITY,
+        });
+        await NG.search(url, pattern, undefined, {
+          captureLine: true,
+          maxLineBytes: Number.NaN,
+        });
+
+        // `Infinity` is the obvious way to spell "give me the whole line", so
+        // it becomes the largest cap the engine can hold rather than silently
+        // reverting to the default and ignoring the caller.
+        expect(capOf(0)).toBe(0xffffffff);
+
+        // `NaN` is not a request for anything, so the default stands.
+        expect(capOf(1)).toBe(4096);
       });
 
       it('floors a fractional value rather than passing it on', async () => {

@@ -184,9 +184,9 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **84 tests**: 48 unit in Node, 36 integration in headless Chromium |
+| Test TS | `pnpm test` | Vitest — **110 tests**: 63 unit in Node, 47 integration in headless Chromium |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **28 tests** |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **45 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
 | Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
@@ -317,7 +317,7 @@ packages/
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts               the whole public API (~300 lines)
+    src/lib/Netgrep.ts               the whole public API (~510 lines)
     src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
                                      unit-tested on its own. NOT re-exported by
                                      index.ts — see decision 0018

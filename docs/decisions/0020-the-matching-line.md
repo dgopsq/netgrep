@@ -46,9 +46,12 @@ if (res.result) console.log(res.line); // `string`, no null check
 
 Four choices make up the decision.
 
-**A second WASM export, not a changed one.** `search_bytes` is untouched; `search_bytes_line(chunk, pattern,
-max_line_bytes) -> Option<String>` sits beside it, and both share the compiled-matcher memo of
-[0016](0016-compiled-matcher-memo.md) through a generic `with_matcher`. `@netgrep/search` therefore stays
+**A second WASM export, not a changed one.** `search_bytes`'s signature and behaviour are untouched;
+`search_bytes_line(chunk, pattern, max_line_bytes) -> Option<String>` sits beside it. Both share the
+compiled-matcher memo of [0016](0016-compiled-matcher-memo.md) through a generic `with_matcher`, and one
+`build_searcher` — so binary detection cannot drift between them, which would be a difference in `result`
+rather than merely in what comes back alongside it. (`try_search_bytes`'s *internals* did move onto
+`with_matcher`; what callers see did not change.) `@netgrep/search` therefore stays
 backwards-compatible — a minor bump, not a major — and, more importantly, the `captureLine: false` path is
 *structurally* the same call it has always been. "Zero cost when off" is a property of the code rather than a
 claim about it.
@@ -75,6 +78,13 @@ the opposite of what this record is for.
 truncated to `maxLineBytes` on a UTF-8 character boundary, then decoded with `String::from_utf8_lossy` — in
 that order, so the cap applies to content and the lossy pass runs over at most `maxLineBytes`. Default 4096.
 Truncating on the JavaScript side would have paid the megabyte copy it exists to avoid.
+
+`maxLineBytes` is clamped at **both** ends before it crosses. The lower bound is obvious; the upper one is
+not, and matters more: the number reaches the engine through `ToUint32`, which wraps rather than saturates, so
+`Infinity`, `NaN` and 2³² all arrive as **0** — and a cap of 0 returns an empty string for every match, which
+is precisely how a match on an empty line is reported. Left unbounded, the obvious way to spell "no cap"
+produced the one result this API cannot afford to be ambiguous about. `Infinity` is therefore read as the
+largest cap the engine can hold, and `NaN` as no request at all.
 
 ## Consequences
 

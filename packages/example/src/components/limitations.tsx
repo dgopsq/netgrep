@@ -13,8 +13,7 @@ import { Info } from 'lucide-react';
  *
  *   "No ranking, no positions"           -> by design. Stays. Was "One boolean
  *                                           per file" until captureLine landed
- *                                           (BACKLOG 19, decision 0020) and
- *                                           made that sentence false
+ *                                           (BACKLOG 19) and made that false
  *   "This demo runs with the cache off"  -> not a defect: the cache is safe now,
  *                                           but a warm one stops the timings
  *                                           measuring the network

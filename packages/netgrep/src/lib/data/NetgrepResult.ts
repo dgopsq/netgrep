@@ -17,8 +17,6 @@
  * const res = await ng.search(url, pattern, undefined, { captureLine: true });
  * if (res.result) console.log(res.line.toUpperCase()); // `line` is `string`
  * ```
- *
- * See [decision 0020](../../../../../docs/decisions/0020-the-matching-line.md).
  */
 export type NetgrepResult<
   T extends object = object,

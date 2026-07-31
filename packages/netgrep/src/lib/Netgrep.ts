@@ -47,12 +47,11 @@ type EngineHit = {
 const NO_HIT: EngineHit = { result: false, line: null };
 
 /**
- * Run one block of bytes through the engine.
+ * Run one block of bytes through the engine — BACKLOG 19.
  *
- * Two entry points rather than one with a flag, so the `captureLine: false`
- * path is the same call it has always been — nothing is allocated, decoded or
- * copied out of WebAssembly for a caller who only wants membership. See
- * [decision 0020](../../../../docs/decisions/0020-the-matching-line.md).
+ * Two entry points rather than one taking a flag, so the `captureLine: false`
+ * path is the call it has always been: nothing allocated, decoded or copied out
+ * of WebAssembly for a caller who only wants membership.
  */
 function runEngine(
   block: Uint8Array,
@@ -75,16 +74,34 @@ function runEngine(
 }
 
 /**
- * Clamp a caller-supplied `maxLineBytes` into something a Rust `usize` can hold.
+ * The largest cap a Rust `usize` receives intact on wasm32.
+ */
+const MAX_LINE_BYTES_CEILING = 0xffffffff;
+
+/**
+ * Clamp a caller-supplied `maxLineBytes` into something the engine can hold.
  *
- * Clamped rather than validated: wasm-bindgen does not check the number, so a
- * negative or fractional value would be reinterpreted rather than rejected, and
- * throwing on it would be a new failure mode for a cosmetic setting.
+ * Clamped rather than validated: throwing would be a new failure mode for a
+ * cosmetic setting, and wasm-bindgen checks nothing.
+ *
+ * ⚠️ THE UPPER BOUND MATTERS AS MUCH AS THE LOWER ONE. The number crosses the
+ * boundary through ToUint32, which WRAPS rather than saturates, so `Infinity`,
+ * `NaN` and 2³² all arrive as **0** — and a cap of 0 returns an empty string
+ * for every match, which is exactly how a match on an empty line is reported.
+ * Unbounded, the obvious way to ask for no cap silently produced the one result
+ * this API cannot afford to be ambiguous about.
  */
 function resolveMaxLineBytes(requested: number | undefined): number {
-  return requested === undefined
-    ? DEFAULT_MAX_LINE_BYTES
-    : Math.max(1, Math.floor(requested));
+  // Not a request for anything.
+  if (requested === undefined || Number.isNaN(requested)) {
+    return DEFAULT_MAX_LINE_BYTES;
+  }
+
+  // `Infinity` is how a caller spells "no cap", so it becomes the largest cap
+  // rather than falling back to the default and quietly ignoring them.
+  if (requested >= MAX_LINE_BYTES_CEILING) return MAX_LINE_BYTES_CEILING;
+
+  return Math.max(1, Math.floor(requested));
 }
 
 /**
@@ -204,7 +221,7 @@ export class Netgrep {
    * boolean; the result type changes to match, so `line` is a `string` wherever
    * `result` has been narrowed to `true`.
    * @returns
-   * A promise resolving to a `NetgrepResult<T>` as soon as a match will
+   * A promise resolving to a `NetgrepResult<T, L>` as soon as a match will
    * be found in the remote file.
    */
   public async search<T extends object, L extends boolean = false>(
@@ -394,6 +411,7 @@ export class Netgrep {
    * The pattern to search for. This can be anything `ripgrep` can understand.
    * @param config
    * An optional configuration respecting the `NetgrepSearchConfig` type.
+   * `captureLine` applies to every url in the batch, and shapes every result.
    * @returns
    * A promise waiting for all the executed searches to complete.
    */
@@ -426,9 +444,10 @@ export class Netgrep {
    * The pattern to search for. This can be anything `ripgrep` can understand.
    * @param cb
    * The callback that will be triggered at every match. It takes
-   * a `BatchNetgrepResult<T>` as a parameter.
+   * a `BatchNetgrepResult<T, L>` as a parameter.
    * @param config
    * An optional configuration respecting the `NetgrepSearchConfig` type.
+   * `captureLine` applies to every url in the batch, and shapes every result.
    */
   public searchBatchWithCallback<T extends object, L extends boolean = false>(
     inputs: Array<NetgrepInput<T>>,

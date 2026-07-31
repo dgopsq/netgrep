@@ -500,6 +500,28 @@ mod matching_line {
     // ---------------------------------------------------------------
 
     #[test]
+    fn test_the_two_entry_points_share_one_searcher_configuration() {
+        // Both go through `build_searcher`, so binary detection cannot differ
+        // between them. That matters more than it looks: a NUL abandons the
+        // whole block, so a divergence would change `result` — adding
+        // `captureLine` to a working search would change its ANSWER, not just
+        // what came back alongside it.
+        //
+        // Asserted through the observable behaviour rather than the builder,
+        // because the builder is not comparable.
+        assert!(!matches(b"needle here\x00tail", "needle"));
+        assert_eq!(first_line(b"needle here\x00tail", "needle", NO_CAP), None);
+
+        // The control, so this is pinning the shared config rather than an
+        // input that never matched.
+        assert!(matches(b"needle here", "needle"));
+        assert_eq!(
+            first_line(b"needle here", "needle", NO_CAP).as_deref(),
+            Some("needle here")
+        );
+    }
+
+    #[test]
     fn test_the_two_entry_points_share_one_matcher() {
         // Both go through `with_matcher`, so a pattern compiled by one is
         // reused by the other. That is the point — but it also means a stale

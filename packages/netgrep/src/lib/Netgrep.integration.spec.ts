@@ -579,7 +579,7 @@ describe('Netgrep integration (real WASM)', () => {
   });
 
   /**
-   * `captureLine` through the real engine — BACKLOG 19, decision 0020.
+   * `captureLine` through the real engine — BACKLOG 19.
    *
    * What a line CONTAINS given a block of bytes is pinned natively in
    * `packages/search/tests/search.rs`, and the wiring is pinned with the engine
@@ -589,8 +589,9 @@ describe('Netgrep integration (real WASM)', () => {
    * that it is the FILE's first matching line rather than the first one in
    * whichever chunk happened to match.
    *
-   * That property is owed entirely to decision 0018. Before it, each chunk was
-   * searched in isolation, so a first occurrence straddling a seam was missed
+   * That property is owed entirely to the tail buffer — BACKLOG 3a. Before it,
+   * each chunk was searched in isolation, so a first occurrence straddling a seam
+   * was missed
    * and the line returned was the file's *second* match — differing run to run
    * with the network's chunking. `splitAtLastLine` means the engine now sees
    * whole lines in file order, so the answer is the same however the response
