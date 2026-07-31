@@ -579,6 +579,223 @@ describe('Netgrep integration (real WASM)', () => {
   });
 
   /**
+   * `captureLine` through the real engine — BACKLOG 19.
+   *
+   * What a line CONTAINS given a block of bytes is pinned natively in
+   * `packages/search/tests/search.rs`, and the wiring is pinned with the engine
+   * mocked in `Netgrep.spec.ts`. What only this suite can establish is the
+   * property the feature actually rests on: that the line survives the trip
+   * through `fetch`, the tail buffer, the cache and the WASM boundary — and
+   * that it is the FILE's first matching line rather than the first one in
+   * whichever chunk happened to match.
+   *
+   * That property is owed entirely to the tail buffer — BACKLOG 3a. Before it,
+   * each chunk was searched in isolation, so a first occurrence straddling a seam
+   * was missed
+   * and the line returned was the file's *second* match — differing run to run
+   * with the network's chunking. `splitAtLastLine` means the engine now sees
+   * whole lines in file order, so the answer is the same however the response
+   * is split. The first test below is that claim, and it is the reason this
+   * feature could be built at all.
+   */
+  describe('captureLine', () => {
+    const CAPTURE = { captureLine: true } as const;
+
+    it('returns the whole line, not the matched fragment', async () => {
+      serve([encoder.encode(POEM)]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          'aside',
+          undefined,
+          CAPTURE,
+        ),
+      ).resolves.toMatchObject({
+        result: true,
+        line: 'He set aside both Queen and Crown',
+      });
+    });
+
+    it("returns the FILE's first match however the response is chunked", async () => {
+      // The assertion decision 0018 bought. `Wiseman` is on line 1 and again on
+      // the last line, and every chunk size below splits the first occurrence
+      // somewhere different — including straight through the middle of the word.
+      const text =
+        'One Wiseman came to Jhaampe-town.\n' +
+        'He set aside both Queen and Crown\n' +
+        'A second Wiseman followed after.\n';
+
+      const NG = new Netgrep({ enableMemoryCache: false });
+      const lines: Array<string | null> = [];
+
+      for (const size of [1, 3, 7, 16, 40, 1024]) {
+        serve(chunked(text, size));
+
+        const result = await NG.search(
+          `url-${size}`,
+          'Wiseman',
+          undefined,
+          CAPTURE,
+        );
+
+        lines.push(result.result ? result.line : null);
+      }
+
+      // One answer, six chunkings — and it is the first line, not the third.
+      expect(lines).toEqual(Array(6).fill('One Wiseman came to Jhaampe-town.'));
+    });
+
+    it('returns a line that arrived across two chunks, whole', async () => {
+      // The tail buffer holds the incomplete final line back and prepends it to
+      // the next chunk, so the engine is handed the line entire — which means
+      // the line handed BACK is entire too, seam and all.
+      serve([
+        encoder.encode('first line\nHe set aside bo'),
+        encoder.encode('th Queen and Crown\nlast line\n'),
+      ]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          'aside',
+          undefined,
+          CAPTURE,
+        ),
+      ).resolves.toMatchObject({
+        line: 'He set aside both Queen and Crown',
+      });
+    });
+
+    it('gives the same line from the cache as from the network', async () => {
+      // The cache path searches one whole buffer while the streaming path
+      // searches a sequence of line-aligned blocks. Different code, and the
+      // answer has to agree — otherwise a warm page would show a different
+      // snippet than a cold one, which reads as a bug rather than as a cache.
+      serve(chunked(POEM, 7));
+
+      const NG = new Netgrep({ enableMemoryCache: true });
+
+      // A miss first, so the stream drains and the entry is written.
+      await NG.search('url', 'dragon');
+
+      const cold = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'bones',
+        undefined,
+        CAPTURE,
+      );
+      const warm = await NG.search('url', 'bones', undefined, CAPTURE);
+
+      expect(warm.result && warm.line).toBe(
+        'Gave his bones to the stones to keep.',
+      );
+      expect(cold.result && cold.line).toBe(warm.result && warm.line);
+    });
+
+    it('returns the final line of a file that does not end in a newline', async () => {
+      // Resolved from the held-back tail at `done`, which is a different call
+      // site from the per-chunk one and so worth its own assertion.
+      serve([
+        encoder.encode('first line\n'),
+        encoder.encode('Wiseman at the end'),
+      ]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          'Wiseman',
+          undefined,
+          CAPTURE,
+        ),
+      ).resolves.toMatchObject({ line: 'Wiseman at the end' });
+    });
+
+    it('carries a multi-byte character across the boundary intact', async () => {
+      // The bytes go in as a `Uint8Array` and the line comes back as a JS
+      // string, so this exercises the marshalling in the direction the boolean
+      // API never used.
+      serve(chunked('nothing\nil a bu un café noir\n', 8));
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          'café',
+          undefined,
+          CAPTURE,
+        ),
+      ).resolves.toMatchObject({ line: 'il a bu un café noir' });
+    });
+
+    it('reports a miss as `line: null`, and omits the key entirely when not asked', async () => {
+      serve([encoder.encode(POEM)]);
+      const NG = new Netgrep({ enableMemoryCache: false });
+
+      await expect(
+        NG.search('a', 'dragon', undefined, CAPTURE),
+      ).resolves.toMatchObject({ result: false, line: null });
+
+      serve([encoder.encode(POEM)]);
+
+      // Not `line: null` — no key at all, so the object agrees with the type.
+      expect(await NG.search('b', 'Wiseman')).not.toHaveProperty('line');
+    });
+
+    it('truncates at maxLineBytes, on a character boundary', async () => {
+      serve([encoder.encode(`needle ${'é'.repeat(50)}\n`)]);
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'needle',
+        undefined,
+        { captureLine: true, maxLineBytes: 12 },
+      );
+
+      // 'needle ' is 7 bytes, leaving 5 for two-byte characters — so two of
+      // them, not two and a half. A split would have shown as U+FFFD.
+      expect(result.result && result.line).toBe('needle éé');
+      expect(result.result && result.line).not.toContain('�');
+    });
+
+    it('carries the line through a batch, and never onto a failed url', async () => {
+      mockFetch.mockImplementation((url: string) =>
+        url === 'broken'
+          ? Promise.reject(new Error('offline'))
+          : Promise.resolve({
+              body: streamOfChunks([encoder.encode(POEM)]),
+            }),
+      );
+
+      const results = await new Netgrep({
+        enableMemoryCache: false,
+      }).searchBatch([{ url: 'hit' }, { url: 'broken' }], 'asleep', CAPTURE);
+
+      expect(results).toMatchObject([
+        {
+          url: 'hit',
+          result: true,
+          line: 'Did his task and fell asleep',
+          error: null,
+        },
+        { url: 'broken', result: false, line: null, error: 'offline' },
+      ]);
+    });
+
+    it('rejects an invalid pattern the same way the boolean path does', async () => {
+      serve([encoder.encode(POEM)]);
+
+      await expect(
+        new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          '(',
+          undefined,
+          CAPTURE,
+        ),
+      ).rejects.toThrow('unclosed group');
+    });
+  });
+
+  /**
    * ---------------------------------------------------------------------
    * DOCUMENTED DEFECTS — these assertions pin behaviour that is WRONG.
    * ---------------------------------------------------------------------
@@ -803,6 +1020,50 @@ describe('Netgrep integration (real WASM)', () => {
       await expect(NG.search('b', '^a')).resolves.toMatchObject({
         result: true,
       });
+    });
+
+    it('BACKLOG 3g: a captured line is a mid-line FRAGMENT inside an over-long line', async () => {
+      // The third consequence of 3g, and the one `captureLine` added.
+      //
+      // Once a line outgrows the 64 KB ceiling the buffer handed to the engine
+      // starts mid-line, so what comes back is not a line: it begins at an
+      // arbitrary byte decided by where the window fell. `result` is still
+      // correct — something did match — but `line` is a fragment, and the type
+      // calls it a line.
+      //
+      // Same precondition as the two 3g tests above, so equally unreachable in
+      // prose: this corpus's longest line is 76 bytes. Not fixable without
+      // either buffering without bound or teaching the engine that a block
+      // starts mid-line, which is offset bookkeeping and out of scope.
+      const NG = new Netgrep({ enableMemoryCache: false });
+      const filler = 'x'.repeat(70_000);
+
+      // Control: one chunk, so the whole line is present and the line comes
+      // back whole — capped, but starting where the line starts.
+      serve([encoder.encode(`START${filler}needle\n`)]);
+
+      const whole = await NG.search('a', 'needle', undefined, {
+        captureLine: true,
+        maxLineBytes: 16,
+      });
+
+      expect(whole.result && whole.line).toBe('STARTxxxxxxxxxxx');
+
+      // Split, and the window has long since dropped 'START'. The line now
+      // "begins" 70 KB into itself.
+      serve([
+        encoder.encode(`START${filler}`),
+        encoder.encode('needle and then some\n'),
+      ]);
+
+      const fragment = await NG.search('b', 'needle', undefined, {
+        captureLine: true,
+        maxLineBytes: 16,
+      });
+
+      expect(fragment.result).toBe(true);
+      expect(fragment.result && fragment.line).toBe('xxxxxxxxxxxxxxxx');
+      expect(fragment.result && fragment.line).not.toContain('START');
     });
 
     it('BACKLOG 3c (FIXED): an invalid pattern rejects, and the engine survives it', async () => {

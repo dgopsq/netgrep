@@ -7,8 +7,10 @@ How netgrep is built and why it behaves the way it does. For *decisions* and the
 
 ## Scope
 
-netgrep answers one question: **does `pattern` occur in the file at `url`?** The answer is a `boolean`.
-No line numbers, no byte offsets, no matched text, no match counts.
+netgrep answers one question: **does `pattern` occur in the file at `url`?** The answer is a `boolean`, and —
+if the caller passes `captureLine` — the **first matching line**. No line numbers, no byte offsets, no match
+counts, no ranking; [decision 0020](decisions/0020-the-matching-line.md) records why the line was the only one
+of these worth adding, and why the rest stay refused.
 
 The distinguishing property is *when* it answers: the search runs against each chunk of the HTTP response
 **as it arrives**, so a match in the first kilobyte resolves without waiting for the remaining megabytes.
@@ -18,12 +20,13 @@ bundler configuration**: since 0.2.0 the WASM is loaded through a standard
 `new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
 understand out of the box.
 
-**Non-goals:** indexing, ranking, snippets, highlighting, Node.js support, filesystem search, a CLI.
+**Non-goals:** indexing, ranking, highlighting, match positions, Node.js support, filesystem search, a CLI.
 
 **It is an experiment rather than a recommended way to build search**, and the public README leads with that.
 A prebuilt index will usually beat it on size, speed and capability; what netgrep tests is whether ripgrep's
 real engine is usable over HTTP against files as they download. That framing is why the correctness caveats
-below are documented rather than hidden, and why the API has stayed a boolean.
+below are documented rather than hidden, and why the API has widened exactly once, deliberately, in four
+years.
 
 ---
 
@@ -70,11 +73,21 @@ never compiled. See [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md).
 
 ```rust
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError>
+pub fn search_bytes_line(chunk: &[u8], pattern: &str, max_line_bytes: usize)
+    -> Result<Option<String>, JsError>
 ```
 
-wasm-bindgen unwraps that `Result`, so the TypeScript a consumer sees is
-`search_bytes(chunk: Uint8Array, pattern: string): boolean` — it simply **throws** on a pattern the regex
-engine will not accept, rather than trapping the instance as it did until 2026.
+wasm-bindgen unwraps those `Result`s, so the TypeScript a consumer sees is
+`search_bytes(chunk: Uint8Array, pattern: string): boolean` and
+`search_bytes_line(chunk: Uint8Array, pattern: string, max_line_bytes: number): string | undefined` — both
+simply **throw** on a pattern the regex engine will not accept, rather than trapping the instance as they did
+until 2026.
+
+The second entry point exists so the first stays free. `Netgrep.ts` calls one or the other depending on
+`captureLine`, so a caller who wants only membership allocates nothing, decodes nothing and copies no string
+out of WebAssembly — the same call it has always made. `undefined` is the only no-match signal it returns: a
+pattern matching an empty line yields `""`, which is falsy. Both share one compiled-matcher memo, so their
+matching semantics cannot drift apart.
 
 Per call it:
 
@@ -103,7 +116,7 @@ The release profile (`lto`, `opt-level = 's'`, `codegen-units = 1`, `panic = 'ab
 **workspace root** `Cargo.toml`. It has to: Cargo silently ignores `[profile.*]` in a member package, and for
 most of this project's life the size-tuned profile sat in `packages/search/Cargo.toml` doing nothing at all.
 
-`index_bg.wasm` is **~1.15 MB** (1,148,922 bytes; ~480 KB gzipped) — every consumer downloads it. Roughly a
+`index_bg.wasm` is **~1.16 MB** (1,164,691 bytes; ~500 KB gzipped) — every consumer downloads it. Roughly a
 third is `regex-automata`'s DFA and Unicode tables.
 
 ---
@@ -224,11 +237,13 @@ a seam.
 
 > **Residual (item 3g) — a line longer than 64 KB.** Such a line would otherwise buffer an entire response, so
 > past a 64 KB ceiling (`MAX_TAIL_BYTES`, not configurable) the tail degrades to a plain window on the last
-> 64 KB. Inside such a line, two things break in opposite directions: a match **longer** than 64 KB is lost, and
-> `^` can match at the window's first byte because a windowed tail starts mid-line and the engine cannot be told
-> so. Both need a line longer than 64 KB, so both are unreachable in hand-written text — the demo corpus is
-> 2.6 MB of prose whose longest line is 76 bytes. Pinned by the two `BACKLOG 3g` tests in
-> `Netgrep.integration.spec.ts`, each alongside its control case.
+> 64 KB. Inside such a line, three things break: a match **longer** than 64 KB is lost; `^` can match at the
+> window's first byte, because a windowed tail starts mid-line and the engine cannot be told so; and a line
+> captured with `captureLine` begins at that same arbitrary byte, so it is a fragment rather than a line —
+> `result` stays correct, and returning `null` there was rejected in
+> [decision 0020](decisions/0020-the-matching-line.md). All three need a line longer than 64 KB, so all three
+> are unreachable in hand-written text — the demo corpus is 2.6 MB of prose whose longest line is 76 bytes.
+> Pinned by the three `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each alongside its control case.
 
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
 the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.
@@ -269,7 +284,8 @@ dropped even when it occurs before the NUL, and even on an earlier line. Any rem
 NUL therefore reports "no match" for content that is demonstrably present.
 
 Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
-"binary, not searched" from "no match", because the API is a boolean.
+"binary, not searched" from "no match" — `captureLine` does not help, since a discarded block reports no match
+and therefore no line.
 
 Decision 0018 changed the *shape* of this without fixing it. What the engine is handed is no longer the network
 chunk but the block of complete lines within it, so how far a NUL reaches now depends on where the last `\n`

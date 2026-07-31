@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 type StoryCardProps = {
   story: Story;
   status: StoryStatus;
+  /** The first matching line, when this story matched. */
+  line?: string;
 };
 
 /**
@@ -21,6 +23,7 @@ type StoryCardProps = {
 export const StoryCard = memo(function StoryCard({
   story,
   status,
+  line,
 }: StoryCardProps) {
   const isMatch = status === 'match';
   const isMiss = status === 'miss';
@@ -33,6 +36,12 @@ export const StoryCard = memo(function StoryCard({
         // Explicitly NOT `transition-all`: that includes `transform`, which the
         // FLIP reorder animates directly, so the two fight and the glide stutters.
         'relative gap-0 overflow-hidden duration-300',
+        // Fill the grid cell. The `li` stretches to the row's height on its own,
+        // but the card inside it does not, so a match carrying a line made its
+        // whole row taller while every miss in that row stayed at content height
+        // — leaving them floating in a gap and reading as further faded than the
+        // 35% opacity below actually makes them.
+        'h-full',
         'transition-[opacity,border-color,background-color,box-shadow]',
         isMatch &&
           'border-primary/40 bg-primary/[0.06] shadow-[0_0_0_1px_var(--color-primary)/10,0_8px_30px_-12px_var(--color-primary)]',
@@ -80,6 +89,23 @@ export const StoryCard = memo(function StoryCard({
           <p className="text-muted-foreground/70 mt-0.5 font-mono text-[11px]">
             {story.file} · {formatBytes(story.bytes)}
           </p>
+
+          {/*
+            The matching line, rendered only on a match. `line` outlives a
+            status change — the hook keeps it while a new query is in flight —
+            so this is gated on `isMatch` rather than on the string existing,
+            or a card that has just become a miss would still be quoting.
+
+            Clamped to two rows: the library caps the line at a byte count, and
+            a byte count is not a row count in a proportional grid. Without the
+            clamp one long line would make its card taller than the rest of its
+            row.
+          */}
+          {isMatch && line !== undefined && (
+            <p className="border-primary/30 text-foreground/80 mt-2 line-clamp-2 border-l-2 pl-2 font-mono text-[11px] leading-relaxed break-words">
+              {line}
+            </p>
+          )}
         </div>
       </div>
 
