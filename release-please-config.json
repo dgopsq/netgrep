@@ -22,11 +22,6 @@
           "type": "json",
           "path": "package.json",
           "jsonpath": "$.version"
-        },
-        {
-          "type": "toml",
-          "path": "/Cargo.lock",
-          "jsonpath": "$.package[?(@.name=='search')].version"
         }
       ],
       "changelog-sections": [
@@ -86,6 +81,9 @@
 
   "//plugins": "@netgrep/netgrep depends on @netgrep/search via `workspace:*`, which pnpm rewrites to an EXACT version at pack time — so a search release nobody pairs with a netgrep release reaches no consumer. Locking the two versions together makes that pin correct by construction. The cost is a no-op republish of one package when only the other changed.",
   "plugins": [
+    {
+      "type": "cargo-workspace"
+    },
     {
       "type": "linked-versions",
       "groupName": "netgrep",
