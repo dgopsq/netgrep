@@ -58,8 +58,12 @@ pair: `workspace:*` resolves to an exact version at pack time, and a `search` re
 | `fix:` | patch |
 | `feat:` | minor |
 | `feat!:` / `BREAKING CHANGE:` | minor while at `0.x` — never an automatic 1.0.0 |
-| `perf:` `refactor:` `build:` `deps:` | changelog only, no release |
+| `perf:` `refactor:` `build:` `deps:` | patch |
 | `chore:` `docs:` `ci:` `test:` | nothing at all |
+
+A type releases if and only if it is **visible in the changelog**: release-please skips a release whose notes
+come out empty, and anything visible that is not `feat` or breaking falls through to a patch bump. So the
+`hidden` flags in `release-please-config.json` decide what releases, not just what is listed.
 
 **So a `chore:` commit that changes the published bytes ships nothing.** If dependency or toolchain work
 moves the `.wasm`, it is a `fix(search):`. If a change alters what a visitor sees on the demo, it is a

@@ -57,9 +57,15 @@ jobs:
       - id: release
         uses: googleapis/release-please-action@v4
 
+  # `id-token: write` is granted here, not just inside the called workflow: a
+  # reusable workflow cannot escalate past its caller, so without this the job
+  # fails asking for a permission it is only allowed as `none`.
   publish-search:
     needs: release-please
     if: needs.release-please.outputs.search_released == 'true'
+    permissions:
+      contents: read
+      id-token: write
     uses: ./.github/workflows/publish-search.yml
     secrets: inherit
 
@@ -71,6 +77,9 @@ jobs:
       - release-please
       - publish-search
     if: needs.release-please.outputs.netgrep_released == 'true'
+    permissions:
+      contents: read
+      id-token: write
     uses: ./.github/workflows/publish-netgrep.yml
     secrets: inherit
 

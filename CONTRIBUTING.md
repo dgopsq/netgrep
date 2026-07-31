@@ -174,7 +174,7 @@ the type in your subject line decides whether your change ships at all.
 | `fix:` | patch | yes |
 | `feat:` | minor | yes |
 | `feat!:` / `BREAKING CHANGE:` | minor, while the version is `0.x` | yes, called out |
-| `perf:`, `refactor:`, `build:`, `deps:` | no | yes |
+| `perf:`, `refactor:`, `build:`, `deps:` | patch | yes |
 | `chore:`, `docs:`, `ci:`, `test:`, `style:` | no | no |
 
 Two traps worth knowing before you pick one:

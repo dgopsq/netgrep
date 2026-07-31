@@ -9,6 +9,8 @@
   "separate-pull-requests": false,
 
   "//bump-minor-pre-major": "A breaking change gives 0.3.0, not 1.0.0. 1.0.0 is a claim this project does not make by accident — reaching it needs an explicit `Release-As: 1.0.0` footer.",
+
+  "//changelog-sections": "`hidden` decides what RELEASES, not only what is listed: release-please skips a release whose notes come out empty, and any visible type that is not feat or breaking falls through to a patch bump. Hiding a type is therefore how `chore` and `docs` ship nothing.",
   "bump-minor-pre-major": true,
 
   "packages": {

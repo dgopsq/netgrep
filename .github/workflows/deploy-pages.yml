@@ -33,9 +33,10 @@ jobs:
 
     # There is deliberately no test gate here: release.yml runs the whole graph
     # before release-please tags, so a deploy that reaches this point is already
-    # of a commit that went green. A manual dispatch is not, which is accepted —
-    # unlike the publish workflows this reaches only a web page, and republishing
-    # from main is the whole reason the manual trigger exists.
+    # of a commit that went green. A manual dispatch is not, which is why the
+    # step below holds it to `main` — republishing from main is the whole reason
+    # that trigger exists, and without the check it would serve any branch to
+    # the live site.
     #
     # `pages` and `id-token` are what `deploy-pages` needs to mint its OIDC
     # token. They are declared here rather than at the top of the file so the
@@ -50,6 +51,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Refuse a manual run from anywhere but main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        run: |
+          echo '::error::Manual deploy is only allowed from main, not ${{ github.ref }}.'
+          exit 1
+
       - uses: actions/checkout@v4
 
       # The WASM is rebuilt rather than taken from the test workflow's

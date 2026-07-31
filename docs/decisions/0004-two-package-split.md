@@ -55,3 +55,24 @@ because pnpm rewrites `workspace:*` into a real version range at pack time.
 One wrinkle this record did not anticipate: the publishable unit for `@netgrep/search` is
 `packages/search/pkg/`, a **gitignored build output**, which no workspace glob can point at. The package is
 therefore a hand-written `packages/search/package.json` wrapping `pkg/` via `"files"`.
+
+---
+
+## Amendment: the two versions are no longer kept in step by hand (2026-07-31)
+
+Two statements above are out of date.
+
+**"Each has its own release workflow, triggered by its own git tag prefix."** Nothing triggers on a tag now.
+Both are reusable workflows called by `release.yml`, which publishes in dependency order within one run —
+release-please tags with `GITHUB_TOKEN`, and GitHub refuses to trigger workflows from events pushed with it,
+so a tag trigger would silently never fire.
+
+**"Two versions must be kept in step by hand … Nothing enforces this and nothing checks it."** Something does
+now. release-please's `linked-versions` plugin holds the two packages at one version and releases them as a
+pair, and `publish-netgrep` waits on `publish-search` in the workflow graph. The dependency range this record
+describes is also gone: `packages/netgrep/package.json` declares `workspace:*`, which pnpm rewrites to an
+exact version at pack time, and `scripts/verify-pack.mjs` fails the build if a `workspace:` range ever
+survives into a tarball.
+
+The disconnected dev loop in the last bullet was fixed earlier, by the move to pnpm workspaces — see
+[0009](0009-pnpm-workspaces.md). See [0021](0021-release-please.md) for the release mechanism.

@@ -1,8 +1,9 @@
 on:
   # Called by release.yml after publish-search.yml has finished: `workspace:*`
   # resolves to an exact version at pack time, so this package does not install
-  # until that one is on npm. Also runnable by hand — see publish-search.yml for
-  # why re-running release.yml is not a retry.
+  # until that one is on npm. Also runnable by hand, because re-running
+  # release.yml does not retry a failed publish: release-please reports
+  # release_created: false once the release exists, and every publish job skips.
   workflow_call:
   workflow_dispatch:
 
@@ -24,9 +25,8 @@ jobs:
 
     steps:
       # No test gate here either; release.yml runs the whole graph before
-      # anything is tagged. See publish-search.yml. That does leave the manual
-      # trigger as a button that publishes whatever ref was picked, so the ref
-      # is checked instead.
+      # anything is tagged. That does leave the manual trigger as a button that
+      # publishes whatever ref was picked, so the ref is checked instead.
       - name: Refuse a manual run from anywhere but main
         if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         run: |
