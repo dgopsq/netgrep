@@ -33,6 +33,7 @@ reasoning got wrong.
 | [0018](0018-line-oriented-tail-buffer.md) | Retain the incomplete trailing *line* between chunks, and cache only a drained stream | Accepted — closes the chunk-boundary and poisoned-cache defects; **amends 0006** |
 | [0019](0019-in-flight-fetch-registry.md) | De-duplicate concurrent downloads of one url, but only when the cache is on | Accepted — closes the duplicate-fetch defect; **the cache entry is the handover**, so with the cache off both callers still fetch |
 | [0020](0020-the-matching-line.md) | Return the first matching line, opt-in per search | Accepted — **the first widening of the public API**; **amends 0003**, and names the match details still refused |
+| [0021](0021-release-please.md) | release-please cuts releases; merging its PR is the trigger | Accepted — replaces tag-push publishing and push-to-main deploys; **amends 0017** (the demo now deploys on release, not on every push to `main`) |
 
 ## Format
 

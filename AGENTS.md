@@ -269,8 +269,35 @@ involved and the step list inside it names the command:
 | `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack`, `pnpm typecheck:example`, `pnpm build:example` |
 | `ci` | all | Aggregate — **this is the check to require on the branch** |
 
-A sixth workflow, `deploy-pages.yml`, publishes the demo to GitHub Pages on every push to `main`. It is not
-one of these jobs: it `uses:` this whole workflow and gates on it, the way the two publish workflows do.
+**`test-and-lint.yml` no longer triggers on `push: main`.** It runs on pull requests, and `release.yml` calls
+it on every push to `main`. That is one run per push where there used to be two — its own, plus the copy
+`deploy-pages.yml` called — in two concurrency groups that could not cancel each other.
+
+`release.yml` is the release pipeline, and the only thing that publishes anything:
+
+| Job | Runs when | Does |
+|---|---|---|
+| `test-and-lint` | every push to `main` | `uses:` the graph above |
+| `release-please` | it passed | Opens or updates the release PR; on a merged one, tags and creates the GitHub Release |
+| `publish-search` | `packages/search--release_created` | `uses: publish-search.yml` |
+| `publish-netgrep` | `packages/netgrep--release_created`, **after** `publish-search` | `uses: publish-netgrep.yml` |
+| `deploy` | `releases_created` — **any** component | `uses: deploy-pages.yml` |
+
+Three things about it are deliberate and easy to "fix" wrongly:
+
+- **The tests run *before* `release-please`, which is the reverse of every release-please example.** The
+  action tags unconditionally, so in the usual order a red `main` leaves a git tag and a public GitHub
+  Release for a version that never reached npm. Here a tag only ever exists for a commit that went green.
+- **Publishing happens in this run, not off a tag.** release-please tags with `GITHUB_TOKEN`, and GitHub
+  refuses to trigger workflows from events pushed with it. A `push: tags` trigger would silently never fire —
+  no error, no run, and you would find out from npm.
+- **`publish-netgrep` needs `publish-search`.** That is hard rule 5, enforced rather than remembered.
+
+The three called workflows trigger on `workflow_call` **and** `workflow_dispatch`, and none of them gates
+itself on the test graph any more — `release.yml` does that once. The manual trigger exists because a publish
+that fails *after* the tag was created cannot be retried by re-running `release.yml`: release-please reports
+`release_created: false` the second time and every publish job skips. Each therefore refuses a manual run
+whose ref is not `main`.
 
 The demo's domain, `netgrep.diegopasquali.com`, is **not configured anywhere in this repository** — it is a
 repository setting (Settings → Pages → Custom domain) plus a DNS record, and a `CNAME` file in the deployed
@@ -330,7 +357,7 @@ packages/
 
   example/           THE PUBLIC DEMO — https://netgrep.diegopasquali.com/
                      Vite + React + Tailwind v4 + shadcn, searching 56 Sherlock Holmes
-                     .txt files. Not published to npm; deployed to Pages on push to main.
+                     .txt files. Not published to npm; deployed to Pages on release.
     src/hooks/use-corpus-search.ts   the whole netgrep integration. Runs with the
                                      memory cache OFF on purpose — read the comment
     src/lib/story-url.ts             the ONLY module that knows the base path
@@ -348,8 +375,12 @@ scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one COMPILER 
                           via sccache. Each keeps its own target/ — sharing that is unsafe,
                           see §4.1 and decision 0014.
 
-.github/workflows/        Five jobs grouped by toolchain (§4.3), two npm publishes,
-                          and deploy-pages.yml for the demo site.
+.github/workflows/        test-and-lint.yml, five jobs grouped by toolchain (§4.3);
+                          release.yml, the pipeline that orchestrates everything
+                          below; two npm publishes and deploy-pages.yml, all three
+                          on workflow_call + workflow_dispatch.
+release-please-config.json      What the three components are, how they version.
+.release-please-manifest.json   Their current versions. WRITTEN BY THE BOT.
 .github/actions/          Composite setup actions, `node` and `rust`, shared by those jobs.
 ```
 
@@ -385,24 +416,51 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 
 ## 6. Hard rules
 
-1. **Version bumps and publishing are human-only.** Releases fire from pushed git tags (`netgrep-**`,
-   `search-**`) and publish to npm under the maintainer's token. You may *prepare* a release; you may never
-   trigger one, push a release tag, or run `npm publish` / `wasm-pack publish`. `.claude/settings.json`
-   denies these outright.
+1. **Version bumps and publishing are human-only.** The guarantee is unchanged; the mechanism is not.
+   Releases are cut by **release-please**, and the human act is **merging its release PR** — that merge tags,
+   publishes both packages and deploys the demo, with no further confirmation. You may never merge it, create
+   a GitHub Release, dispatch a publish workflow, push a tag, or run `npm publish` / `wasm-pack publish`.
+   `.claude/settings.json` denies all of these, including `gh pr merge`, `gh release create` and
+   `gh workflow run`.
+
+   **You may not edit version numbers by hand either.** `packages/search/Cargo.toml`,
+   `packages/search/package.json`, `packages/netgrep/package.json`, `packages/example/package.json`, the root
+   `Cargo.lock` and `.release-please-manifest.json` are all written by release-please. Editing one is how the
+   two manifests drift, which `pnpm verify:pack` fails on.
+
+   **Commit subjects now decide version numbers**, so they are part of this rule. Do not write a `!` breaking
+   marker or a `Release-As:` footer unless you were explicitly asked to — `bump-minor-pre-major` caps a stray
+   `!` at a minor bump rather than 1.0.0, but the number it produces is still published and cannot be taken
+   back.
 
 2. **Never bump dependencies opportunistically.** A version change is its own deliberate, tested task, never
    a side effect of unrelated work. If a tool suggests an upgrade while you are doing something else, add it
    to [`docs/BACKLOG.md`](docs/BACKLOG.md) and move on.
+
+   **When you do that task, commit it as `fix(search):` — not `chore:` — if it changes the bytes that ship.**
+   `chore` neither releases nor appears in a changelog, and this repository's most consequential changes have
+   historically been `chore`: dropping the ripgrep fork moved the `.wasm` by ~342 KB and silently fixed the
+   `^`-anchoring bug. From a consumer's side that is a fix, and calling it one is what gets it published.
+   Nothing enforces this.
 
    **There is deliberately no Renovate or Dependabot**, and adding one is not a maintenance task to pick up.
    On a repository maintained in bursts, per-dependency PRs become noise that gets ignored, which is worse
    than deliberate periodic review. Revisit only if the pinned versions start going stale in practice.
 
 3. **The example is the public demo, and its dependencies ARE maintained.** It is published to GitHub Pages
-   at <https://netgrep.diegopasquali.com/> on every push to `main`, and CI typechecks and builds it. This
-   **reverses** the exemption the package used to carry — the note in its `package.json` saying its
-   dependencies were deliberately frozen is gone, not overlooked. See
+   at <https://netgrep.diegopasquali.com/> **when a release is cut**, and CI typechecks and builds it on
+   every PR. This **reverses** the exemption the package used to carry — the note in its `package.json`
+   saying its dependencies were deliberately frozen is gone, not overlooked. See
    [decision 0017](docs/decisions/0017-example-as-hosted-demo.md).
+
+   It used to deploy on every push to `main`, which meant the published demo ran code no consumer could
+   install and its Scope section could describe a library that was not on npm. It now shows what was
+   released.
+
+   **A consequence to write commits around: `docs:` does not release, so it does not deploy.** A change a
+   visitor can see — copy, an image, a story file — must be committed as `fix(example):` or `feat(example):`
+   or it will sit on `main` until some other component happens to release. `docs:` is for repository
+   documentation. Nothing enforces this.
 
    It is still not a *correctness* check: nothing asserts what it renders. Correctness is established by
    `pnpm test`, `pnpm test:rust` and `pnpm verify:pack`. Rule 2 still applies to it — a version change is its
@@ -413,6 +471,10 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 
 5. **Publish `@netgrep/search` before `@netgrep/netgrep`.** The dependency is `workspace:*`, which pnpm
    rewrites to a real version at pack time; the wrapper will not resolve if the core is not on npm yet.
+
+   `release.yml` enforces this with a `needs:` edge, and the `linked-versions` plugin keeps the two on one
+   version so they always release as a pair. The rule still matters when publishing by hand from the Actions
+   UI, where nothing sequences them for you.
 
 ---
 

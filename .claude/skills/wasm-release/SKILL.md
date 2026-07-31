@@ -1,17 +1,24 @@
 ---
 name: wasm-release
-description: Build, verify and prepare a release of the netgrep packages (@netgrep/search WASM core and/or @netgrep/netgrep TypeScript wrapper). Use when asked to build the WASM package, cut or prepare a release, bump versions, or understand the publish pipeline. Covers the wasm-pack → post_build → git-tag → npm flow and the exact toolchain pins required.
+description: Build, verify and prepare a release of the netgrep packages (@netgrep/search WASM core and/or @netgrep/netgrep TypeScript wrapper). Use when asked to build the WASM package, cut or prepare a release, bump versions, or understand the publish pipeline. Covers the wasm-pack → post_build → release-please → npm flow and the exact toolchain pins required.
 ---
 
 # Releasing netgrep
 
-Two independently published packages, each released by pushing a git tag. This skill covers building,
-verifying and **preparing** a release.
+Releases are cut by **release-please**. It keeps a `chore: release main` pull request up to date as commits
+land on `main`; merging that PR tags both packages, publishes them to npm in dependency order, and deploys
+the demo — one run, no further confirmation. This skill covers building, verifying and **preparing**.
 
 > [!CAUTION]
-> **You may never publish.** Version bumps, `git tag`, `git push` and any `publish` command are human-only
-> actions (see [`AGENTS.md` §6](../../../AGENTS.md#6-hard-rules)). `.claude/settings.json` denies them
-> outright. Prepare the release, verify it, then hand over with the exact commands for a human to run.
+> **You may never release.** The human act is *merging the release PR*, and you may not do it — nor create a
+> GitHub Release, dispatch a publish workflow, push a tag, or run any `publish` command. See
+> [`AGENTS.md` §6](../../../AGENTS.md#6-hard-rules); `.claude/settings.json` denies all of them, `gh pr merge`
+> included. Verify, then hand over.
+
+> [!CAUTION]
+> **You may never hand-edit a version.** `packages/search/Cargo.toml`, the two `package.json` versions, the
+> root `Cargo.lock` and `.release-please-manifest.json` are written by the bot. Editing one makes them drift,
+> which `pnpm verify:pack` fails on.
 
 ---
 
@@ -31,13 +38,32 @@ Install the toolchain if missing:
 
 ---
 
-## 1. Which package changed?
+## 1. What will actually release
 
-| Changed files | Release |
+release-please picks components from the **paths a commit touched**, and the version from the **commit
+type** — not from anything you edit.
+
+| Changed files | Component | Effect of merging the release PR |
+|---|---|---|
+| `packages/search/**` | `search` | Publishes `@netgrep/search`, and `@netgrep/netgrep` with it |
+| `packages/netgrep/**` | `netgrep` | Publishes both — they are locked to one version |
+| `packages/example/**` | `example` | Deploys the demo site |
+
+`search` and `netgrep` share a version through the `linked-versions` plugin, so they always release as a
+pair: `workspace:*` resolves to an exact version at pack time, and a `search` release with no matching
+`netgrep` release reaches no consumer. The demo deploys when **any** component releases.
+
+| Commit type | Result |
 |---|---|
-| `packages/search/**` | `@netgrep/search` — then usually `@netgrep/netgrep` too (see step 4) |
-| `packages/netgrep/**` | `@netgrep/netgrep` only |
-| `packages/example/**` | Nothing — not published |
+| `fix:` | patch |
+| `feat:` | minor |
+| `feat!:` / `BREAKING CHANGE:` | minor while at `0.x` — never an automatic 1.0.0 |
+| `perf:` `refactor:` `build:` `deps:` | changelog only, no release |
+| `chore:` `docs:` `ci:` `test:` | nothing at all |
+
+**So a `chore:` commit that changes the published bytes ships nothing.** If dependency or toolchain work
+moves the `.wasm`, it is a `fix(search):`. If a change alters what a visitor sees on the demo, it is a
+`fix(example):` — `docs:` will not deploy it.
 
 ---
 
@@ -50,8 +76,8 @@ pnpm build:wasm        # must run first: the TS package compiles against pkg/ind
 pnpm lint              # Biome + clippy
 pnpm typecheck
 pnpm build
-pnpm test              # 24 tests: 7 in Node, 17 in headless Chromium
-pnpm test:rust         # 2 tests, native cargo test
+pnpm test              # 110 tests: 63 unit in Node, 47 integration in headless Chromium
+pnpm test:rust         # 45 tests, native cargo test
 pnpm verify:pack       # the tarballs that would actually reach npm
 ```
 
@@ -86,55 +112,50 @@ not the manifest wasm-pack generates inside `pkg/`.
 **`@netgrep/netgrep`** — `pnpm build` → `packages/netgrep/dist/`, also gitignored. The published manifest is
 `packages/netgrep/package.json`, hand-written, with `"files": ["dist"]`.
 
-Sanity-check before handing over:
-
-```bash
-cat packages/search/package.json     # version matches Cargo.toml?
-cat packages/netgrep/package.json    # version right? @netgrep/search dependency right?
-```
-
-Note `@netgrep/netgrep` depends on `@netgrep/search` as `workspace:*`. pnpm rewrites that to a real version
-range when packing, so **publish `@netgrep/search` first**.
+The version-copy step in `post_build.js` is now a **guard rather than a mechanism**: release-please writes
+`Cargo.toml` and the npm wrapper in the same commit, so the two already agree. If it ever reports a sync,
+something bypassed the bot.
 
 ---
 
-## 4. Version bumps — the coupling that bites
+## 4. Reading the release PR
 
-Versions live in two places, but only one is hand-maintained:
+The release PR is the artefact to review. Check:
 
-| Package | Version source | Must also update |
-|---|---|---|
-| `@netgrep/search` | `packages/search/Cargo.toml` | nothing — `post_build.js` syncs the npm manifest |
-| `@netgrep/netgrep` | `packages/netgrep/package.json` | — |
+- **The computed versions** in its `<details>` sections — `search` and `netgrep` must match each other.
+- **The changelog entries.** They come from commit subjects, so a wrongly-typed commit shows up here as a
+  missing entry, and this is the last cheap moment to notice.
+- **`packages/search/Cargo.toml`, both `package.json`s and the root `Cargo.lock`** all moved together. The
+  `cargo-workspace` plugin handles the lock; the `rust` strategy alone would miss it, because it only looks
+  for a lock inside the package directory.
 
-A change to the Rust core is still a **two-release sequence**: publish `@netgrep/search` first, then
-`@netgrep/netgrep`. The version drift that used to need watching is now handled by the build.
+A dry run against a pushed branch, which changes nothing:
 
-Both publish workflows set `greater-version-only: true`, so a forgotten bump means the publish silently
-no-ops rather than failing loudly.
+```bash
+npx release-please@17.11.0 release-pr --dry-run \
+  --repo-url=dgopsq/netgrep --target-branch=<branch> --token="$(gh auth token)"
+```
+
+It reads the config over the GitHub API rather than from the working tree, so the branch must be pushed
+first. Do not use `--local`: it runs `git checkout` in the directory you point it at.
 
 ---
 
-## 5. Hand-off (human runs these)
+## 5. Hand-off (human does this)
 
-Releases fire on tag push. `.github/workflows/publish-*.yml` run test-and-lint, build, then
-`JS-DevTools/npm-publish` with `NPM_TOKEN`.
+There are no tag commands any more. Say:
 
-```bash
-# @netgrep/search  — after bumping packages/search/Cargo.toml
-git tag search-<version> && git push origin search-<version>
+> Merge the `chore: release main` pull request. That tags `search-<version>` and `netgrep-<version>`,
+> publishes both packages, and deploys the demo.
 
-# @netgrep/netgrep — after bumping packages/netgrep/package.json
-git tag netgrep-<version> && git push origin netgrep-<version>
-```
-
-CI is green. The workflows pin the same Rust version as `rust-toolchain.toml` and read Node from
-`.node-version`, so a tag push builds what you built locally.
+If a publish fails **after** the tag exists, re-running `release.yml` will not retry it — release-please
+reports `release_created: false` the second time and every publish job skips. The retry is a manual
+`workflow_dispatch` of `publish-search.yml` or `publish-netgrep.yml` from `main`, in that order.
 
 ---
 
 ## 6. Report back
 
-State plainly: which targets you ran and their results, the built artefact sizes, which version bumps are
-needed and where, the exact tag commands to run, and the CI warning if Rust is involved. If a target failed,
-say so with the output — do not report a release as ready when it is not.
+State plainly: which targets you ran and their results, the built artefact sizes, what the release PR would
+contain, and the CI warning if Rust is involved. If a target failed, say so with the output — do not report
+a release as ready when it is not.
