@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { guidePlugin } from './plugins/guide';
 
 export default defineConfig({
   // The site is served from https://netgrep.diegopasquali.com, a custom domain,
@@ -16,7 +17,21 @@ export default defineConfig({
   // base change stays a one-line edit here.
   base: '/',
 
-  plugins: [react(), tailwindcss()],
+  // Two real documents, not a client-side router: /docs is generated HTML that
+  // reads without JavaScript, and `mpa` turns off the SPA fallback that would
+  // otherwise serve index.html for an unknown path and hide a broken link.
+  appType: 'mpa',
+
+  build: {
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        docs: fileURLToPath(new URL('./docs/index.html', import.meta.url)),
+      },
+    },
+  },
+
+  plugins: [react(), tailwindcss(), guidePlugin()],
 
   resolve: {
     alias: {

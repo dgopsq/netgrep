@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0a0b0c" />
+
+    <!--
+      Absolute, and written out in full, for the reason given at the top of
+      ../index.html: canonical and og:url may not be relative, and Vite's
+      `base` has no origin in it. If the domain moves, grep BOTH files and
+      public/sitemap.xml.
+    -->
+    <link rel="canonical" href="https://netgrep.diegopasquali.com/docs/" />
+
+    <title>Documentation — netgrep</title>
+    <meta
+      name="description"
+      content="How to use netgrep: installing, searching, capturing the matching line and its match positions, patterns, cancelling, caching, and the known limitations."
+    />
+    <meta
+      name="robots"
+      content="index, follow, max-snippet:-1, max-image-preview:large"
+    />
+
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icon-192.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="netgrep" />
+    <meta property="og:url" content="https://netgrep.diegopasquali.com/docs/" />
+    <meta property="og:title" content="netgrep documentation" />
+    <meta
+      property="og:description"
+      content="How to use netgrep: searching, capturing the matching line, patterns, cancelling, caching, and the known limitations."
+    />
+    <meta
+      property="og:image"
+      content="https://netgrep.diegopasquali.com/og-image.jpg"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!--
+      This entry loads the stylesheets and a scroll-spy for the table of
+      contents. It is NOT what renders the page: the guide HTML below is
+      injected at build time by plugins/guide.ts, so this document is complete
+      with JavaScript disabled. Vite emits a real <link rel="stylesheet"> into
+      the built HTML, so it is styled without JavaScript too.
+    -->
+    <script type="module" src="/src/docs-page.ts"></script>
+  </head>
+
+  <body>
+    <!--SITE_NAV-->
+
+    <div class="docs-layout">
+      <!--GUIDE_TOC-->
+      <main class="guide"><!--GUIDE_BODY--></main>
+    </div>
+  </body>
+</html>

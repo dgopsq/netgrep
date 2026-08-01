@@ -707,10 +707,11 @@ mod line_ranges_tests {
 /// Tracked in `docs/BACKLOG.md`.
 ///
 /// And the published demo warns its visitors about these, so a fix is not
-/// finished until it stops: drop the caveat from the `CAVEATS` array in
-/// `packages/example/src/components/limitations.tsx` in the same PR. Nothing
-/// checks that — a green `cargo test` is not evidence the site is honest.
-/// See AGENTS.md §2.3.
+/// finished until it stops: delete the caveat from
+/// `docs/guide/caveats.data.json` and run `pnpm docs:sync` in the same PR.
+/// That is checked now — `pnpm docs:sync --check` fails CI when the guide, the
+/// README and the demo disagree with that file. A green `cargo test` still is
+/// not evidence of it either way, so do the deletion here.
 #[cfg(test)]
 mod documented_defects {
     use super::matches;

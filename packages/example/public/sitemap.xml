@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  One page, one entry. It exists so that the sitemap can be submitted in Google
-  Search Console, which is the fastest route to a first crawl of a brand-new
-  domain; it is not doing any discovery work a single-page site needs.
+  Two pages, two entries. It exists so that the sitemap can be submitted in
+  Google Search Console, which is the fastest route to a first crawl of a
+  brand-new domain; it is not doing any discovery work a two-page site needs.
 
   `lastmod` is hand-maintained and only worth updating when the page's CONTENT
   changes — not on every deploy. A lastmod that always says "today" is ignored,
@@ -12,5 +12,9 @@
   <url>
     <loc>https://netgrep.diegopasquali.com/</loc>
     <lastmod>2026-07-29</lastmod>
+  </url>
+  <url>
+    <loc>https://netgrep.diegopasquali.com/docs/</loc>
+    <lastmod>2026-08-01</lastmod>
   </url>
 </urlset>

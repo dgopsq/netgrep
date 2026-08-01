@@ -1,7 +1,6 @@
 import { CircleAlert } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Hero } from '@/components/hero';
-import { Limitations } from '@/components/limitations';
 import { SearchField } from '@/components/search-field';
 import { StatsBar } from '@/components/stats-bar';
 import { StoryCard } from '@/components/story-card';
@@ -100,17 +99,34 @@ export function App() {
           ))}
         </ul>
 
-        <Limitations />
+        <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
+          <p>
+            Corpus: the Sherlock Holmes canon, public domain, from{' '}
+            <a
+              className="hover:text-primary underline underline-offset-4"
+              href="https://sherlock-holm.es/"
+            >
+              sherlock-holm.es
+            </a>
+            .
+          </p>
 
-        <footer className="text-muted-foreground/60 mt-16 text-center text-xs">
-          Corpus: the Sherlock Holmes canon, public domain, from{' '}
-          <a
-            className="hover:text-primary underline underline-offset-4"
-            href="https://sherlock-holm.es/"
-          >
-            sherlock-holm.es
-          </a>
-          .
+          <p>
+            netgrep is experimental, and{' '}
+            {/*
+              Composed from Vite's base rather than written as `/docs/`: the
+              site sat at `/netgrep/` before the custom domain, and a
+              root-relative link would 404 there with nothing to say why.
+              `BASE_URL` always ends in a slash.
+            */}
+            <a
+              className="hover:text-primary underline underline-offset-4"
+              href={`${import.meta.env.BASE_URL}docs/#limitations`}
+            >
+              what it cannot do
+            </a>{' '}
+            is listed in the documentation.
+          </p>
         </footer>
       </div>
     </div>

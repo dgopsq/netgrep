@@ -52,6 +52,20 @@ export default defineConfig({
           exclude: ['@netgrep/search'],
         },
       },
+      {
+        // Build-time tooling and the example's pure modules: the docs
+        // generator, the guide renderer, `active-heading.ts`.
+        // None of these touch the library, `pkg/` or a browser — so this
+        // project boots nothing. It is separate from `unit` rather than
+        // folded into it because that project's include path is the
+        // library's source, and widening it would blur what a red
+        // `test:unit` means.
+        test: {
+          name: 'tools',
+          environment: 'node',
+          include: ['scripts/**/*.spec.mjs', 'packages/example/**/*.spec.ts'],
+        },
+      },
     ],
   },
 });

@@ -1,0 +1,225 @@
+/*
+ * Typography for the guide HTML, which is generated at build time and so is
+ * NOT visible to Tailwind's class scanner. Everything here therefore styles
+ * plain elements under `.guide`, using the same tokens as index.css rather
+ * than utility classes. Adding utilities to the generated markup would work in
+ * dev and silently lose its styles in a production build.
+ */
+
+/*
+ * The document element is what scrolls on this page, so this is what turns a
+ * clicked table-of-contents link into a glide rather than a jump. It lives here
+ * rather than in index.css because only /docs has in-page anchors — and it is
+ * switched off under `prefers-reduced-motion` at the bottom of index.css.
+ */
+html {
+  scroll-behavior: smooth;
+}
+
+.docs-layout {
+  display: grid;
+  gap: 3rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 6rem;
+}
+
+@media (min-width: 64rem) {
+  .docs-layout {
+    grid-template-columns: minmax(0, 1fr) 16rem;
+  }
+
+  .toc {
+    position: sticky;
+    top: 2rem;
+    order: 2;
+    align-self: start;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+  }
+}
+
+.toc ul {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  line-height: 1.9;
+}
+
+.toc-label {
+  color: var(--primary);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.toc li[data-level="3"] {
+  padding-left: 0.875rem;
+}
+
+.toc a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.toc a:hover,
+.toc a.is-current {
+  color: var(--foreground);
+}
+
+.guide {
+  min-width: 0;
+  line-height: 1.75;
+}
+
+/* A heading reached from the table of contents stops just below the top edge
+   rather than flush against it. */
+.guide h1,
+.guide h2,
+.guide h3 {
+  scroll-margin-top: 1.5rem;
+}
+
+.guide h1 {
+  margin: 3.5rem 0 1rem;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.guide h1:first-child {
+  margin-top: 0;
+}
+
+.guide h2 {
+  margin: 3rem 0 0.75rem;
+  font-size: 1.375rem;
+  font-weight: 600;
+}
+
+.guide h3 {
+  margin: 2rem 0 0.5rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.guide p,
+.guide ul,
+.guide ol {
+  margin: 1rem 0;
+  color: var(--muted-foreground);
+}
+
+.guide li {
+  margin: 0.375rem 0;
+}
+
+.guide a {
+  color: var(--primary);
+  text-underline-offset: 4px;
+}
+
+.guide strong {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.guide code {
+  padding: 0.125em 0.375em;
+  border-radius: var(--radius-sm);
+  background: var(--muted);
+  color: var(--foreground);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+
+.guide pre {
+  margin: 1.25rem 0;
+  padding: 1rem 1.125rem;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /*
+   * No background here on purpose: Shiki writes the theme's own as an inline
+   * style on this element, and that theme's editor background IS `--card`.
+   * This used to set it with `!important` — the only way to beat an inline
+   * style — back when the theme was a bundled one sitting on GitHub's
+   * near-black.
+   */
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+
+.guide pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+
+.guide table {
+  width: 100%;
+  margin: 1.25rem 0;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.guide th,
+.guide td {
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+  color: var(--muted-foreground);
+}
+
+.guide th {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.guide blockquote {
+  margin: 1.25rem 0;
+  padding: 0.875rem 1.125rem;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.guide blockquote p {
+  margin: 0.375rem 0;
+}
+
+.alert-label {
+  color: var(--primary);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/*
+ * styleAlerts emits five kinds; Note, Tip and Important keep the blockquote's
+ * default teal, which is the right weight for an aside. Only the two that
+ * interrupt the reader are recoloured, and they are recoloured apart: amber for
+ * Warning, red for Caution, following GitHub's own ordering where Caution is
+ * the more severe. The kind is also spelled out in .alert-label, so the
+ * distinction does not rest on hue alone.
+ */
+.guide .alert-warning {
+  border-left-color: var(--warning);
+}
+
+.guide .alert-warning .alert-label {
+  color: var(--warning);
+}
+
+.guide .alert-caution {
+  border-left-color: var(--destructive);
+}
+
+.guide .alert-caution .alert-label {
+  color: var(--destructive);
+}

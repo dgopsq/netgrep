@@ -1,7 +1,7 @@
 on:
   # Called by release.yml when ANY component released. This used to fire on
   # every push to main, which meant the published demo ran unreleased code and
-  # its Scope section could describe a library no one could install. It now
+  # its documentation could describe a library no one could install. It now
   # deploys what was just released.
   workflow_call:
   # So a failed deploy can be retried, and the site can be re-published from
