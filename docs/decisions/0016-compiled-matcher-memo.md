@@ -139,3 +139,13 @@ library can least afford. Not worth 0.5µs. Recorded here so it is not rediscove
   answers correctly**.
 - Not fixed, and unaffected: 3a (chunk-boundary false negatives), 3b (poisoned partial cache), 3f (one NUL
   discards the chunk), 17 (`$` on CRLF), 18 (concurrent searches double a cache entry).
+
+---
+
+## Note (2026-08-02) — reason 3's cache-hit path is gone
+
+[Decision 0024](0024-remove-the-in-memory-cache.md) deleted `memoryCache` and the cache-hit path reason 3
+above describes; `Netgrep.search` no longer answers from anything but a fetch. Reasons 1 and 2 are untouched,
+and so is the decision they support — a `Matcher` handle would still owe `.free()` discipline and still be a
+breaking change to buy nothing a caller asked for. The paragraph above is left as written; this note exists so
+a reader re-opening the question does not weigh an argument against a path that no longer exists.

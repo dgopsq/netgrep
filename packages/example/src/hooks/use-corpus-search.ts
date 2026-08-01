@@ -55,7 +55,7 @@ export type SearchState = {
 };
 
 /**
- * THE PAGE MEASURES THE NETWORK, AND SINCE 0024 IT DOES SO BY CONSTRUCTION.
+ * THE PAGE MEASURES THE NETWORK, AND IT NOW DOES SO BY CONSTRUCTION.
  *
  * netgrep used to keep downloaded bytes in memory, on by default, and this
  * page switched it off: a miss drains the stream, which is exactly the
@@ -63,10 +63,10 @@ export type SearchState = {
  * `Record` lookup and presented it as a download from the second query onward
  * — and those numbers are the page's only evidence for its claim.
  *
- * Decision 0024 removed the cache from the library, so there is no longer a
- * flag to set. What repeats now cost is whatever the host's response headers
- * say, which is the browser's business and visible in devtools — a warm HTTP
- * hit is still served as a stream, so early resolution keeps working.
+ * The library no longer keeps a cache, so there is no longer a flag to set.
+ * What repeats now cost is whatever the host's response headers say, which is
+ * the browser's business and visible in devtools — a warm HTTP hit is still
+ * served as a stream, so early resolution keeps working.
  *
  * Note that overlapping runs still double-fetch, and always did: a keystroke
  * ABORTS the previous search, and an aborted download was never something a

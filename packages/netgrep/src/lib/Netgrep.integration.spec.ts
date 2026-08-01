@@ -816,10 +816,10 @@ describe('Netgrep integration (real WASM)', () => {
    * When one of these is genuinely fixed, the corresponding assertion must be
    * inverted IN THE SAME PR. That is the point: the fix cannot land quietly.
    *
-   * A defect whose MECHANISM IS DELETED leaves this block rather than being
-   * inverted in it — there is nothing left to regress. One that regresses
-   * stays, re-inverted. Decision 0024 removed the cache and took 3b and 18
-   * out with it; see AGENTS.md §2.1.
+   * An entry leaves this block once its current behaviour stops being wrong —
+   * whether the failure became impossible or the old behaviour came back but
+   * is now intended; one still producing a wrong answer stays, re-inverted.
+   * Decision 0024 removed the cache and took 3b and 18 out with it.
    *
    * Tracked in `docs/BACKLOG.md`.
    *

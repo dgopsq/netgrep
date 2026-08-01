@@ -221,8 +221,8 @@ suppressing early resolution, so fixing it alone would have made caveat 2 fire m
 configuration. Caveat 1's *residual* is what remains, and is described below. Caveats 2 and 3 were then
 overtaken entirely on 2026-08-01 by [decision 0024](decisions/0024-remove-the-in-memory-cache.md), which
 deleted the cache both of them described; their headings are kept because the numbering is referenced from
-this file's own text and from [`BACKLOG.md`](BACKLOG.md). Caveat 7 stopped being a defect on the same day, for
-the same reason, and is now a design consequence.
+this file's own text and from [decision 0002](decisions/0002-search-while-downloading.md), which cites both by
+number. Caveat 7 stopped being a defect on the same day, for the same reason, and is now a design consequence.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 

@@ -75,12 +75,13 @@ what, decide whether the new behaviour is right, and if it is, **invert the asse
 note saying why. Do not "fix" a defect test to make CI green, and do not fix the underlying bug without
 inverting its test in the same change.
 
-**A defect whose *mechanism* is deleted leaves the block; one that *regresses* stays in it, re-inverted.**
-[Decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) removed the in-memory cache, and took the
-`BACKLOG 3b` and `BACKLOG 18` entries out with it — 3b's failure became structurally impossible rather than
-fixed, and 18's assertion moved, inverted, into the ordinary suite beside the design boundary it now belongs
-to. That is not the tidying this section forbids: the entries left because the code they described did, and
-0024 says so.
+**An entry leaves the block once its current behaviour stops being wrong — whether the failure became
+impossible or the old behaviour came back but is now intended; one still producing a wrong answer stays,
+re-inverted.** [Decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) removed the in-memory
+cache, and took the `BACKLOG 3b` and `BACKLOG 18` entries out with it — 3b's failure became structurally
+impossible, leaving nothing to pin, and 18's behaviour came back but is now intended, so its assertion moved,
+inverted, into the ordinary suite beside the design boundary it now belongs to. That is not the tidying this
+section forbids: the entries left because the code they described did, and 0024 says so.
 
 This has already paid for itself once: upgrading off the ripgrep fork silently fixed the `^`-anchoring bug,
 and only this block noticed.

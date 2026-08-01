@@ -272,7 +272,7 @@ export class Netgrep {
    *
    * Separate from `search` so the public method stays what it reads as — the
    * engine gate and the argument resolution — with the loop below it. The
-   * split arrived with the cache (0019) and outlived it.
+   * split arrived with the cache and outlived it.
    */
   private executeSearch<T extends object, C extends NetgrepCapture>(
     url: string,
