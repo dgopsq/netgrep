@@ -46,8 +46,9 @@ no React and no markdown parser in the browser**. The page is complete with Java
 stylesheet, because Vite emits a real `<link rel="stylesheet">` into the built HTML.
 
 What that buys is measurable, and it is the reason to care on this site specifically: `/docs` ships
-**0.36 kB** of JavaScript — an `IntersectionObserver` that highlights the table-of-contents entry you are
-reading under, and nothing else — against the demo page's **248 kB** React bundle. A page whose subject is
+**1.07 kB** of JavaScript — an `IntersectionObserver` that highlights the table-of-contents entry you are
+reading under (0.36 kB), and Vite's `modulepreload` polyfill, which every entry gets (0.69 kB) — against the
+demo page's **248 kB** React bundle. A page whose subject is
 download cost cannot ship 50 KB of parser to display prose about download cost.
 
 **One data file, three renderings, and CI fails when they disagree.**
@@ -84,7 +85,7 @@ prevent.**
 | Field | What it decides |
 |---|---|
 | `kind` | `defect` (a real bug, listed in the README) or `by-design` (never going to be fixed — shown on the site and in the guide, and kept out of the README's *defect* list, where it would be a bug report for a decision) |
-| `demoCorpusCanTrigger` | Whether **this corpus** can reach it. `$` on CRLF and the 64 KB line ceiling are both `false`: every corpus file is LF and its longest line is 76 bytes |
+| `demoCorpusCanTrigger` | Whether **this corpus** can reach it, which gates **defects only**: the demo shows an entry when `kind` is `by-design` **or** this is true, so "No ranking" appears despite being `false`. `$` on CRLF and the 64 KB line ceiling are the two it does exclude — every corpus file is LF and its longest line is 76 bytes |
 
 The `demoCorpusCanTrigger` filter is not tidying. The demo's list is worth reading precisely because every
 entry on it is live *on the page you are looking at* — a visitor can go and reproduce any of them. Adding a
@@ -143,7 +144,7 @@ open the door to. A documentation site is an unusually inviting surface, so:
 |---|---|
 | **Render `docs/decisions/` on the site** | These records are written for contributors and they argue with each other — half of them amend or supersede another, and several say plainly where the earlier reasoning was wrong. That is the right register for a repository and the wrong one for a page whose visitor is deciding whether the library works. They stay on GitHub, where the audience already is. |
 | **Migrate `ARCHITECTURE.md` into the guide** | Different question, different reader. The guide answers "how do I use this"; `ARCHITECTURE.md` answers "how does this work inside", names `MAX_TAIL_BYTES` and `BinaryDetection::quit`, and is read alongside the source. Merging them would double the guide's length with material that helps no consumer, and would put internals on a page that must stay short enough to read. |
-| **Search over the documentation** | Tempting, and the temptation is the problem: netgrep searching its own docs would be a demo, not a feature. The corpus is seven files on **one page**, where `Ctrl-F` is better than anything netgrep can offer — a boolean per file is not navigation — and doing it would ship the 1.17 MB WebAssembly onto the one page in this project that currently ships 0.36 kB. |
+| **Search over the documentation** | Tempting, and the temptation is the problem: netgrep searching its own docs would be a demo, not a feature. The corpus is seven files on **one page**, where `Ctrl-F` is better than anything netgrep can offer — a boolean per file is not navigation — and doing it would ship the 1.17 MB WebAssembly onto the one page in this project that currently ships 1.07 kB. |
 | **Light mode** | The demo has been dark-only since 0017 and the guide matches it. A second theme means auditing every token in two palettes, and the site would then have two appearances and one set of eyes checking them. Cheap to add and permanently on the maintenance path — which is the shape of change this project refuses by default. |
 | **Versioned documentation** | The obvious answer to the release lag in *Consequences*, and it is the wrong size of solution: it would mean a build per released version, a switcher, and stale copies of the guide kept alive forever, for a 0.x library with two published packages on one version. The lag is a few days and the repository always shows the truth. Revisit if netgrep ever ships a 1.0 with a supported previous major. |
 
