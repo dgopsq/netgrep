@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BEGIN,
+  END,
   renderCaveatsModule,
   renderGuideSection,
   renderReadmeList,
+  spliceReadme,
 } from './caveats.mjs';
 
 /** Two entries covering both `kind`s and both sides of the demo filter. */
@@ -114,5 +117,50 @@ describe('renderCaveatsModule', () => {
     ]);
 
     expect(out).toContain("\\'");
+  });
+});
+
+describe('spliceReadme', () => {
+  it('replaces the block between the markers', () => {
+    const readme = `# Title\n\n${BEGIN}\nold content\n${END}\n\n## Next section\n`;
+
+    const out = spliceReadme(readme, 'new content');
+
+    expect(out).toBe(
+      `# Title\n\n${BEGIN}\nnew content\n${END}\n\n## Next section\n`,
+    );
+  });
+
+  it('is idempotent when spliced twice', () => {
+    const readme = `# Title\n\n${BEGIN}\nold content\n${END}\n`;
+
+    const once = spliceReadme(readme, 'new content');
+    const twice = spliceReadme(once, 'new content');
+
+    expect(twice).toBe(once);
+  });
+
+  it('throws when BEGIN is missing', () => {
+    const readme = `# Title\n\nold content\n${END}\n`;
+
+    expect(() => spliceReadme(readme, 'new content')).toThrow(
+      /missing or has misordered/,
+    );
+  });
+
+  it('throws when END is missing', () => {
+    const readme = `# Title\n\n${BEGIN}\nold content\n`;
+
+    expect(() => spliceReadme(readme, 'new content')).toThrow(
+      /missing or has misordered/,
+    );
+  });
+
+  it('throws when the markers are swapped', () => {
+    const readme = `# Title\n\n${END}\nold content\n${BEGIN}\n`;
+
+    expect(() => spliceReadme(readme, 'new content')).toThrow(
+      /missing or has misordered/,
+    );
   });
 });

@@ -18,11 +18,10 @@ import {
   renderCaveatsModule,
   renderGuideSection,
   renderReadmeList,
+  spliceReadme,
 } from './lib/caveats.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const BEGIN = '<!-- BEGIN GENERATED CAVEATS -->';
-const END = '<!-- END GENERATED CAVEATS -->';
 
 const check = process.argv.includes('--check');
 
@@ -45,19 +44,6 @@ function biomeFormat(source, filePath) {
   }
 
   return result.stdout;
-}
-
-function spliceReadme(readme, block) {
-  const start = readme.indexOf(BEGIN);
-  const end = readme.indexOf(END);
-
-  if (start === -1 || end === -1) {
-    throw new Error(
-      `README.md is missing the ${BEGIN} / ${END} markers. Restore them; the caveat list is generated.`,
-    );
-  }
-
-  return `${readme.slice(0, start)}${BEGIN}\n${block}\n${readme.slice(end)}`;
 }
 
 const caveats = JSON.parse(
