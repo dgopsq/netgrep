@@ -36,7 +36,18 @@ if (entries.length > 0) {
     }
   };
 
+  // A clicked link jumps its heading to the top of the viewport, and the
+  // jump itself fires `scroll` events — including, for a late heading, ones
+  // that land on the bottom-of-document rule and would overwrite the click
+  // with the last entry a moment later. Pinning the clicked index and
+  // ignoring scroll-driven recomputes while pinned is what keeps the clicked
+  // entry active through that self-inflicted scroll. `scroll` therefore
+  // cannot be what clears the pin; `wheel`, `touchmove` and `keydown` are,
+  // because those only fire for scrolling the reader actually did.
+  let pinnedIndex: number | null = null;
+
   const update = () => {
+    if (pinnedIndex !== null) return;
     const tops = entries.map(({ heading }) => documentTop(heading));
     const index = activeHeadingIndex(
       tops,
@@ -60,16 +71,29 @@ if (entries.length > 0) {
     });
   };
 
+  const unpin = () => {
+    pinnedIndex = null;
+  };
+  const unpinAndResize = () => {
+    unpin();
+    onScroll();
+  };
+
   window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', onScroll);
+  window.addEventListener('resize', unpinAndResize);
   window.addEventListener('hashchange', update);
+  window.addEventListener('wheel', unpin, { passive: true });
+  window.addEventListener('touchmove', unpin, { passive: true });
+  window.addEventListener('keydown', unpin);
   update();
 
-  // A clicked link jumps its heading straight to the top of the viewport —
-  // above where the activation line will settle once the browser finishes
-  // scrolling — so the active entry is set immediately rather than waiting
-  // on the next scroll event.
+  // The active entry is set immediately on click, rather than waiting on the
+  // scroll it triggers, so the highlight responds before the browser even
+  // starts moving.
   for (const [i, { link }] of entries.entries()) {
-    link.addEventListener('click', () => paint(i));
+    link.addEventListener('click', () => {
+      pinnedIndex = i;
+      paint(i);
+    });
   }
 }

@@ -1,6 +1,12 @@
 /** How far down the viewport the activation line sits, as a fraction of its height. */
 const ACTIVATION_FRACTION = 0.1;
 
+// Real browsers routinely report scrollY + innerHeight a fraction of a pixel
+// short of scrollHeight at a full scroll — fractional device pixel ratios,
+// zoom, subpixel layout — so an exact >= comparison misses a genuinely
+// bottomed-out page and reintroduces the "last headings never highlight" bug.
+const BOTTOM_TOLERANCE_PX = 2;
+
 /**
  * Which table-of-contents heading is "active" for the current scroll position.
  *
@@ -31,7 +37,10 @@ export function activeHeadingIndex(
   // never satisfy "scrolled to the bottom" even though scrollY + viewportHeight
   // trivially reaches documentHeight — there is no scroll position to be at.
   const canScroll = documentHeight > viewportHeight;
-  if (canScroll && scrollY + viewportHeight >= documentHeight) {
+  if (
+    canScroll &&
+    scrollY + viewportHeight >= documentHeight - BOTTOM_TOLERANCE_PX
+  ) {
     return tops.length - 1;
   }
 

@@ -49,4 +49,24 @@ describe('activeHeadingIndex', () => {
     // position, landing on the first heading.
     expect(activeHeadingIndex(tops, 0, 800, 600)).toBe(0);
   });
+
+  it('treats half a pixel short of the bottom as scrolled to the bottom', () => {
+    const tops = [100, 200, 10000];
+    // scrollY + viewportHeight = 10199.5, half a pixel short of
+    // documentHeight (10200) — exactly the subpixel gap real browsers
+    // produce (device pixel ratio, zoom, subpixel layout) on a fully
+    // scrolled page. Without a tolerance this misses the bottom rule and
+    // the last heading (top 10000, far past the activation line) never
+    // activates — bug 2 again.
+    expect(activeHeadingIndex(tops, 9399.5, 800, 10200)).toBe(2);
+  });
+
+  it('does not treat a genuinely mid-document position as the bottom', () => {
+    const tops = [100, 200, 10000];
+    // scrollY + viewportHeight = 10195, 5px short of documentHeight —
+    // outside the subpixel tolerance, so this must resolve by position
+    // rather than jumping to the last heading. Pins the tolerance so it
+    // cannot silently grow into "close enough" for a real scroll gap.
+    expect(activeHeadingIndex(tops, 9395, 800, 10200)).toBe(1);
+  });
 });
