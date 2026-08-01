@@ -418,6 +418,13 @@ export class Netgrep {
               : NO_HIT;
 
           if (hit.result) {
+            // Terminate the transfer rather than just stop reading it. An
+            // abandoned reader leaves the request open, so the rest of the
+            // file keeps arriving and is paid for. Rejections are ignored:
+            // the answer is already decided, and a stream that has errored
+            // rejects here.
+            reader.cancel().catch(() => {});
+
             resolve(toResult<T, C>(url, pattern, metadata, hit, capture));
           } else {
             // `.catch` because this promise is not chained to the executor's:
