@@ -12,6 +12,7 @@
 
 import Shiki from '@shikijs/markdown-it';
 import MarkdownIt from 'markdown-it';
+import { netgrepTheme } from './shiki-theme';
 
 const REPO_BLOB = 'https://github.com/dgopsq/netgrep/blob/main';
 
@@ -34,7 +35,11 @@ function getShikiPlugin() {
     // comment in index.css), and the two-theme form emits `--shiki-light` /
     // `--shiki-dark` custom properties that render as unstyled text unless a
     // stylesheet picks one — a failure that looks like Shiki not running.
-    theme: 'github-dark-default',
+    //
+    // It is defined in this repository rather than picked from Shiki's bundle
+    // because every bundled theme is a rainbow, and this page has exactly one
+    // accent colour.
+    theme: netgrepTheme,
   });
 
   return shikiPlugin;

@@ -142,14 +142,12 @@ html {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   /*
-   * `!important` is load-bearing: Shiki writes the theme's background as an
-   * INLINE style on the `<pre>`, and an inline style beats a stylesheet rule
-   * on specificity alone. The block would otherwise sit on GitHub's near-black
-   * rather than this site's card colour. Same reasoning, and the same ignore
-   * form, as the reduced-motion block in index.css.
+   * No background here on purpose: Shiki writes the theme's own as an inline
+   * style on this element, and that theme's editor background IS `--card`.
+   * This used to set it with `!important` — the only way to beat an inline
+   * style — back when the theme was a bundled one sitting on GitHub's
+   * near-black.
    */
-  /* biome-ignore lint/complexity/noImportantStyles: must override Shiki's inline background */
-  background: var(--card) !important;
   font-size: 0.8125rem;
   line-height: 1.7;
 }
