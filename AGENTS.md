@@ -95,8 +95,8 @@ This is the first thing to try when something fails inexplicably on a clean chec
 
 ### 2.3 ⚠️ Fixing a defect is not finished until the DEMO SITE stops warning about it
 
-The example is a **published web page** — <https://netgrep.diegopasquali.com/> — and its "Scope" section tells
-visitors what netgrep cannot do. A fix that leaves that list alone puts the project in the worst possible
+The example is a **published two-page site** — <https://netgrep.diegopasquali.com/> — and its `/docs` page
+tells visitors what netgrep cannot do. A fix that leaves that list alone puts the project in the worst possible
 position: a live site confidently warning the world about a bug that no longer exists. The site's only value
 is that it is accurate, so stale honesty is worse than none.
 
@@ -109,19 +109,26 @@ is exactly why it is in this section rather than in a comment somewhere.
 
 **This is now enforced, for the caveat list.** Every limitation lives once, in
 [`docs/guide/caveats.data.json`](docs/guide/caveats.data.json). `pnpm docs:sync` renders it onto the
-guide, the README and the demo, and CI runs `pnpm docs:sync --check` — so the three cannot disagree.
-Fixing a defect means **deleting one entry from that file** and running `pnpm docs:sync`, in the PR
-that fixes it.
+guide's Limitations page and the README's defect list, and CI runs `pnpm docs:sync --check` — so the two
+cannot disagree. Fixing a defect means **deleting one entry from that file** and running `pnpm docs:sync`,
+in the PR that fixes it.
 
-Two things the generator does not decide, and you must:
+**The demo page does not restate any of this — it links to it.** Its "Scope" section was removed once `/docs`
+existed to carry the same list generated; one line in the demo's footer now points at the guide's
+limitations. A visitor has to follow that link where the list used to be in front of them, and in exchange
+what they land on cannot go stale.
+
+One thing the generator does not decide, and you must:
 
 | Field | What it means |
 |---|---|
-| `kind` | `defect` (a bug, listed in the README) or `by-design` (never fixed, shown on the site and in the guide but not in the README's defect list) |
-| `demoCorpusCanTrigger` | Whether *this corpus* can hit it. It filters **defects only** — the demo shows an entry when `kind` is `by-design` **or** the flag is true, so a by-design entry appears whatever it says (`no-ranking` is exactly that). `false` therefore keeps a defect off the demo page: 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false`, and so is concurrent-dedup, since the demo issues one search per URL per query and so never triggers it |
+| `kind` | `defect` (a bug, listed in the README and under the guide's *Defects* heading) or `by-design` (never fixed — in the guide under *By design*, kept out of the README's defect list, where it would be a bug report for a decision) |
+
+`backlog` is carried and never rendered. It records which item pins the defect, for a maintainer reading the
+data file; published documentation does not send a reader to an internal tracker. Do not delete it as unused.
 
 **Adding a defect is still a judgement call, and `--check` cannot make it for you.** CI verifies that
-the three generated surfaces agree with `caveats.data.json`. Nothing detects a defect that was never
+the two generated surfaces agree with `caveats.data.json`. Nothing detects a defect that was never
 entered into it in the first place. So when you add one to [`docs/BACKLOG.md`](docs/BACKLOG.md),
 decide whether a visitor is affected: if so, add an entry here; if not, no action — but make it a
 decision, not an omission.
@@ -140,13 +147,8 @@ the scope of a result and the 1.17 MB WebAssembly download.
 > [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
 > [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md).
 
-Two items are deliberately *not* on the site, both because the corpus cannot trigger them: **17** (`$` on CRLF
-input — every file is LF) and **3g** (inside a line longer than 64 KB, a long match is lost and `^` can match at
-a window edge — the corpus's longest line is 76 bytes). If it ever gains a CRLF file or a very long line, each
-needs a caveat.
-
-**Do not delete a caveat to tidy the page.** The list is short because the defects are few, not because the
-page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
+**Do not delete a caveat to tidy the guide or the README.** The list is short because the defects are few, not
+because a page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
 
 ---
 
@@ -197,7 +199,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
 | Test the tooling | `pnpm test:tools` | **72 tests** over the docs generator, the guide renderer and the example's data modules. Touches neither the library nor `pkg/` |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **57 tests** |
-| Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide, the README and the demo. `--check` writes nothing and exits 1 when they disagree — §2.3 |
+| Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide and the README. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
 | Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
@@ -376,9 +378,9 @@ packages/
     src/hooks/use-corpus-search.ts   the whole netgrep integration. Runs with the
                                      memory cache OFF on purpose — read the comment
     src/lib/story-url.ts             the ONLY module that knows the base path
-    src/data/visible-caveats.ts      which caveats the demo shows, and why. The
-                                     library's own come from caveats.generated.ts,
-                                     which `pnpm docs:sync` writes
+    src/App.tsx                      the demo page. It states no limitation of its
+                                     own: the footer links to the guide's, which
+                                     `pnpm docs:sync` generates
     index.html                       the DEMO entry: canonical, Open Graph, JSON-LD —
                                      spells the domain out in full; so do
                                      public/robots.txt and public/sitemap.xml.
@@ -400,8 +402,8 @@ docs/guide/               THE CANONICAL PROSE. Seven numbered .md files, readabl
 scripts/verify-pack.mjs   Packaging guard, run in CI.
 scripts/bootstrap.mjs     Prepares a checkout: install, browser, WASM (§4.1).
 scripts/worktree.mjs      `git worktree add` + bootstrap, in one command.
-scripts/docs-sync.mjs     Renders docs/guide/caveats.data.json onto the guide, the README
-                          and the demo. `--check` writes nothing and fails CI (§2.3).
+scripts/docs-sync.mjs     Renders docs/guide/caveats.data.json onto the guide and the
+                          README. `--check` writes nothing and fails CI (§2.3).
 scripts/lib/              Its pure renderers and their tests, run by `pnpm test:tools`.
 scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one COMPILER cache,
                           via sccache. Each keeps its own target/ — sharing that is unsafe,
@@ -492,7 +494,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    [decision 0017](docs/decisions/0017-example-as-hosted-demo.md).
 
    It used to deploy on every push to `main`, which meant the published demo ran code no consumer could
-   install and its Scope section could describe a library that was not on npm. It now shows what was
+   install and its documentation could describe a library that was not on npm. It now shows what was
    released.
 
    **A consequence to write commits around: `docs:` does not release, so it does not deploy.** A change a

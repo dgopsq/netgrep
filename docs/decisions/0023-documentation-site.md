@@ -150,3 +150,28 @@ open the door to. A documentation site is an unusually inviting surface, so:
 
 None of these is refused because documentation is unwelcome. They are refused because `/docs` is worth having
 only while it stays a page that loads instantly, reads without JavaScript, and cannot disagree with the README.
+
+---
+
+## Amendment: the demo's Scope section was removed (2026-08-01)
+
+**One data file now feeds two surfaces, not three.** The demo page's "Scope" section is gone, and with it
+`limitations.tsx`, `visible-caveats.ts` and the generated `caveats.generated.ts`. `pnpm docs:sync` writes
+`docs/guide/07-limitations.md` and the README block; nothing else. The demo's footer carries one line linking
+to the guide's limitations, composed from `import.meta.env.BASE_URL`.
+
+**"Why the site's caveat list is still not the README's" is now history, and it is left standing above as
+history.** With no list on the demo page there is nothing for `demoCorpusCanTrigger` to gate, so the field is
+gone from `caveats.data.json` along with `demoBody`, and `kind` is the only judgement the data file still
+carries. The `cache-off` card — the one caveat that was never library data — went with the section; the
+reason the demo runs with the cache off is still in the comment in `use-corpus-search.ts`, which is where it
+was always argued.
+
+**What this costs is exactly what the section was for.** [0017](0017-example-as-hosted-demo.md) put the
+caveats *on the page*, below the result and above the fold's fold, because the site's audience will watch the
+thing work and then want to know what it cannot do; a visitor now has to follow a link to learn that, and
+most will not. The reasoning for the removal is that the guide says it better and says it once — the demo was
+restating a subset in different words, and a subset written for one corpus is the harder of the two lists to
+keep true. Both claims were made when the section still existed and this record argued the other way; the
+argument above is not rewritten, because a record that quietly agrees with whatever was done last is worth
+nothing.

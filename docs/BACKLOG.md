@@ -39,13 +39,13 @@ means inverting its assertion in the same PR.**
 
 > [!IMPORTANT]
 > **Moving an item to _Done_ is not finished until the demo site stops warning about it.** The published
-> page at <https://netgrep.diegopasquali.com/> names the defects that affect its visitors, and every one of
-> them lives once in [`guide/caveats.data.json`](guide/caveats.data.json). Delete the entry and run
-> `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
+> documentation at <https://netgrep.diegopasquali.com/docs/> names the defects a visitor is affected by, and
+> every one of them lives once in [`guide/caveats.data.json`](guide/caveats.data.json). Delete the entry and
+> run `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
 >
 > **3f has a caveat there.** The demo's cache is switched off, but no longer for any reason on this list — a
 > warm cache stops the page's timings measuring the network, which is a choice about the demo rather than a
-> workaround for a defect. `pnpm docs:sync --check` keeps the three rendered surfaces honest to that file;
+> workaround for a defect. `pnpm docs:sync --check` keeps the two rendered surfaces honest to that file;
 > what it cannot tell you is that an item here needs an entry in it at all. See
 > [`../AGENTS.md` §2.3](../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 
@@ -80,9 +80,10 @@ not regress — a match arriving complete in **one** chunk is found, because the
 the window is taken; `^` does not match when the window is never flushed on its own; and a line captured from a
 single chunk starts where the line starts.
 
-**Deliberately not on the demo site**, for the same reason as item 17: the corpus cannot trigger it. Recorded
-as `demoCorpusCanTrigger: false` in [`guide/caveats.data.json`](guide/caveats.data.json) so that stays a
-decision rather than an omission.
+**Published anyway**, in [`guide/caveats.data.json`](guide/caveats.data.json) and so in the guide and the
+README, like item 17. The demo used to filter its own list down to what its corpus could reach; it no longer
+carries one, and a reader running netgrep over minified JavaScript reaches this whether or not the Sherlock
+canon does.
 
 Not obviously worth fixing. Raising the ceiling trades memory for a case nobody has hit; removing it means
 buffering without bound. Left recorded rather than planned.
