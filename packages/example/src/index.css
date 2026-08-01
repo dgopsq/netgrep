@@ -256,4 +256,15 @@
     transition-duration: 0.01ms !important;
     /* biome-ignore-end lint/complexity/noImportantStyles: must override Tailwind's animate-* utilities */
   }
+
+  /*
+   * Smooth scrolling is a vestibular trigger, so /docs's is switched off too.
+   * `!important` for the same reason as above: docs.css is imported after this
+   * file and sets `scroll-behavior` on the same element, so it would otherwise
+   * win on order alone.
+   */
+  html {
+    /* biome-ignore lint/complexity/noImportantStyles: must override docs.css, which loads later */
+    scroll-behavior: auto !important;
+  }
 }

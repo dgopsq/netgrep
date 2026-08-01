@@ -6,6 +6,16 @@
  * dev and silently lose its styles in a production build.
  */
 
+/*
+ * The document element is what scrolls on this page, so this is what turns a
+ * clicked table-of-contents link into a glide rather than a jump. It lives here
+ * rather than in index.css because only /docs has in-page anchors — and it is
+ * switched off under `prefers-reduced-motion` at the bottom of index.css.
+ */
+html {
+  scroll-behavior: smooth;
+}
+
 .docs-layout {
   display: grid;
   gap: 3rem;
@@ -62,6 +72,14 @@
 .guide {
   min-width: 0;
   line-height: 1.75;
+}
+
+/* A heading reached from the table of contents stops just below the top edge
+   rather than flush against it. */
+.guide h1,
+.guide h2,
+.guide h3 {
+  scroll-margin-top: 1.5rem;
 }
 
 .guide h1 {
