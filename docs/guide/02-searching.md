@@ -28,14 +28,14 @@ NG.search("url", "pattern", { title: 'A blog post' })
 
 ## What you get back
 
-A single search resolves to a result carrying the answer and whatever metadata you passed in:
+A single search resolves to the answer and whatever metadata you passed in:
 
 ```ts
 {
   url: string;
   pattern: string;
-  result: boolean;      // the whole answer: did the pattern occur?
-  metadata?: T;         // returned untouched, for correlating results back to your own objects
+  result: boolean;      // did the pattern occur?
+  metadata?: T;         // returned untouched
 }
 ```
 
@@ -70,16 +70,16 @@ NG.searchBatchWithCallback([
 
 ## Batch results never reject
 
-The batch methods add an `error` field, and this is the part worth reading twice:
+The batch methods add an `error` field:
 
 ```ts
 { /* …as above… */ error: string | null }
 ```
 
 > [!WARNING]
-> **`searchBatch` and `searchBatchWithCallback` never reject.** A failed request — network error, 404, CORS —
+> **`searchBatch` and `searchBatchWithCallback` never reject.** A failed request (network error, 404, CORS)
 > is captured as `{ result: false, error: "…" }`, which is indistinguishable from a genuine "no match" unless
-> you check `error`. Single `search` calls behave the opposite way: they *reject*, and have no `error` field.
+> you check `error`. Single `search` calls do the opposite: they *reject*, and have no `error` field.
 
 ```ts
 const outputs = await NG.searchBatch(inputs, pattern);

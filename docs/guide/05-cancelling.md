@@ -1,7 +1,7 @@
 # Cancelling a search
 
 Every search method takes an optional config with an `AbortSignal`, which is threaded into the underlying
-`fetch`. This is the natural fit for a search-as-you-type box:
+`fetch`. For a search-as-you-type box:
 
 ```ts
 let controller: AbortController | undefined;
