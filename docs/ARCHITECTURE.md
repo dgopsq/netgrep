@@ -38,12 +38,12 @@ years — twice if the follow-up that added match positions within that line is 
 ┌─────────────────────────────────────────────────────────────────┐
 │ packages/example  — the public demo, deployed to GitHub Pages     │
 │   Vite + React + Tailwind, 56 .txt files, debounced input →      │
-│   searchBatchWithCallback, memory cache OFF (decision 0017)      │
+│   searchBatchWithCallback (decision 0017)                        │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
 │ packages/netgrep  — @netgrep/netgrep (TypeScript, ESM)           │
-│   streaming, batching, in-memory cache, abort, error shaping     │
+│   streaming, batching, abort, error shaping — retains nothing    │
 │   awaits init() once, then search_bytes per block of whole lines │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
@@ -134,7 +134,7 @@ third is `regex-automata`'s DFA and Unicode tables.
 
 ## The TypeScript wrapper — `packages/netgrep`
 
-`src/lib/Netgrep.ts` is the entire public surface. `src/lib/data/` holds five types, one per file.
+`src/lib/Netgrep.ts` is the entire public surface. `src/lib/data/` holds six types, one per file.
 
 `src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` is
 `export * from './lib/Netgrep.js'`, so anything exported from that file would become public API. It is a
@@ -149,7 +149,8 @@ tiny cap, instead of only through a >64 KB fixture in a browser.
 | `searchBatch(inputs, pattern, config?)` | `Promise<BatchNetgrepResult<T>[]>` | `Promise.all` — resolves only when **all** searches settle. Per-item errors are captured into `error`, never rejected. |
 | `searchBatchWithCallback(inputs, pattern, cb, config?)` | `void` | Fires `cb` per completed search. **No completion signal** — the caller cannot know when the batch is done. |
 
-`NetgrepConfig { enableMemoryCache }` (default `true`) is per-instance.
+The constructor takes no arguments — the library retains nothing between searches, so there is nothing to
+configure ([0024](decisions/0024-remove-the-in-memory-cache.md)).
 `NetgrepSearchConfig { signal }` is per-call and threads an `AbortSignal` into `fetch`.
 
 `metadata` is an opaque generic `T` carried through untouched and returned on the result — the mechanism by
@@ -162,26 +163,15 @@ search(url, pattern)
   │
   ├─ await wasmReady          ← init() started once at module load
   │
-  ├─ cache enabled AND a search of this url is in flight?
-  │     └─ yes → await it, then look again (it may have cached nothing)
-  │
-  ├─ cache enabled AND cache[url] exists?
-  │     └─ yes → search_bytes(cache[url], pattern) → resolve
-  │              (always the WHOLE file — entries are only written from a
-  │               drained stream, so there are no boundaries inside one)
-  │
-  └─ register in inFlight[url] (cache enabled only), then
-     fetch(url, { signal })
+  └─ fetch(url, { signal })
        └─ res.body.getReader()
             └─ handleReader(reader)   ── recursive
                  ├─ read() → { value, done }
                  │
                  ├─ done → search_bytes(tail, pattern)  ← the final line, which
                  │         │                              nothing has looked at
-                 │         ├─ cache enabled → cache[url] = join(chunks)
                  │         └─ resolve(result)
                  │
-                 ├─ cache enabled → chunks.push(value)
                  ├─ splitAtLastLine(tail ++ value, 64 KB)
                  │    ├─ searched ← whole lines
                  │    └─ tail     ← the incomplete trailing line, held back
@@ -191,25 +181,20 @@ search(url, pattern)
                  └─ not matched   → recurse
 ```
 
-Two things about that shape are load-bearing, and both are [decision
-0018](decisions/0018-line-oriented-tail-buffer.md):
+Three things about that shape are load-bearing:
 
-- **The engine only ever sees whole lines.** A match cannot span a `\n`, so the incomplete trailing line is the
-  exact carry-over between chunks — which is why a boundary cannot hide a match, and why it cannot fake a line
-  start for `^` or a line end for `$` either. `splitAtLastLine` falls back to a 64 KB byte window when a line
-  outgrows the ceiling, which is the one case where a match can still be lost (caveat 1).
-- **The cache is written once, at `done`.** Resolving early therefore caches *nothing*, rather than caching a
-  prefix that later answers questions about text it never downloaded (caveat 2). Chunks are only collected when
-  the cache is enabled, so a search with it off holds one chunk plus the tail.
+- **The engine only ever sees whole lines** ([decision 0018](decisions/0018-line-oriented-tail-buffer.md)). A
+  match cannot span a `\n`, so the incomplete trailing line is the exact carry-over between chunks — which is
+  why a boundary cannot hide a match, and why it cannot fake a line start for `^` or a line end for `$`
+  either. `splitAtLastLine` falls back to a 64 KB byte window when a line outgrows the ceiling, which is the
+  one case where a match can still be lost (caveat 1).
+- **Nothing is retained between reads.** One chunk plus the incomplete line at its end, bounded at 64 KB,
+  however long the file is. There is no accumulation and no cache
+  ([0024](decisions/0024-remove-the-in-memory-cache.md)) — which is what makes the memory cost independent of
+  the response size.
 - **A match cancels the reader.** `resolve` on a hit is paired with `reader.cancel()`, which terminates the
   underlying request instead of merely stopping local reads — otherwise the rest of the file would keep
   arriving, and being paid for, after the answer was already known.
-
-The two `cache enabled` branches at the top are [decision
-0019](decisions/0019-in-flight-fetch-registry.md), and the second exists because the first is not a guarantee:
-a waiter can wake to a cold cache, since the search it waited on may have matched early or failed. It then
-fetches for itself rather than waiting again — queueing until the url is quiet would serialise callers that
-used to fetch in parallel without saving a single request.
 
 Errors are normalised to strings by `serializeError` — `Error.message`, or `JSON.stringify` for
 non-`Error` throws. The recursive `handleReader` call carries a `.catch(reject)`: the promise it returns is not
@@ -220,18 +205,22 @@ an unhandled rejection and the search would never settle.
 
 ## Known limitations & correctness caveats
 
-All verified against the source in this repository, and each is **pinned by a test** — in
+All verified against the source in this repository, and every one still open is **pinned by a test** — in
 `Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the `documented_defects` module
 of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
-`(FIXED)` there were inverted in place when the defect was closed. See
-[`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) before touching
-any of them.
+`(FIXED)` there were inverted in place when the defect was closed. Two left the block on 2026-08-01 rather
+than being inverted in it, because the code they described was deleted rather than corrected — the rule is in
+[`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose), which is worth
+reading before touching any of them.
 
 **Documented, not fixed.** Caveats 1 and 2 were both closed on 2026-07-30 by
 [decision 0018](decisions/0018-line-oriented-tail-buffer.md), and they had to be closed together: caveat 1 was
 suppressing early resolution, so fixing it alone would have made caveat 2 fire more often, in the default
-configuration. Caveat 1's *residual* is what remains, and is described below. Caveat 7 was closed the same day
-by [decision 0019](decisions/0019-in-flight-fetch-registry.md), for instances running with the cache on.
+configuration. Caveat 1's *residual* is what remains, and is described below. Caveats 2 and 3 were then
+overtaken entirely on 2026-08-01 by [decision 0024](decisions/0024-remove-the-in-memory-cache.md), which
+deleted the cache both of them described; their headings are kept because the numbering is referenced from
+this file's own text and from [`BACKLOG.md`](BACKLOG.md). Caveat 7 stopped being a defect on the same day, for
+the same reason, and is now a design consequence.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 
@@ -264,29 +253,22 @@ a seam.
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
 the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.
 
-### 2. Poisoned partial cache — FIXED
+### 2. Poisoned partial cache — CLOSED BY REMOVAL
 
-`upsertMemoryCache` appended each chunk as it arrived, but the loop **resolves and stops reading the moment a
-match is found**, so the cache was left holding only the *prefix* downloaded so far, with no marker that it was
-incomplete. A later search for a different pattern took the cache-hit branch and searched that truncated
-prefix, returning `false` for text that was never downloaded.
+An early resolution used to leave the cache holding only the *prefix* downloaded so far, with no marker that
+it was incomplete, and a later search for a different pattern answered `false` from that truncated prefix.
+Decision 0018 narrowed it to nothing by writing the entry only from a drained stream;
+[decision 0024](decisions/0024-remove-the-in-memory-cache.md) then deleted the cache, so there is no entry to
+be partial and no branch that would read one. Kept as a heading because caveats are referred to here by
+number.
 
-The entry is now written **only when the reader reports `done`**, so a partial one is never created rather than
-created and flagged. An early resolution therefore caches nothing and the next search re-fetches — a wasted
-request in place of a confident wrong answer. Note that a match in the *final* chunk still caches nothing: the
-stream is not known to be complete until `done`, which is one read later.
+### 3. Unbounded cache growth — CLOSED BY REMOVAL
 
-This is narrower than the completeness flag originally proposed here, and deliberately so: a partial entry
-cannot resume a download either, and nothing needed it to.
-
-### 3. Unbounded cache growth — `Netgrep.ts`, the `memoryCache` record
-
-The cache is a plain `Record<string, Uint8Array>` with no eviction, no size cap and no TTL. It retains the
-full bytes of every file searched for the lifetime of the `Netgrep` instance.
-
-The O(n²) population this caveat also described is gone: chunks are collected in an array and joined once, and
-they are only collected at all when the cache is enabled — so a search with it off retains one chunk plus the
-tail rather than the whole file.
+The cache was a plain `Record<string, Uint8Array>` with no eviction, no size cap and no TTL, retaining the
+full bytes of every file searched for the lifetime of the `Netgrep` instance — backlog item 19. It was closed
+by deleting the cache rather than by adding eviction, in
+[decision 0024](decisions/0024-remove-the-in-memory-cache.md): the eviction it asked for is the browser HTTP
+cache's, and netgrep now retains nothing between searches, so there is no growth left to bound.
 
 ### 4. No completion signal from `searchBatchWithCallback`
 
@@ -319,23 +301,23 @@ Silent, and it depends on who wrote the file rather than on anything the caller 
 `RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
 deliberate task rather than a drive-by.
 
-### 7. Concurrent searches of one url both fetch it — FIXED with the cache on, unchanged with it off
+### 7. Concurrent searches of one url each download it — BY DESIGN
 
-Nothing used to track a download already in flight, so two searches of one url started before either resolved
-both `fetch`ed it. The sharp half went first, in decision 0018: the cache entry used to be *appended* to per
-chunk, so the two copies were joined with no separator and the seam formed a line that existed nowhere — a file
-of `needle` cached as `needleneedle`, and `^needleneedle$` answered `true`.
+Two searches of one url that overlap both `fetch` it. The answers are correct; the second request is wasted.
 
-The wasted request went in [decision 0019](decisions/0019-in-flight-fetch-registry.md). `search` keeps a per-url
-registry of in-flight searches; a second caller of the same url waits on the first and is then answered from the
-cache entry the first one writes.
+This was a defect twice, and is one no longer. Its sharp half — the entry was *appended* to per chunk, so two
+copies were joined with no separator and the seam formed a line that existed nowhere, a file of `needle`
+cached as `needleneedle` — went in decision 0018. The wasted request went in
+[decision 0019](decisions/0019-in-flight-fetch-registry.md), which made a second caller wait for the first and
+answer from the cache entry it wrote. **That entry was the handover**, so when
+[decision 0024](decisions/0024-remove-the-in-memory-cache.md) deleted the cache the registry went with it:
+with nothing retained there is nothing to hand a waiter.
 
-That entry is the handover, which is why the de-duplication only applies with the **cache on**. With it off there
-is nothing to hand a waiter — sharing would mean retaining every chunk of a file nobody asked to keep, or teeing
-the response stream and with it the first caller's abort signal — so both callers still fetch, deliberately.
-Two further cases fall back to fetching, both pinned: a first caller that matches early resolves without
-draining and writes no entry, and a failed download is not inherited by its waiter, which retries with its own
-signal.
+Reinstating the sharing needs one of the two things 0019 already rejected — retaining every chunk of a file
+nobody asked to keep, or teeing the response stream and with it the first caller's abort signal, which turns a
+wasted request into a wrong answer. So both callers fetch, deliberately, and the browser's own HTTP cache
+decides what the repeat actually costs. Pinned by *fetches once per concurrent search of one url, by design*
+in `Netgrep.integration.spec.ts` — an ordinary assertion, not a defect one.
 
 ---
 
@@ -438,13 +420,13 @@ components straight out of `rust-toolchain.toml`.
 | Suite | Runner | What it covers |
 |---|---|---|
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
-| `Netgrep.spec.ts` | Vitest in **Node**, 58 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 54 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `Netgrep.spec.ts` | Vitest in **Node**, 48 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, and all three public methods including `searchBatchWithCallback`. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 47 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
 | `packages/search/tests/search.rs` | `cargo test`, native, 57 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin
-in Rust, where a failure names the engine; anything about streaming, batching or caching belongs in the
+in Rust, where a failure names the engine; anything about streaming, batching or aborting belongs in the
 TypeScript suites. They overlap at exactly one point — smart case — because it is the behaviour most likely
 to move silently under a dependency bump, and knowing *which* layer moved is worth one duplicated assertion.
 
@@ -465,5 +447,7 @@ That block has already earned its place: modernizing the ripgrep dependencies si
 
 The example is the public demo at <https://netgrep.diegopasquali.com/>. It runs against local workspace
 source, so it is honest, and CI typechecks and builds it — but nothing asserts what it *renders*, so it
-establishes no correctness. It searches with the in-memory cache disabled, because two of the P1 defects
-below exist only when that cache is on; see [decision 0017](decisions/0017-example-as-hosted-demo.md).
+establishes no correctness. Its timings measure the network, and since
+[decision 0024](decisions/0024-remove-the-in-memory-cache.md) that is true by construction rather than by
+configuration — the library retains nothing to answer a second query from. See
+[decision 0017](decisions/0017-example-as-hosted-demo.md).

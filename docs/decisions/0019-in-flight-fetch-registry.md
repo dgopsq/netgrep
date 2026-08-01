@@ -1,6 +1,7 @@
 # 0019 — De-duplicate concurrent downloads of one url, but only when the cache is on
 
-**Status: ACCEPTED (2026-07-30).** Closes [`BACKLOG`](../BACKLOG.md) item **18**, the last of what
+**Status: SUPERSEDED (2026-08-01) by [0024](0024-remove-the-in-memory-cache.md).** Originally accepted
+2026-07-30. Closes [`BACKLOG`](../BACKLOG.md) item **18**, the last of what
 [0018](0018-line-oriented-tail-buffer.md) left open, and records why the de-duplication is deliberately
 conditional rather than universal.
 
@@ -130,3 +131,15 @@ because a miss drains the stream, which is exactly the condition for caching, so
 timing a `Record` lookup and presenting it as a download. The page measures the network — see the comment in
 `use-corpus-search.ts` and
 [`AGENTS.md` §2.3](../../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
+
+## Outcome (2026-08-01) — superseded; the entry it handed over no longer exists
+
+See [0024](0024-remove-the-in-memory-cache.md). This record's central sentence — **the cache entry is the
+handover** — is what made it removable in one piece: with no entry, the registry has nothing to give a
+waiter, and the two alternatives this record already rejected (retain every chunk, or tee the stream and with
+it the first caller's abort signal) are the only ways to reinstate it.
+
+So the conditional de-duplication described here is gone, not generalised, and BACKLOG 18's scenario is now
+accepted rather than fixed. The narrower thing that would work — a registry keyed on `url + pattern +
+capture`, handing over the *result* instead of the bytes — is named in 0024's rejected list as feature work
+needing its own record.

@@ -18,7 +18,7 @@ reasoning got wrong.
 | [0003](0003-boolean-only-results.md) | Return a boolean, not match details | Accepted — amended by 0020 (**the first matching line is available on request**; everything else is still refused) |
 | [0004](0004-two-package-split.md) | Ship two npm packages, not one | Accepted — amended |
 | [0005](0005-esm-only-distribution.md) | ESM only | Accepted — amended; **a bundler is no longer configured** |
-| [0006](0006-in-memory-cache.md) | Cache downloaded bytes in memory, on by default | Accepted — amended by 0018 (**an entry is written only from a drained stream**, which closed the poisoned-prefix defect) and by 0019 (**the flag now also decides whether concurrent downloads of one url are shared**) |
+| [0006](0006-in-memory-cache.md) | Cache downloaded bytes in memory, on by default | **Superseded** by 0024 — the cache is removed, and nothing of this decision survives. Amended along the way by 0018 (**an entry is written only from a drained stream**, which closed the poisoned-prefix defect) and by 0019 (**the flag also decided whether concurrent downloads of one url were shared**) |
 | [0007](0007-nx-cargo-hybrid-monorepo.md) | Nx orchestrating both JS and Cargo | **Superseded** by 0009 |
 | [0008](0008-wee-alloc.md) | `wee_alloc` as the WASM global allocator | **Superseded** — removed; worth only 0.6% |
 | [0009](0009-pnpm-workspaces.md) | pnpm workspaces, and a hand-written manifest for the WASM package | Accepted |
@@ -31,11 +31,12 @@ reasoning got wrong.
 | [0016](0016-compiled-matcher-memo.md) | Cache the compiled matcher inside Rust, rather than hand a handle to JavaScript | Accepted |
 | [0017](0017-example-as-hosted-demo.md) | The example becomes the hosted demo, and goes back on the maintenance path | Accepted — **reverses the example's frozen-dependency exemption**; amended — custom domain, base path now `/` |
 | [0018](0018-line-oriented-tail-buffer.md) | Retain the incomplete trailing *line* between chunks, and cache only a drained stream | Accepted — closes the chunk-boundary and poisoned-cache defects; **amends 0006** |
-| [0019](0019-in-flight-fetch-registry.md) | De-duplicate concurrent downloads of one url, but only when the cache is on | Accepted — closes the duplicate-fetch defect; **the cache entry is the handover**, so with the cache off both callers still fetch |
+| [0019](0019-in-flight-fetch-registry.md) | De-duplicate concurrent downloads of one url, but only when the cache is on | **Superseded** by 0024 — **the cache entry was the handover**, so removing the cache removed the registry with it, and both callers fetch again |
 | [0020](0020-the-matching-line.md) | Return the first matching line, opt-in per search | Accepted — **the first widening of the public API**; **amends 0003**, and names the match details still refused — amended by 0022 (`captureLine` renamed, one refusal reopened) |
 | [0021](0021-release-please.md) | release-please cuts releases; merging its PR is the trigger | Accepted — replaces tag-push publishing and push-to-main deploys; **amends 0017** (the demo now deploys on release, not on every push to `main`) |
 | [0022](0022-capture-ranges.md) | Return each match's position within the captured line | Accepted — **amends 0020**: `capture: 'line' \| 'line-ranges'` replaces `captureLine`, and the "highlight ranges" refusal is reopened because **a JS re-match cannot reproduce the engine**; file-wide positions stay refused |
 | [0023](0023-documentation-site.md) | A documentation page at `/docs`, and one source for the caveat list | Accepted — **amends 0017**: the demo becomes a two-page site whose second page has no router and no React; every limitation now lives once, in `docs/guide/caveats.data.json`, and **CI fails when the three surfaces disagree** — which retires the hand-maintenance tables in AGENTS.md §2.3 |
+| [0024](0024-remove-the-in-memory-cache.md) | Remove the in-memory cache entirely | Accepted — **supersedes 0006 and 0019**; the library retains nothing, so constant memory is unconditional and concurrent searches of one url both fetch, by design |
 
 ## Format
 
