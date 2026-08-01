@@ -5,6 +5,7 @@ import {
   renderToc,
   rewriteRepoLinks,
   slugify,
+  styleAlerts,
 } from './guide-render';
 
 describe('slugify', () => {
@@ -56,6 +57,35 @@ describe('rewriteRepoLinks', () => {
     const html = '<a href="02-searching.md">Searching</a>';
 
     expect(rewriteRepoLinks(html)).toContain('href="#searching"');
+  });
+
+  it('leaves an href inside a code block alone', () => {
+    // A fence showing example markup must survive as written. Shiki often
+    // splits such text across spans so it escapes by accident; a `text` fence
+    // does not, and this is the case that used to be silently rewritten.
+    const html = '<pre><code>href="02-searching.md"</code></pre>';
+
+    expect(rewriteRepoLinks(html)).toBe(html);
+  });
+});
+
+describe('styleAlerts', () => {
+  it('renders a NOTE alert', () => {
+    const html = styleAlerts(
+      '<blockquote>\n<p>[!NOTE]<br>\nSee below.</p>\n</blockquote>',
+    );
+
+    expect(html).toContain('class="alert alert-note"');
+    expect(html).toContain('>Note<');
+  });
+
+  it('renders a CAUTION alert', () => {
+    const html = styleAlerts(
+      '<blockquote>\n<p>[!CAUTION]<br>\nThis can lose data.</p>\n</blockquote>',
+    );
+
+    expect(html).toContain('class="alert alert-caution"');
+    expect(html).toContain('>Caution<');
   });
 });
 
@@ -113,6 +143,19 @@ describe('renderGuide', () => {
     const { html } = await renderGuide(['# X\n\n> [!TIP]\n> Upgrading?\n']);
 
     expect(html).toContain('class="alert alert-tip"');
+  });
+
+  it('yields to a raw anchor whose id the heading would collide with', async () => {
+    // This is the real shape of 07-limitations.md: a generated anchor whose id
+    // is the caveat's, followed by a heading whose title slugifies to the
+    // same string. Two elements with one id is invalid HTML, and the anchor is
+    // the one the README's published links point at.
+    const { html } = await renderGuide([
+      '<a id="no-ranking"></a>\n\n### No ranking\n',
+    ]);
+
+    expect(html).toContain('<a id="no-ranking"></a>');
+    expect(html).toContain('<h3 id="no-ranking-2">');
   });
 });
 

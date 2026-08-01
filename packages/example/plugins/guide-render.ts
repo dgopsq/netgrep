@@ -49,6 +49,18 @@ export function styleAlerts(html: string): string {
  * becomes an in-page anchor and everything else becomes an absolute repo URL.
  */
 export function rewriteRepoLinks(html: string): string {
+  // Code blocks are skipped. This runs over rendered HTML with a regex, and a
+  // fence containing a literal `href="02-searching.md"` — an example of the
+  // markup this very function produces — would otherwise be rewritten inside
+  // what is meant to be unmodified sample code. Shiki usually splits such text
+  // across spans, so it survives by accident; a `text` fence does not.
+  return html
+    .split(/(<pre[\s\S]*?<\/pre>)/g)
+    .map((part) => (part.startsWith('<pre') ? part : rewriteHrefs(part)))
+    .join('');
+}
+
+function rewriteHrefs(html: string): string {
   return html.replace(/href="([^"]+)"/g, (match, href: string) => {
     if (/^(https?:|#|mailto:)/.test(href)) return match;
 
@@ -70,6 +82,18 @@ export function rewriteRepoLinks(html: string): string {
 export async function renderGuide(sources: string[]): Promise<RenderedGuide> {
   const toc: TocEntry[] = [];
   const seen = new Map<string, number>();
+
+  // Seed with the ids already present as raw anchors in the source.
+  // `07-limitations.md` emits `<a id="no-ranking"></a>` before `### No
+  // ranking`, and that title slugifies to the same string — so without this
+  // the document carries two elements with `id="no-ranking"`. The anchor wins,
+  // because the README's published links point at it; the heading takes the
+  // suffixed id and the table of contents follows it there.
+  for (const source of sources) {
+    for (const [, id] of source.matchAll(/\bid="([^"]+)"/g)) {
+      seen.set(id, 1);
+    }
+  }
 
   const md = MarkdownIt({ html: true, linkify: false, typographer: false });
 
