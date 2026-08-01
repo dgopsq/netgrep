@@ -186,7 +186,8 @@ search(url, pattern)
                  │    ├─ searched ← whole lines
                  │    └─ tail     ← the incomplete trailing line, held back
                  ├─ searched non-empty → search_bytes(searched, pattern)
-                 ├─ matched       → resolve(result: true)   ← stops reading
+                 ├─ matched       → resolve(result: true)   ← cancels the reader,
+                 │                                              ending the transfer
                  └─ not matched   → recurse
 ```
 
@@ -200,6 +201,9 @@ Two things about that shape are load-bearing, and both are [decision
 - **The cache is written once, at `done`.** Resolving early therefore caches *nothing*, rather than caching a
   prefix that later answers questions about text it never downloaded (caveat 2). Chunks are only collected when
   the cache is enabled, so a search with it off holds one chunk plus the tail.
+- **A match cancels the reader.** `resolve` on a hit is paired with `reader.cancel()`, which terminates the
+  underlying request instead of merely stopping local reads — otherwise the rest of the file would keep
+  arriving, and being paid for, after the answer was already known.
 
 The two `cache enabled` branches at the top are [decision
 0019](decisions/0019-in-flight-fetch-registry.md), and the second exists because the first is not a guarantee:
@@ -435,7 +439,7 @@ components straight out of `rust-toolchain.toml`.
 |---|---|---|
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
 | `Netgrep.spec.ts` | Vitest in **Node**, 58 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 52 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 54 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
 | `packages/search/tests/search.rs` | `cargo test`, native, 57 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 

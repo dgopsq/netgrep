@@ -35,7 +35,11 @@ the whole point is to never assemble the string.
   most expensive part of the work on every iteration.~~ **Fixed 2026-07-29**: the engine caches the last
   compiled pattern, so chunking no longer multiplies compilation. It was the largest cost this decision
   carried — 97–99% of per-chunk time. See [0016](0016-compiled-matcher-memo.md).
-- Resolving early stops *reading* but does not cancel the underlying request, so bytes may keep arriving.
+- ~~Resolving early stops *reading* but does not cancel the underlying request, so bytes may keep arriving.~~
+  **Fixed 2026-08-01**: the reader is cancelled on a match, which ends the transfer rather than abandoning
+  it. Early resolution now saves bandwidth as well as latency — at the cost of forcing the connection closed
+  under HTTP/1.1, so a large batch of concurrent searches trades bandwidth for extra connection setups; under
+  HTTP/2 cancellation is a cheap `RST_STREAM` and the trade barely registers.
 - ~~Interacts badly with the memory cache — the cache is left holding a partial file.~~ **Fixed 2026-07-30**
   by writing the cache entry only once the stream has drained, so early resolution leaves no entry rather than
   a partial one. See [0006](0006-in-memory-cache.md), [0018](0018-line-oriented-tail-buffer.md) and

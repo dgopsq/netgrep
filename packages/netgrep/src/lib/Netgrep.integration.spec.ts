@@ -57,8 +57,17 @@ vi.mock('@netgrep/search', async (importOriginal) => {
 
 const encoder = new TextEncoder();
 
-/** Build a `ReadableStream` that emits the given chunks one at a time. */
-function streamOfChunks(chunks: Array<Uint8Array>) {
+/**
+ * Build a `ReadableStream` that emits the given chunks one at a time, and
+ * records whether its consumer cancelled it.
+ *
+ * A stream that runs to completion never invokes `cancel`, so this flag
+ * distinguishes "the consumer stopped early" from "the body ended".
+ */
+function streamOfChunks(
+  chunks: Array<Uint8Array>,
+  state?: { cancelled: boolean },
+) {
   let index = 0;
 
   return new ReadableStream({
@@ -70,6 +79,10 @@ function streamOfChunks(chunks: Array<Uint8Array>) {
 
       controller.enqueue(chunks[index]);
       index += 1;
+    },
+
+    cancel() {
+      if (state) state.cancelled = true;
     },
   });
 }
@@ -84,7 +97,10 @@ function streamOfChunks(chunks: Array<Uint8Array>) {
  * queuing strategy pulls one chunk ahead of the consumer, so counting inside
  * `pull` overstates consumption by one and would make this assertion a lie.
  */
-function countingBody(stream: ReadableStream, state: { reads: number }) {
+function countingBody(
+  stream: ReadableStream,
+  state: { reads: number; cancelCalls: number },
+) {
   const body = {
     getReader() {
       const reader = stream.getReader();
@@ -93,6 +109,21 @@ function countingBody(stream: ReadableStream, state: { reads: number }) {
         read() {
           state.reads += 1;
           return reader.read();
+        },
+
+        // Forwarded because the searcher cancels on a match. Without it this
+        // fake reader is missing a method the real one has, and every
+        // early-resolving test throws instead of asserting.
+        //
+        // Counted here rather than via the underlying stream's `cancel()`
+        // callback: once a stream reaches "closed" (the `done` branch has
+        // already run), the Streams spec makes cancel() a no-op that never
+        // reaches the underlying source — so a stray call in the `done`
+        // branch would be invisible to any assertion downstream of the
+        // stream itself. Counting the consumer's call catches it.
+        cancel() {
+          state.cancelCalls += 1;
+          return reader.cancel();
         },
       };
     },
@@ -136,10 +167,12 @@ globalThis.fetch = mockFetch;
  * locked". The read counter is shared across all of them.
  */
 function serve(chunks: Array<Uint8Array>) {
-  const state = { reads: 0 };
+  const state = { reads: 0, cancelled: false, cancelCalls: 0 };
 
   mockFetch.mockImplementation(() =>
-    Promise.resolve({ body: countingBody(streamOfChunks(chunks), state) }),
+    Promise.resolve({
+      body: countingBody(streamOfChunks(chunks, state), state),
+    }),
   );
 
   return state;
@@ -229,6 +262,39 @@ describe('Netgrep integration (real WASM)', () => {
       // Still resolving early, which is the property that matters: the poem is
       // eight chunks long and five of them were never asked for.
       expect(chunks.length).toBeGreaterThan(state.reads);
+    });
+
+    it('cancels the response stream on a match, ending the transfer', async () => {
+      const state = serve(chunked(POEM.repeat(200), 64));
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'Jhaampe',
+      );
+
+      expect(result.result).toBe(true);
+      expect(state.cancelled).toBe(true);
+      expect(state.cancelCalls).toBe(1);
+    });
+
+    it('does not cancel a stream that ended on its own', async () => {
+      const chunks = chunked(POEM, 64);
+      const state = serve(chunks);
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'Nothingmatchesthis',
+      );
+
+      expect(result.result).toBe(false);
+      expect(state.cancelled).toBe(false);
+      // Cancelling an already-closed stream is a no-op per the Streams spec —
+      // it reaches neither the underlying source's `cancel` callback nor
+      // another read — so `cancelled` and `reads` alone can't tell an
+      // intentional skip from a stray cancel() call in the `done` branch.
+      // `cancelCalls` counts the consumer's call directly and catches it.
+      expect(state.reads).toBe(chunks.length + 1);
+      expect(state.cancelCalls).toBe(0);
     });
 
     it('finds a pattern straddling a chunk boundary', async () => {
