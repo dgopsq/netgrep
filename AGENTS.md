@@ -75,13 +75,14 @@ what, decide whether the new behaviour is right, and if it is, **invert the asse
 note saying why. Do not "fix" a defect test to make CI green, and do not fix the underlying bug without
 inverting its test in the same change.
 
-**An entry leaves the block once its current behaviour stops being wrong — whether the failure became
-impossible or the old behaviour came back but is now intended; one still producing a wrong answer stays,
-re-inverted.** [Decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) removed the in-memory
-cache, and took the `BACKLOG 3b` and `BACKLOG 18` entries out with it — 3b's failure became structurally
-impossible, leaving nothing to pin, and 18's behaviour came back but is now intended, so its assertion moved,
-inverted, into the ordinary suite beside the design boundary it now belongs to. That is not the tidying this
-section forbids: the entries left because the code they described did, and 0024 says so.
+**An entry stays while the behaviour it names could still change silently — inverted in place once fixed. It
+leaves only when there is no defect left to track: the subject was deleted, so there is nothing to assert; or
+the behaviour is now deliberate, and its assertion belongs in the ordinary suite as a design boundary.**
+Removing the in-memory cache took the `BACKLOG 3b` and `BACKLOG 18` entries out on one of those grounds each —
+3b pinned a cache entry answering a later query, and there is no entry, while 18's double fetch came back and
+is now intended, so its assertion moved into the ordinary suite beside the boundary it describes. That is not
+the tidying this section forbids: the entries left because the code they described did, and
+[decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) argues each one.
 
 This has already paid for itself once: upgrading off the ripgrep fork silently fixed the `^`-anchoring bug,
 and only this block noticed.

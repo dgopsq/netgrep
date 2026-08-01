@@ -544,8 +544,8 @@ describe('Netgrep integration (real WASM)', () => {
       // The cost of retaining nothing, and the reason the caveat calls this
       // by design rather than a defect. This used to be BACKLOG 18: a per-url
       // registry made a second caller wait for the first and answer from the
-      // entry it wrote. Decision 0024 deleted the entry, and the entry WAS the
-      // handover — so sharing would now mean either keeping every chunk of a
+      // entry it wrote. That entry WAS the handover, and it is gone — so
+      // sharing would now mean either keeping every chunk of a
       // file nobody asked to keep, or teeing the response stream and with it
       // the first caller's abort signal. Both callers fetch instead. The
       // answers are correct; the second request is wasted.
@@ -816,10 +816,12 @@ describe('Netgrep integration (real WASM)', () => {
    * When one of these is genuinely fixed, the corresponding assertion must be
    * inverted IN THE SAME PR. That is the point: the fix cannot land quietly.
    *
-   * An entry leaves this block once its current behaviour stops being wrong —
-   * whether the failure became impossible or the old behaviour came back but
-   * is now intended; one still producing a wrong answer stays, re-inverted.
-   * Decision 0024 removed the cache and took 3b and 18 out with it.
+   * An entry stays while the behaviour it names could still change silently —
+   * inverted in place once fixed. It leaves only when there is no defect left
+   * to track: the subject was deleted, so there is nothing to assert, or the
+   * behaviour is now deliberate and its assertion belongs above as a design
+   * boundary. Removing the in-memory cache took BACKLOG 3b and BACKLOG 18 out
+   * on one of those grounds each.
    *
    * Tracked in `docs/BACKLOG.md`.
    *
@@ -864,10 +866,10 @@ describe('Netgrep integration (real WASM)', () => {
       // fragments — same url, same pattern, two answers, decided by whether
       // anyone had asked before.
       //
-      // Decision 0024 removed the cache, so both searches now stream. What
-      // this still pins is the property 0018 bought and 0024 did not touch:
-      // the tail buffer finds the match on the first pass, under a chunking
-      // that splits it, so repeating a search cannot change its answer.
+      // Nothing is retained between searches now, so both of these stream.
+      // What this still pins is the tail buffer: it finds the match on the
+      // first pass, under a chunking that splits it, so repeating a search
+      // cannot change its answer.
       serve(chunked(POEM, 7));
 
       const NG = new Netgrep();
