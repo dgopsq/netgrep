@@ -159,6 +159,14 @@
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  /*
+   * `!important` is load-bearing: Shiki writes the theme's background as an
+   * INLINE style on the `<pre>`, and an inline style beats a stylesheet rule
+   * on specificity alone. The block would otherwise sit on GitHub's near-black
+   * rather than this site's card colour. Same reasoning, and the same ignore
+   * form, as the reduced-motion block in index.css.
+   */
+  /* biome-ignore lint/complexity/noImportantStyles: must override Shiki's inline background */
   background: var(--card) !important;
   font-size: 0.8125rem;
   line-height: 1.7;
