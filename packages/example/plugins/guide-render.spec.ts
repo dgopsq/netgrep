@@ -257,12 +257,21 @@ describe('renderToc', () => {
 });
 
 describe('renderNav', () => {
-  it('marks the current page for styling and for screen readers', () => {
+  it('marks Docs as the current page for styling and for screen readers', () => {
     expect(renderNav('docs', '/')).toContain('aria-current="page"');
+  });
+
+  it('marks nothing as current on the demo page', () => {
+    expect(renderNav('demo', '/')).not.toContain('aria-current');
+  });
+
+  it('has no Demo link: the wordmark is the way home', () => {
+    expect(renderNav('docs', '/')).not.toContain('>Demo<');
   });
 
   it('composes hrefs from the configured base', () => {
     expect(renderNav('demo', '/')).toContain('href="/docs/"');
+    // The wordmark, which is the only thing pointing at the demo.
     expect(renderNav('docs', '/')).toContain('href="/"');
   });
 

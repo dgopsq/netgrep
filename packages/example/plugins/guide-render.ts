@@ -202,8 +202,10 @@ export function renderToc(toc: TocEntry[]): string {
  * and the page looks like a corpus that matches nothing rather than a bug.
  */
 export function renderNav(current: 'demo' | 'docs', base: string): string {
-  const link = (href: string, label: string, page: 'demo' | 'docs') =>
-    `<a href="${href}"${page === current ? ' aria-current="page"' : ''}>${label}</a>`;
+  // Only the Docs link can ever be current. The demo has no nav entry — the
+  // wordmark beside it is the way home, and a second link to the same page was
+  // one the eye had to rule out.
+  const docsCurrent = current === 'docs' ? ' aria-current="page"' : '';
 
   // A small version of the hero's `new Netgrep();` wordmark (see hero.tsx):
   // same four parts — muted `new `, gradient `Netgrep`, primary-coloured `()`,
@@ -216,8 +218,7 @@ export function renderNav(current: 'demo' | 'docs', base: string): string {
   return `<header class="site-nav">
   ${mark}
   <nav aria-label="Site">
-    ${link(base, 'Demo', 'demo')}
-    ${link(`${base}docs/`, 'Docs', 'docs')}
+    <a href="${base}docs/"${docsCurrent}>Docs</a>
     <a href="https://github.com/dgopsq/netgrep">GitHub</a>
     <a href="https://www.npmjs.com/package/@netgrep/netgrep">npm</a>
   </nav>
