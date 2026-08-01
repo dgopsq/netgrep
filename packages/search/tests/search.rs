@@ -307,6 +307,13 @@ mod search {
     }
 }
 
+/// Ranges variant of `matches_line`: bytes in, `(line, flat utf16 ranges)` out.
+#[cfg(test)]
+fn line_ranges(haystack: &[u8], pattern: &str, cap: usize) -> Option<(String, Vec<u32>)> {
+    ::search::try_search_bytes_line_ranges(haystack, pattern, cap)
+        .expect("the pattern should compile")
+}
+
 /// Assert-friendly wrapper around the line-returning entry point.
 ///
 /// `None` is "no match"; `Some` carries the line. The same note as `matches`
@@ -555,6 +562,117 @@ mod matching_line {
             first_line(b"anything", "any", NO_CAP).as_deref(),
             Some("anything")
         );
+    }
+}
+
+/// Ranges within the matching line — Task 2 of capture ranges.
+///
+/// `line_ranges` returns the same line as `first_line` plus flat `[start,
+/// end, …]` pairs in UTF-16 code units, so a caller can `line.slice(start,
+/// end)` in JavaScript without conversion.
+#[cfg(test)]
+mod line_ranges_tests {
+    use super::line_ranges;
+
+    #[test]
+    fn test_ranges_for_a_single_match() {
+        let (line, ranges) = line_ranges(b"one needle here\n", "needle", 4096).unwrap();
+        assert_eq!(line, "one needle here");
+        assert_eq!(ranges, vec![4, 10]);
+    }
+
+    #[test]
+    fn test_no_match_returns_none() {
+        assert!(line_ranges(b"nothing here\n", "dragon", 4096).is_none());
+    }
+
+    #[test]
+    fn test_all_matches_within_the_line_not_just_the_first() {
+        let (_, ranges) = line_ranges(b"cat and cat and cat\n", "cat", 4096).unwrap();
+        assert_eq!(ranges, vec![0, 3, 8, 11, 16, 19]);
+    }
+
+    #[test]
+    fn test_ranges_are_for_the_first_matching_line_only() {
+        // The second matching line contributes nothing: the search stops at the
+        // first, exactly as the boolean and line variants do.
+        let (line, ranges) = line_ranges(b"a cat\nanother cat cat\n", "cat", 4096).unwrap();
+        assert_eq!(line, "a cat");
+        assert_eq!(ranges, vec![2, 5]);
+    }
+
+    #[test]
+    fn test_offsets_are_utf16_units_not_bytes() {
+        // 'é' is 2 bytes in UTF-8 but 1 UTF-16 unit; '𝄞' (U+1D11E) is 4 bytes
+        // in UTF-8 and a surrogate PAIR — 2 UTF-16 units. Byte offsets would be
+        // 2 and 6; char offsets 1 and 3; only UTF-16 gives 1 and 4.
+        let (_, ranges) = line_ranges("é𝄞needle\n".as_bytes(), "needle", 4096).unwrap();
+        assert_eq!(ranges, vec![3, 9]);
+    }
+
+    #[test]
+    fn test_offsets_follow_lossy_decoding() {
+        // A truncated 3-byte sequence (0xE0 0xA0 with no valid continuation)
+        // decodes to exactly ONE U+FFFD (1 UTF-16 unit), so the match sits at
+        // UTF-16 index 1, not at byte index 2. `[0xFF, 0xFE]` was avoided here:
+        // it is the UTF-16LE BOM, and `grep_searcher` sniffs and transcodes it
+        // before matching, so it never reaches this decoding path at all.
+        let mut haystack = vec![0xE0, 0xA0];
+        haystack.extend_from_slice(b"needle\n");
+        let (line, ranges) = line_ranges(&haystack, "needle", 4096).unwrap();
+        // Derive the expectation from the decoded line itself, so the test states
+        // the actual invariant: ranges index into `line` as a JS string would.
+        let expected_start = line.chars().take_while(|c| *c == '\u{FFFD}').count() as u32;
+        assert_eq!(
+            line,
+            format!("{}needle", "\u{FFFD}".repeat(expected_start as usize))
+        );
+        assert_eq!(ranges, vec![expected_start, expected_start + 6]);
+    }
+
+    #[test]
+    fn test_a_match_past_the_cap_is_dropped() {
+        // The line matched, but the only match sits beyond `max_line_bytes`, so
+        // the returned string cannot show it: ranges is EMPTY, result stays true.
+        let (line, ranges) = line_ranges(b"aaaa needle\n", "needle", 4).unwrap();
+        assert_eq!(line, "aaaa");
+        assert!(ranges.is_empty());
+    }
+
+    #[test]
+    fn test_a_match_straddling_the_cap_is_clamped() {
+        let (line, ranges) = line_ranges(b"aa needle\n", "needle", 6).unwrap();
+        assert_eq!(line, "aa nee");
+        assert_eq!(ranges, vec![3, 6]);
+    }
+
+    #[test]
+    fn test_a_match_on_an_empty_line_is_an_empty_range() {
+        let (line, ranges) = line_ranges(b"x\n\ny\n", "^$", 4096).unwrap();
+        assert_eq!(line, "");
+        assert_eq!(ranges, vec![0, 0]);
+    }
+
+    #[test]
+    fn test_crlf_terminator_is_stripped_before_ranges() {
+        // `\r` is structure, not content: it must be outside both the line and
+        // any range touching the line's end.
+        let (line, ranges) = line_ranges(b"needle\r\n", "needle", 4096).unwrap();
+        assert_eq!(line, "needle");
+        assert_eq!(ranges, vec![0, 6]);
+    }
+
+    #[test]
+    fn test_smart_case_applies_to_ranges() {
+        // Lowercase pattern, capitalised text: the range must cover what the
+        // ENGINE matched, which a case-sensitive JS re-match would miss entirely.
+        let (_, ranges) = line_ranges(b"Needle\n", "needle", 4096).unwrap();
+        assert_eq!(ranges, vec![0, 6]);
+    }
+
+    #[test]
+    fn test_invalid_pattern_is_a_domain_error() {
+        assert!(::search::try_search_bytes_line_ranges(b"x\n", "a(", 4096).is_err());
     }
 }
 

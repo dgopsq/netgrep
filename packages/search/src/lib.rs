@@ -1,3 +1,4 @@
+use grep_matcher::Matcher;
 use grep_regex::{RegexMatcher, RegexMatcherBuilder};
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
 use std::cell::RefCell;
@@ -93,6 +94,22 @@ pub fn try_search_bytes_line(
 ) -> Result<Option<String>, String> {
     with_matcher(pattern, |matcher| {
         search_line_with(matcher, chunk, max_line_bytes)
+    })
+}
+
+/// `search_bytes_line_ranges`, as plain Rust. Split from the export for the
+/// same reason as `try_search_bytes`.
+///
+/// The tuple is the line (terminator stripped, truncated, lossily decoded) and
+/// flat `[start, end, …]` pairs — UTF-16 code units into that string, so a
+/// JavaScript caller can `line.slice(start, end)` without conversion.
+pub fn try_search_bytes_line_ranges(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<Option<(String, Vec<u32>)>, String> {
+    with_matcher(pattern, |matcher| {
+        search_line_ranges_with(matcher, chunk, max_line_bytes)
     })
 }
 
@@ -228,6 +245,102 @@ impl Sink for LineSink {
         // last matching line instead of the first.
         Ok(false)
     }
+}
+
+/// Run a compiled matcher over one block of bytes, keeping the first matching
+/// line and where the pattern matches within it.
+///
+/// The ranges pass runs AFTER the search, over one line's bytes — it does not
+/// touch the early exit, and a `capture: 'line'` or boolean caller never pays
+/// for it.
+///
+/// `find_iter` runs over the full stripped line, not the truncated slice:
+/// truncating first would let `$` match at the cut, reporting a match the
+/// real line does not contain. Ranges past the cut are then dropped, and one
+/// straddling it is clamped — the string cannot show what it does not hold.
+fn search_line_ranges_with(
+    matcher: &RegexMatcher,
+    chunk: &[u8],
+    max_line_bytes: usize,
+) -> Option<(String, Vec<u32>)> {
+    let mut searcher = build_searcher();
+    let mut sink = LineSink { first: None };
+
+    let _ = searcher.search_slice(matcher, chunk, &mut sink);
+
+    sink.first.map(|line| {
+        let content = strip_terminator(&line);
+        let cap = floor_char_boundary(content, max_line_bytes);
+
+        let mut byte_offsets: Vec<usize> = Vec::new();
+        let _ = matcher.find_iter(content, |m| {
+            byte_offsets.push(m.start());
+            byte_offsets.push(m.end());
+            true
+        });
+
+        // Drop pairs starting at or past the cut; clamp ends to it. `start ==
+        // cap` survives only for the empty match on an empty line, where
+        // dropping it would break "a match always has a range" in the one case
+        // a caller cannot re-derive.
+        let mut kept: Vec<usize> = Vec::with_capacity(byte_offsets.len());
+        for pair in byte_offsets.chunks_exact(2) {
+            let (start, end) = (pair[0], pair[1]);
+            if start < cap || (start == 0 && cap == 0) {
+                kept.push(start);
+                kept.push(end.min(cap));
+            }
+        }
+
+        let capped = &content[..cap];
+        let ranges = byte_offsets_to_utf16(capped, &kept);
+
+        (String::from_utf8_lossy(capped).into_owned(), ranges)
+    })
+}
+
+/// Map ascending byte offsets in `bytes` to UTF-16 code-unit offsets in
+/// `String::from_utf8_lossy(bytes)`.
+///
+/// One walk serves every offset. `utf8_chunks` yields exactly the segments
+/// `from_utf8_lossy` replaces — each non-empty invalid part becomes one
+/// U+FFFD — so counting UTF-16 units per segment reproduces the decoded
+/// string's indexing without materialising a second copy. An offset landing
+/// inside a character (a regex over bytes can split one) floors to that
+/// character's start.
+fn byte_offsets_to_utf16(bytes: &[u8], offsets: &[usize]) -> Vec<u32> {
+    let mut out = Vec::with_capacity(offsets.len());
+    let mut next = 0;
+    let mut byte_pos = 0usize;
+    let mut utf16_pos = 0u32;
+
+    for chunk in bytes.utf8_chunks() {
+        for ch in chunk.valid().chars() {
+            while next < offsets.len() && offsets[next] < byte_pos + ch.len_utf8() {
+                out.push(utf16_pos);
+                next += 1;
+            }
+            byte_pos += ch.len_utf8();
+            utf16_pos += ch.len_utf16() as u32;
+        }
+
+        let invalid = chunk.invalid();
+        if !invalid.is_empty() {
+            while next < offsets.len() && offsets[next] < byte_pos + invalid.len() {
+                out.push(utf16_pos);
+                next += 1;
+            }
+            byte_pos += invalid.len();
+            utf16_pos += 1;
+        }
+    }
+
+    while next < offsets.len() {
+        out.push(utf16_pos);
+        next += 1;
+    }
+
+    out
 }
 
 /// Turn one matched line's raw bytes into the string that crosses the boundary.
