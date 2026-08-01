@@ -107,20 +107,21 @@ in the PR that fixes it.
 **Nothing enforces this.** No test fails, CI stays green, and the site keeps lying until a human notices. That
 is exactly why it is in this section rather than in a comment somewhere.
 
-| If you… | Then, in the same PR… |
-|---|---|
-| Fix 3f | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) — it is the only open defect with one |
-| Fix 3g or 17 | Nothing on the site to remove: neither has an entry, for the reasons below. Check that still holds rather than assuming it |
-| Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
-| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state the scope of a result and the 1.17 MB WebAssembly download |
+**This is now enforced, for the caveat list.** Every limitation lives once, in
+[`docs/guide/caveats.data.json`](docs/guide/caveats.data.json). `pnpm docs:sync` renders it onto the
+guide, the README and the demo, and CI runs `pnpm docs:sync --check` — so the three cannot disagree.
+Fixing a defect means **deleting one entry from that file** and running `pnpm docs:sync`, in the PR
+that fixes it.
 
-**The three caveats currently on the site map to backlog items like this**, so you can find yours quickly:
+Two things the generator does not decide, and you must:
 
-| Caveat on the site | Backlog |
+| Field | What it means |
 |---|---|
-| No ranking | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md) as amended by [0020](docs/decisions/0020-the-matching-line.md) and [0022](docs/decisions/0022-capture-ranges.md). Will never be "fixed". Retitled twice as those two landed: "One boolean per file" until the line existed, then "No ranking, no positions" until positions within the line did |
-| This demo runs with the cache off | *none* — a choice about what the page measures, see below |
-| Binary files stop at the first NUL | **3f** |
+| `kind` | `defect` (a bug, listed in the README) or `by-design` (never fixed, shown on the site and in the guide but not in the README's defect list) |
+| `demoCorpusCanTrigger` | Whether *this corpus* can hit it. `false` keeps it off the demo page — 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false` |
+
+**Still not enforced, and still yours to check:** the hero copy and the `StatsBar` line, which state
+the scope of a result and the 1.17 MB WebAssembly download.
 
 > [!WARNING]
 > **The demo's cache stays off, and no library fix changes that.** This section used to say that fixing 3b and

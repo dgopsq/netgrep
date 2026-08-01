@@ -35,6 +35,7 @@ reasoning got wrong.
 | [0020](0020-the-matching-line.md) | Return the first matching line, opt-in per search | Accepted — **the first widening of the public API**; **amends 0003**, and names the match details still refused — amended by 0022 (`captureLine` renamed, one refusal reopened) |
 | [0021](0021-release-please.md) | release-please cuts releases; merging its PR is the trigger | Accepted — replaces tag-push publishing and push-to-main deploys; **amends 0017** (the demo now deploys on release, not on every push to `main`) |
 | [0022](0022-capture-ranges.md) | Return each match's position within the captured line | Accepted — **amends 0020**: `capture: 'line' \| 'line-ranges'` replaces `captureLine`, and the "highlight ranges" refusal is reopened because **a JS re-match cannot reproduce the engine**; file-wide positions stay refused |
+| [0023](0023-documentation-site.md) | A documentation page at `/docs`, and one source for the caveat list | Accepted — **amends 0017**: the demo becomes a two-page site whose second page has no router and no React; every limitation now lives once, in `docs/guide/caveats.data.json`, and **CI fails when the three surfaces disagree** — which retires the hand-maintenance tables in AGENTS.md §2.3 |
 
 ## Format
 
