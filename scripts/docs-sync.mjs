@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Renders `docs/guide/caveats.data.json` onto the three surfaces that carry a
- * limitation, so that fixing a defect is one edit rather than three.
+ * Renders `docs/guide/caveats.data.json` onto the two surfaces that carry a
+ * limitation, so that fixing a defect is one edit rather than two.
  *
  *   pnpm docs:sync           write the outputs
  *   pnpm docs:sync --check   write nothing; exit 1 if any output is stale
@@ -10,12 +10,10 @@
  * AGENTS.md §2.3 has a long history of conventions that were not kept.
  */
 
-import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  renderCaveatsModule,
   renderGuideSection,
   renderReadmeList,
   spliceReadme,
@@ -24,27 +22,6 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const check = process.argv.includes('--check');
-
-/**
- * Biome owns the formatting of everything it lints, so a generator that emits
- * nearly-formatted TypeScript would fail `pnpm lint:js` on a trailing comma it
- * guessed wrong. Handing the output to Biome removes the guessing — and
- * `--check` compares post-format, so the two modes cannot disagree.
- */
-function biomeFormat(source, filePath) {
-  const result = spawnSync(
-    'pnpm',
-    ['exec', 'biome', 'format', `--stdin-file-path=${filePath}`],
-    { cwd: ROOT, input: source, encoding: 'utf8' },
-  );
-
-  if (result.status !== 0) {
-    console.error(result.stderr);
-    throw new Error(`biome format failed for ${filePath}`);
-  }
-
-  return result.stdout;
-}
 
 const caveats = JSON.parse(
   await readFile(join(ROOT, 'docs/guide/caveats.data.json'), 'utf8'),
@@ -56,13 +33,6 @@ const outputs = [
   {
     path: 'docs/guide/07-limitations.md',
     content: renderGuideSection(caveats),
-  },
-  {
-    path: 'packages/example/src/data/caveats.generated.ts',
-    content: biomeFormat(
-      renderCaveatsModule(caveats),
-      'packages/example/src/data/caveats.generated.ts',
-    ),
   },
   {
     path: 'README.md',

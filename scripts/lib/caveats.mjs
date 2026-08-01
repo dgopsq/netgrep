@@ -76,49 +76,6 @@ export function renderReadmeList(caveats) {
     .join('\n');
 }
 
-/** Single-quoted output, because Biome's `quoteStyle` is `single`. */
-const quote = (value) =>
-  `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-
-export function renderCaveatsModule(caveats) {
-  const entries = caveats
-    .map((caveat) =>
-      [
-        '  {',
-        `    id: ${quote(caveat.id)},`,
-        `    title: ${quote(caveat.title)},`,
-        `    short: ${quote(caveat.short)},`,
-        `    demoBody: ${caveat.demoBody === null ? 'null' : quote(caveat.demoBody)},`,
-        `    kind: ${quote(caveat.kind)},`,
-        `    demoCorpusCanTrigger: ${caveat.demoCorpusCanTrigger},`,
-        '  },',
-      ].join('\n'),
-    )
-    .join('\n');
-
-  return `// ${GENERATED_BY}
-
-export type Caveat = {
-  id: string;
-  title: string;
-  short: string;
-  /** Card copy for this page. \`null\` when the demo cannot show this entry. */
-  demoBody: string | null;
-  kind: 'defect' | 'by-design';
-  demoCorpusCanTrigger: boolean;
-};
-
-/**
- * EVERY library caveat, unfiltered. The demo decides which of them apply to
- * its own corpus — see the filter in \`visible-caveats.ts\`, and the reasoning
- * beside it.
- */
-export const CAVEATS: Caveat[] = [
-${entries}
-];
-`;
-}
-
 /**
  * Splices `block` between the `BEGIN`/`END` markers in `readme`.
  *

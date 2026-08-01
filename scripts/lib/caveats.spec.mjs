@@ -2,33 +2,28 @@ import { describe, expect, it } from 'vitest';
 import {
   BEGIN,
   END,
-  renderCaveatsModule,
   renderGuideSection,
   renderReadmeList,
   spliceReadme,
 } from './caveats.mjs';
 
-/** Two entries covering both `kind`s and both sides of the demo filter. */
+/** Two entries, one of each `kind`. */
 const CAVEATS = [
   {
     id: 'no-ranking',
     title: 'No ranking',
     short: 'netgrep does not rank, count or order matches.',
     body: 'Long prose about ranking.',
-    demoBody: 'Card copy about ranking.',
     kind: 'by-design',
     backlog: null,
-    demoCorpusCanTrigger: false,
   },
   {
     id: 'nul-byte',
     title: 'Binary files stop at the first NUL',
     short: 'A file containing a NUL byte reports no match.',
     body: 'Long prose about NUL bytes.',
-    demoBody: 'Card copy about NUL bytes.',
     kind: 'defect',
     backlog: '3f',
-    demoCorpusCanTrigger: true,
   },
 ];
 
@@ -83,47 +78,6 @@ describe('renderReadmeList', () => {
     expect(renderReadmeList(CAVEATS)).toContain(
       'https://netgrep.diegopasquali.com/docs/#nul-byte',
     );
-  });
-});
-
-describe('renderCaveatsModule', () => {
-  it('emits every entry, so the demo does its own filtering', () => {
-    const out = renderCaveatsModule(CAVEATS);
-
-    expect(out).toContain("id: 'no-ranking'");
-    expect(out).toContain("id: 'nul-byte'");
-  });
-
-  it('omits body, which no surface in the demo renders', () => {
-    expect(renderCaveatsModule(CAVEATS)).not.toContain('Long prose');
-  });
-
-  it('carries demoBody, which is what the cards render', () => {
-    const out = renderCaveatsModule(CAVEATS);
-
-    expect(out).toContain('Card copy about ranking.');
-    expect(out).toContain('Card copy about NUL bytes.');
-  });
-
-  it('emits null demoBody for an entry the demo cannot show', () => {
-    const hidden = { ...CAVEATS[1], id: 'crlf', demoBody: null };
-
-    expect(renderCaveatsModule([hidden])).toContain('demoBody: null,');
-  });
-
-  it('carries the flags the demo filters on', () => {
-    const out = renderCaveatsModule(CAVEATS);
-
-    expect(out).toContain("kind: 'by-design'");
-    expect(out).toContain('demoCorpusCanTrigger: true');
-  });
-
-  it('escapes a single quote in copy so the module still parses', () => {
-    const out = renderCaveatsModule([
-      { ...CAVEATS[1], short: "ripgrep's detection quits." },
-    ]);
-
-    expect(out).toContain("\\'");
   });
 });
 

@@ -53,8 +53,8 @@ export default defineConfig({
         },
       },
       {
-        // Build-time tooling and example-site data: the docs generator, the
-        // guide renderer, and pure data modules like `visible-caveats.ts`.
+        // Build-time tooling and the example's pure modules: the docs
+        // generator, the guide renderer, `active-heading.ts`.
         // None of these touch the library, `pkg/` or a browser — so this
         // project boots nothing. It is separate from `unit` rather than
         // folded into it because that project's include path is the
