@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/dgopsq/netgrep/compare/netgrep-0.2.0...netgrep-0.3.0) (2026-08-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* `captureLine: true` becomes `capture: 'line'` in `NetgrepSearchConfig`. There is no behavioural change for existing callers beyond the option's name.
+
+### Features
+
+* capture match ranges within the matching line ([#32](https://github.com/dgopsq/netgrep/issues/32)) ([244477c](https://github.com/dgopsq/netgrep/commit/244477c4f8680460574c2e975a5c36cb05fbd74b))
+* **example:** turn the demo into a documentation site ([#35](https://github.com/dgopsq/netgrep/issues/35)) ([e5a500b](https://github.com/dgopsq/netgrep/commit/e5a500bec41cb70b6da6b283acd3077074104339))
+
 ## [0.2.0](https://github.com/dgopsq/netgrep/compare/netgrep-0.1.5...netgrep-0.2.0) (2026-07-31)
 
 
