@@ -2,20 +2,30 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
-import { renderGuide, renderNav, renderToc } from './guide-render';
+import {
+  type GuideFile,
+  renderGuide,
+  renderNav,
+  renderToc,
+} from './guide-render';
 
 const GUIDE_DIR = join(
   dirname(fileURLToPath(import.meta.url)),
   '../../../docs/guide',
 );
 
-async function readGuide(): Promise<string[]> {
+async function readGuide(): Promise<GuideFile[]> {
   const names = (await readdir(GUIDE_DIR))
     .filter((name) => /^\d{2}-.*\.md$/.test(name))
     .sort();
 
+  // The name travels with the source: a bare cross-file link is resolved
+  // against the target file's heading id, which needs the filename to match on.
   return Promise.all(
-    names.map((name) => readFile(join(GUIDE_DIR, name), 'utf8')),
+    names.map(async (name) => ({
+      name,
+      source: await readFile(join(GUIDE_DIR, name), 'utf8'),
+    })),
   );
 }
 

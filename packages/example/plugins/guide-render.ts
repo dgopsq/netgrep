@@ -17,6 +17,7 @@ const REPO_BLOB = 'https://github.com/dgopsq/netgrep/blob/main';
 
 export type TocEntry = { id: string; text: string; level: 2 | 3 };
 export type RenderedGuide = { html: string; toc: TocEntry[] };
+export type GuideFile = { name: string; source: string };
 
 export function slugify(text: string): string {
   return text
@@ -47,8 +48,14 @@ export function styleAlerts(html: string): string {
  * `docs/guide/`, which is what GitHub resolves correctly when the same file is
  * read there. On the site the seven files are ONE page, so a sibling link
  * becomes an in-page anchor and everything else becomes an absolute repo URL.
+ *
+ * `h1Ids` maps each file's name to the id its `<h1>` was given, which is what a
+ * bare sibling link has to point at.
  */
-export function rewriteRepoLinks(html: string): string {
+export function rewriteRepoLinks(
+  html: string,
+  h1Ids: ReadonlyMap<string, string> = new Map(),
+): string {
   // Code blocks are skipped. This runs over rendered HTML with a regex, and a
   // fence containing a literal `href="02-searching.md"` — an example of the
   // markup this very function produces — would otherwise be rewritten inside
@@ -56,11 +63,14 @@ export function rewriteRepoLinks(html: string): string {
   // across spans, so it survives by accident; a `text` fence does not.
   return html
     .split(/(<pre[\s\S]*?<\/pre>)/g)
-    .map((part) => (part.startsWith('<pre') ? part : rewriteHrefs(part)))
+    .map((part) => (part.startsWith('<pre') ? part : rewriteHrefs(part, h1Ids)))
     .join('');
 }
 
-function rewriteHrefs(html: string): string {
+function rewriteHrefs(
+  html: string,
+  h1Ids: ReadonlyMap<string, string>,
+): string {
   return html.replace(/href="([^"]+)"/g, (match, href: string) => {
     if (/^(https?:|#|mailto:)/.test(href)) return match;
 
@@ -68,7 +78,16 @@ function rewriteHrefs(html: string): string {
 
     // A sibling guide file: `07-limitations.md`, `02-searching.md#batches`.
     if (/^\d{2}-[a-z-]+\.md$/.test(path)) {
-      const anchor = fragment ?? slugify(path.replace(/^\d{2}-|\.md$/g, ''));
+      // A bare link resolves to the target file's H1 id, which is not the slug
+      // of its filename whenever the title says more than the name does:
+      // `03-the-matching-line.md` is titled "The matching line, and where the
+      // matches are in it". Slugifying the name produced a dead anchor.
+      // A file with no H1 has no id to aim at, so it keeps the filename slug —
+      // wrong, but a link the reader can see is broken beats a silent one.
+      const anchor =
+        fragment ??
+        h1Ids.get(path) ??
+        slugify(path.replace(/^\d{2}-|\.md$/g, ''));
 
       return `href="#${anchor}"`;
     }
@@ -79,9 +98,14 @@ function rewriteHrefs(html: string): string {
   });
 }
 
-export async function renderGuide(sources: string[]): Promise<RenderedGuide> {
+export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
   const toc: TocEntry[] = [];
   const seen = new Map<string, number>();
+
+  // Filled from the ids `heading_open` actually emits, rather than re-slugified
+  // here: the two would drift the moment de-duplication renamed one of them.
+  const h1Ids = new Map<string, string>();
+  let currentFile = '';
 
   // Seed with the ids already present as raw anchors in the source.
   // `07-limitations.md` emits `<a id="no-ranking"></a>` before `### No
@@ -89,7 +113,7 @@ export async function renderGuide(sources: string[]): Promise<RenderedGuide> {
   // the document carries two elements with `id="no-ranking"`. The anchor wins,
   // because the README's published links point at it; the heading takes the
   // suffixed id and the table of contents follows it there.
-  for (const source of sources) {
+  for (const { source } of files) {
     for (const [, id] of source.matchAll(/\bid="([^"]+)"/g)) {
       seen.set(id, 1);
     }
@@ -120,12 +144,22 @@ export async function renderGuide(sources: string[]): Promise<RenderedGuide> {
       toc.push({ id, text, level: token.tag === 'h2' ? 2 : 3 });
     }
 
+    if (token.tag === 'h1' && !h1Ids.has(currentFile)) {
+      h1Ids.set(currentFile, id);
+    }
+
     return `<${token.tag} id="${id}">`;
   };
 
-  const html = sources.map((source) => md.render(source)).join('\n');
+  const html = files
+    .map(({ name, source }) => {
+      currentFile = name;
 
-  return { html: rewriteRepoLinks(styleAlerts(html)), toc };
+      return md.render(source);
+    })
+    .join('\n');
+
+  return { html: rewriteRepoLinks(styleAlerts(html), h1Ids), toc };
 }
 
 export function renderToc(toc: TocEntry[]): string {

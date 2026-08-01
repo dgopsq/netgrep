@@ -1,5 +1,9 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  type GuideFile,
   renderGuide,
   renderNav,
   renderToc,
@@ -7,6 +11,25 @@ import {
   slugify,
   styleAlerts,
 } from './guide-render';
+
+const GUIDE_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../docs/guide',
+);
+
+/** The seven published files, in the order the plugin concatenates them. */
+async function readRealGuide(): Promise<GuideFile[]> {
+  const names = (await readdir(GUIDE_DIR))
+    .filter((name) => /^\d{2}-.*\.md$/.test(name))
+    .sort();
+
+  return Promise.all(
+    names.map(async (name) => ({
+      name,
+      source: await readFile(join(GUIDE_DIR, name), 'utf8'),
+    })),
+  );
+}
 
 describe('slugify', () => {
   it('lowercases and hyphenates', () => {
@@ -53,10 +76,27 @@ describe('rewriteRepoLinks', () => {
     expect(rewriteRepoLinks(html)).toContain('href="#nul-byte"');
   });
 
-  it("anchors a bare sibling link to that file's own heading", () => {
+  it("anchors a bare sibling link to that file's H1 id", () => {
+    // Not a slug of the filename: `03-the-matching-line.md` is titled "The
+    // matching line, and where the matches are in it", so the two differ and
+    // the filename version pointed at nothing.
+    const html = '<a href="03-the-matching-line.md">The matching line</a>';
+    const h1Ids = new Map([
+      [
+        '03-the-matching-line.md',
+        'the-matching-line-and-where-the-matches-are-in-it',
+      ],
+    ]);
+
+    expect(rewriteRepoLinks(html, h1Ids)).toContain(
+      'href="#the-matching-line-and-where-the-matches-are-in-it"',
+    );
+  });
+
+  it('falls back to the filename slug when the target has no H1', () => {
     const html = '<a href="02-searching.md">Searching</a>';
 
-    expect(rewriteRepoLinks(html)).toContain('href="#searching"');
+    expect(rewriteRepoLinks(html, new Map())).toContain('href="#searching"');
   });
 
   it('leaves an href inside a code block alone', () => {
@@ -91,7 +131,9 @@ describe('styleAlerts', () => {
 
 describe('renderGuide', () => {
   it('gives every heading an id, so the TOC can link to it', async () => {
-    const { html } = await renderGuide(['# Caching\n\n## When it fills\n']);
+    const { html } = await renderGuide([
+      { name: '01-caching.md', source: '# Caching\n\n## When it fills\n' },
+    ]);
 
     expect(html).toContain('id="caching"');
     expect(html).toContain('id="when-it-fills"');
@@ -99,7 +141,10 @@ describe('renderGuide', () => {
 
   it('collects h2 and h3 into the TOC, and nothing else', async () => {
     const { toc } = await renderGuide([
-      '# Patterns\n\n## Smart case\n\n### Details\n\n#### Ignored\n',
+      {
+        name: '01-patterns.md',
+        source: '# Patterns\n\n## Smart case\n\n### Details\n\n#### Ignored\n',
+      },
     ]);
 
     expect(toc).toEqual([
@@ -109,7 +154,10 @@ describe('renderGuide', () => {
   });
 
   it('de-duplicates ids across concatenated files', async () => {
-    const { html } = await renderGuide(['## Notes\n', '## Notes\n']);
+    const { html } = await renderGuide([
+      { name: '01-a.md', source: '## Notes\n' },
+      { name: '02-b.md', source: '## Notes\n' },
+    ]);
 
     expect(html).toContain('id="notes"');
     expect(html).toContain('id="notes-2"');
@@ -117,7 +165,10 @@ describe('renderGuide', () => {
 
   it('highlights code fences at build time', async () => {
     const { html } = await renderGuide([
-      '# X\n\n```ts\nconst NG = new Netgrep();\n```\n',
+      {
+        name: '01-x.md',
+        source: '# X\n\n```ts\nconst NG = new Netgrep();\n```\n',
+      },
     ]);
 
     // A real colour, not a `--shiki-light` custom property: the single-theme
@@ -131,7 +182,10 @@ describe('renderGuide', () => {
 
   it('renders a GitHub alert as a styled callout', async () => {
     const { html } = await renderGuide([
-      '# X\n\n> [!WARNING]\n> Batch results never reject.\n',
+      {
+        name: '01-x.md',
+        source: '# X\n\n> [!WARNING]\n> Batch results never reject.\n',
+      },
     ]);
 
     expect(html).toContain('class="alert alert-warning"');
@@ -140,7 +194,9 @@ describe('renderGuide', () => {
   });
 
   it('renders a tip alert too', async () => {
-    const { html } = await renderGuide(['# X\n\n> [!TIP]\n> Upgrading?\n']);
+    const { html } = await renderGuide([
+      { name: '01-x.md', source: '# X\n\n> [!TIP]\n> Upgrading?\n' },
+    ]);
 
     expect(html).toContain('class="alert alert-tip"');
   });
@@ -151,11 +207,30 @@ describe('renderGuide', () => {
     // same string. Two elements with one id is invalid HTML, and the anchor is
     // the one the README's published links point at.
     const { html } = await renderGuide([
-      '<a id="no-ranking"></a>\n\n### No ranking\n',
+      {
+        name: '07-limitations.md',
+        source: '<a id="no-ranking"></a>\n\n### No ranking\n',
+      },
     ]);
 
     expect(html).toContain('<a id="no-ranking"></a>');
     expect(html).toContain('<h3 id="no-ranking-2">');
+  });
+
+  it('leaves no dead anchor anywhere in the real guide', async () => {
+    // The whole guide, from disk, not a fixture: this is the check that catches
+    // a cross-reference pointing at an id nothing emits. One such link shipped —
+    // `03-the-matching-line.md` resolved to a slug of its filename while its
+    // heading carried the slug of its much longer title.
+    const { html } = await renderGuide(await readRealGuide());
+
+    const ids = new Set(
+      [...html.matchAll(/\bid="([^"]+)"/g)].map(([, id]) => id),
+    );
+    const targets = [...html.matchAll(/href="#([^"]+)"/g)].map(([, id]) => id);
+
+    expect(targets.length).toBeGreaterThan(0);
+    expect(targets.filter((id) => !ids.has(id))).toEqual([]);
   });
 });
 
