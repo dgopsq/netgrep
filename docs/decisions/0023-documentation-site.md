@@ -127,9 +127,12 @@ demo shows two library caveats plus its own. Three memberships, one source, no c
   generated. That is deliberate — they explain the *mechanism* and name the file and the pinning test, for
   contributors — but it is honest to record that the "one source" claim covers the consumer-facing caveat list
   and not every mention of a defect in the repository.
-- **§2.3 stops being a list of things to remember and becomes a list of two fields to decide.** What is still
-  unenforced is named there rather than implied: the hero copy and the `StatsBar` line, which state the scope
-  of a result and the 1.17 MB WebAssembly download, are checked by nobody.
+- **§2.3 stops being a list of things to remember and becomes a list of two fields to decide** — but the check
+  proves agreement, not completeness. `--check` establishes that the three surfaces say what the data file
+  says; nothing establishes that the data file is *complete*, so a defect nobody entered is invisible to it,
+  and whether a new backlog item deserves an entry is still a judgement a human makes. Nor does anything check
+  the hero copy or the `StatsBar` line, which state the scope of a result and the 1.17 MB WebAssembly
+  download. §2.3 names both gaps rather than implying them.
 
 ## Rejected alongside
 

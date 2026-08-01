@@ -120,6 +120,12 @@ Two things the generator does not decide, and you must:
 | `kind` | `defect` (a bug, listed in the README) or `by-design` (never fixed, shown on the site and in the guide but not in the README's defect list) |
 | `demoCorpusCanTrigger` | Whether *this corpus* can hit it. `false` keeps it off the demo page — 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false` |
 
+**Adding a defect is still a judgement call, and `--check` cannot make it for you.** CI verifies that
+the three generated surfaces agree with `caveats.data.json`. Nothing detects a defect that was never
+entered into it in the first place. So when you add one to [`docs/BACKLOG.md`](docs/BACKLOG.md),
+decide whether a visitor is affected: if so, add an entry here; if not, no action — but make it a
+decision, not an omission.
+
 **Still not enforced, and still yours to check:** the hero copy and the `StatsBar` line, which state
 the scope of a result and the 1.17 MB WebAssembly download.
 
