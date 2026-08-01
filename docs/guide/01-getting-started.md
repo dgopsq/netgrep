@@ -29,10 +29,6 @@ No bundler configuration is required. netgrep loads its WebAssembly through a st
 understand out of the box. The WASM file is fetched in the background as soon as the module is
 imported, and the first search waits for it automatically.
 
-> [!TIP]
-> **Upgrading from 0.1.x?** Delete the `experiments.asyncWebAssembly` flag from your webpack config —
-> it is no longer needed.
-
 ## Your first search
 
 ```ts

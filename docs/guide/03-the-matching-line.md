@@ -38,10 +38,6 @@ copy, so pointing netgrep at minified JavaScript costs you a snippet rather than
 is taken on a UTF-8 character boundary — and on a range boundary too: a range past the cut is dropped, one
 straddling it is clamped. Setting the cap without `capture` is a compile error.
 
-> [!IMPORTANT]
-> **Renamed:** `captureLine: true` is now `capture: 'line'`. The boolean is gone, with no alias — a union was
-> the only way to add a third mode without carrying two flags forever. Behaviour is otherwise unchanged.
-
 Three things to know about the string:
 
 - **The line terminator is stripped** — a trailing `\n`, and a `\r` immediately before it — so you can render

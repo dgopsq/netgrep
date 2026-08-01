@@ -67,16 +67,12 @@ describe('the guide', () => {
     expect(broken).toEqual([]);
   });
 
-  it.each(files)(
-    '%s does not mention the removed captureLine flag',
-    async (name) => {
-      const source = await readFile(join(GUIDE, name), 'utf8');
+  it.each(files)('%s never mentions the captureLine flag', async (name) => {
+    const source = await readFile(join(GUIDE, name), 'utf8');
 
-      // `capture: 'line'` replaced `captureLine: true` with no alias. The one
-      // legitimate mention is the migration note, which says "Renamed".
-      if (source.includes('captureLine')) {
-        expect(source).toContain('Renamed');
-      }
-    },
-  );
+    // `captureLine` never shipped under that name — `capture: 'line'` is
+    // simply the API. The guide describes only the current shape, with no
+    // migration notes, so the string should not appear anywhere in it.
+    expect(source).not.toContain('captureLine');
+  });
 });
