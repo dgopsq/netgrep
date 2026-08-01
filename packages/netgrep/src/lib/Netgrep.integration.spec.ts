@@ -266,7 +266,8 @@ describe('Netgrep integration (real WASM)', () => {
     });
 
     it('does not cancel a stream that ended on its own', async () => {
-      const state = serve(chunked(POEM, 64));
+      const chunks = chunked(POEM, 64);
+      const state = serve(chunks);
 
       const result = await new Netgrep({ enableMemoryCache: false }).search(
         'url',
@@ -275,6 +276,10 @@ describe('Netgrep integration (real WASM)', () => {
 
       expect(result.result).toBe(false);
       expect(state.cancelled).toBe(false);
+      // Cancelling an already-closed stream is a no-op per the Streams spec, so
+      // `cancelled` alone can't tell an intentional skip from a stray cancel()
+      // call in the `done` branch. Pin that the stream was actually drained.
+      expect(state.reads).toBe(chunks.length + 1);
     });
 
     it('finds a pattern straddling a chunk boundary', async () => {
