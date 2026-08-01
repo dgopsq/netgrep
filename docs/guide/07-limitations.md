@@ -25,15 +25,15 @@ The block of lines containing the NUL reports no match, even when the match came
 
 The line terminator is `\n`, so on Windows-authored text the `\r` sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
 
-<a id="concurrent-dedup"></a>
-
-### Concurrent searches of one URL are only de-duplicated when the cache is on
-
-With `enableMemoryCache: true` the second caller waits for the first and is answered from the entry it writes. With the cache off there is no entry to hand over, so both download the file. The answers are still correct; the second request is wasted. Two residuals even with the cache on: a first caller that matches early resolves without reading to the end, so it writes no entry and its waiter fetches after all; and a failed download is not inherited, so the waiter retries with its own signal.
-
 ## By design
 
 These are not bugs and will not be fixed.
+
+<a id="concurrent-dedup"></a>
+
+### Concurrent searches of one URL each download it
+
+netgrep retains nothing between searches, so there is no buffer for a second caller to be handed. Two searches of one URL that overlap therefore both download it. The answers are correct; the second request is wasted. Sharing the download would mean either keeping the whole file in memory — the cost that retaining nothing exists to avoid — or teeing the response stream, which would give the second caller the first one's cancellation as well, turning a wasted request into a wrong answer. The browser's own HTTP cache still applies, so what a repeat costs is whatever the host's response headers say.
 
 <a id="no-ranking"></a>
 

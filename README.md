@@ -58,7 +58,6 @@ explained in full in the [documentation](https://netgrep.diegopasquali.com/docs/
 - **[Inside a line longer than 64 KB, results are approximate](https://netgrep.diegopasquali.com/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.
 - **[A file containing a NUL byte reports no match](https://netgrep.diegopasquali.com/docs/#nul-byte)** — A NUL byte discards the block of lines containing it, even when the match came earlier.
 - **[`$` does not match on CRLF files](https://netgrep.diegopasquali.com/docs/#crlf-dollar)** — On Windows-authored text the `\r` sits between your text and the anchor, so `needle$` misses what `needle` finds.
-- **[Concurrent searches of one URL are only de-duplicated when the cache is on](https://netgrep.diegopasquali.com/docs/#concurrent-dedup)** — With the cache off, two concurrent searches of one URL both download it: correct answers, one wasted request.
 <!-- END GENERATED CAVEATS -->
 
 Fixes land on `main` before they reach npm; [`CHANGELOG.md`](https://github.com/dgopsq/netgrep/blob/main/packages/netgrep/CHANGELOG.md)

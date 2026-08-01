@@ -1,15 +1,26 @@
 # Caching
 
-netgrep keeps downloaded bytes in memory, keyed by URL, so repeat searches over the same corpus need no
-network. The cache is on by default. There is no eviction, size cap or TTL: bytes are retained for the
-lifetime of the `Netgrep` instance.
+netgrep keeps nothing. Every search streams the file from the network, holding one chunk and the
+incomplete line at its end — so searching a 500 MB file costs the same memory as searching a 5 KB
+one, and searching the same URL twice costs two requests.
 
-```ts
-const NG = new Netgrep({ enableMemoryCache: false });
+What a repeat actually costs is the browser's decision, not netgrep's. The request goes through the
+HTTP cache like any other `fetch`, so it is your response headers that decide whether the second
+search re-downloads the file, revalidates it for a `304`, or is answered from disk without touching
+the network at all:
+
+```
+cache-control: public, max-age=600
+etag: "..."
 ```
 
-Disable it if you are searching a large or unbounded set of URLs, or bound the growth by discarding the
-instance.
+A warm HTTP hit is still delivered as a stream, so a search answered from the browser's cache still
+resolves on the first matching line rather than waiting for the whole file.
 
-Concurrent searches of one URL interact with this; see
+There is no configuration for any of this. The library used to keep downloaded bytes in memory, on by
+default, behind an `enableMemoryCache` flag; that was removed because the platform does the same job
+better — it has eviction, it persists across page loads, and it is shared with everything else the
+page fetches.
+
+Two searches of one URL that overlap will each download it; see
 [the limitation on concurrent searches](07-limitations.md#concurrent-dedup).
