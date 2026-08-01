@@ -55,8 +55,16 @@
   --accent: oklch(0.26 0.012 181);
   --accent-foreground: oklch(0.96 0.002 240);
 
-  --destructive: oklch(0.66 0.19 24);
-  --destructive-foreground: oklch(0.98 0.005 24);
+  /*
+   * Pulled into the palette rather than left at shadcn's stock red: same
+   * chroma as --primary and a comparable lightness, so only the hue tells them
+   * apart. The error card is the match card with one token swapped, and with a
+   * saturated red in it the two states had visibly different weight. Still
+   * warm, and still 151° from the accent, which is what keeps it a warning.
+   */
+  --destructive: oklch(0.75 0.13 30);
+  /* Dark ink, mirroring --primary-foreground: the surface is light now. */
+  --destructive-foreground: oklch(0.17 0.02 30);
 
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
