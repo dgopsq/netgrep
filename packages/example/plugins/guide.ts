@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 import {
   type GuideFile,
+  type RenderedGuide,
   renderGuide,
   renderNav,
   renderToc,
@@ -32,6 +33,17 @@ async function readGuide(): Promise<GuideFile[]> {
 export function guidePlugin(): Plugin {
   let base = '/';
 
+  // The seven guide files are read and re-rendered (markdown-it + Shiki) on
+  // every /docs request in dev, which is the other half of what made it slow
+  // — see getShikiPlugin's comment in guide-render.ts for the first half.
+  // Filled on first request, cleared by the watcher below on a guide edit.
+  let cached: Promise<RenderedGuide> | null = null;
+
+  function getRenderedGuide() {
+    cached ??= readGuide().then(renderGuide);
+    return cached;
+  }
+
   return {
     name: 'netgrep-guide',
 
@@ -47,6 +59,9 @@ export function guidePlugin(): Plugin {
       server.watcher.add(GUIDE_DIR);
       server.watcher.on('change', (path) => {
         if (path.startsWith(GUIDE_DIR)) {
+          // Clear before reloading, or the reload re-requests /docs and gets
+          // served the stale render right back.
+          cached = null;
           server.ws.send({ type: 'full-reload' });
         }
       });
@@ -62,7 +77,7 @@ export function guidePlugin(): Plugin {
 
       if (!isDocs) return withNav;
 
-      const { html: body, toc } = await renderGuide(await readGuide());
+      const { html: body, toc } = await getRenderedGuide();
 
       return withNav
         .replace('<!--GUIDE_TOC-->', renderToc(toc))

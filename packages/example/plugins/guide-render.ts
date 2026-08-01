@@ -19,6 +19,27 @@ export type TocEntry = { id: string; text: string; level: 2 | 3 };
 export type RenderedGuide = { html: string; toc: TocEntry[] };
 export type GuideFile = { name: string; source: string };
 
+// Created once and reused: instantiating the Shiki plugin re-initialises its
+// WASM highlighter, which is the expensive part of a render. `renderGuide` is
+// called on every /docs request in dev (see the Vite plugin's
+// `transformIndexHtml`), so without this a page load paid that cost again.
+// Safe to apply to more than one MarkdownIt instance — `markdownItShiki`'s
+// returned function only assigns `options.highlight` on the instance it is
+// given, closing over a highlighter that is itself stateless across calls.
+let shikiPlugin: ReturnType<typeof Shiki> | null = null;
+
+function getShikiPlugin() {
+  shikiPlugin ??= Shiki({
+    // ONE theme, not a light/dark pair. The site is dark-only (see the token
+    // comment in index.css), and the two-theme form emits `--shiki-light` /
+    // `--shiki-dark` custom properties that render as unstyled text unless a
+    // stylesheet picks one — a failure that looks like Shiki not running.
+    theme: 'github-dark-default',
+  });
+
+  return shikiPlugin;
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -119,17 +140,13 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
     }
   }
 
+  // A fresh MarkdownIt instance per call: `heading_open` below closes over
+  // per-render state (`toc`, `seen`, `h1Ids`, `currentFile`), and sharing the
+  // instance across renders would let one render's headings corrupt the
+  // next's. Only the Shiki plugin — the expensive part — is shared.
   const md = MarkdownIt({ html: true, linkify: false, typographer: false });
 
-  md.use(
-    await Shiki({
-      // ONE theme, not a light/dark pair. The site is dark-only (see the token
-      // comment in index.css), and the two-theme form emits `--shiki-light` /
-      // `--shiki-dark` custom properties that render as unstyled text unless a
-      // stylesheet picks one — a failure that looks like Shiki not running.
-      theme: 'github-dark-default',
-    }),
-  );
+  md.use(await getShikiPlugin());
 
   md.renderer.rules.heading_open = (tokens, index) => {
     const token = tokens[index];
