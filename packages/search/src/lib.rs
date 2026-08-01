@@ -154,9 +154,9 @@ pub fn try_search_bytes_line_ranges(
 /// Run `use_matcher` against the compiled form of `pattern`, compiling it only
 /// if the memo is not already holding it.
 ///
-/// Generic over the return type so both entry points share one memo: the slot
-/// caches the *matcher*, which is the expensive part, and is indifferent to
-/// what the caller then does with it.
+/// Generic over the return type so all three entry points share one memo: the
+/// slot caches the *matcher*, which is the expensive part, and is indifferent
+/// to what the caller then does with it.
 fn with_matcher<T>(
     pattern: &str,
     use_matcher: impl FnOnce(&RegexMatcher) -> T,
@@ -197,11 +197,11 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
 /// Build a searcher with netgrep's fixed reading semantics: quit on a NUL, and
 /// do not count lines.
 ///
-/// Shared by both entry points rather than spelled out in each. They must agree
-/// — a caller who adds `captureLine` to an existing search is entitled to the
-/// same answer — and binary detection in particular decides whether a whole
-/// block is abandoned, so a divergence here would be a difference in `result`,
-/// not merely in what is returned alongside it.
+/// Shared by all three entry points rather than spelled out in each. They must
+/// agree — a caller who adds `capture: 'line-ranges'` to an existing search is
+/// entitled to the same answer — and binary detection in particular decides
+/// whether a whole block is abandoned, so a divergence here would be a
+/// difference in `result`, not merely in what is returned alongside it.
 fn build_searcher() -> Searcher {
     SearcherBuilder::new()
         .binary_detection(BinaryDetection::quit(b'\x00'))

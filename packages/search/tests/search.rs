@@ -329,13 +329,13 @@ fn first_line(haystack: &[u8], pattern: &str, max_line_bytes: usize) -> Option<S
 ///
 /// Everything here is about what `search_bytes_line` returns *given* a match;
 /// whether something matches at all is `mod search` above, and is deliberately
-/// not re-asserted. The two entry points share one compiled matcher and one
+/// not re-asserted. All three entry points share one compiled matcher and one
 /// searcher configuration, so matching semantics cannot diverge between them —
-/// `test_the_two_entry_points_share_one_matcher` is the assertion that keeps
+/// `test_the_three_entry_points_share_one_matcher` is the assertion that keeps
 /// that true.
 #[cfg(test)]
 mod matching_line {
-    use super::{first_line, matches};
+    use super::{first_line, line_ranges, matches};
     use ::search::try_search_bytes_line;
 
     /// Comfortably above every line used here, so a test only exercises the cap
@@ -507,17 +507,18 @@ mod matching_line {
     // ---------------------------------------------------------------
 
     #[test]
-    fn test_the_two_entry_points_share_one_searcher_configuration() {
-        // Both go through `build_searcher`, so binary detection cannot differ
-        // between them. That matters more than it looks: a NUL abandons the
-        // whole block, so a divergence would change `result` — adding
-        // `captureLine` to a working search would change its ANSWER, not just
-        // what came back alongside it.
+    fn test_the_three_entry_points_share_one_searcher_configuration() {
+        // All three go through `build_searcher`, so binary detection cannot
+        // differ between them. That matters more than it looks: a NUL abandons
+        // the whole block, so a divergence would change `result` — adding
+        // `capture: 'line-ranges'` to a working search would change its
+        // ANSWER, not just what came back alongside it.
         //
         // Asserted through the observable behaviour rather than the builder,
         // because the builder is not comparable.
         assert!(!matches(b"needle here\x00tail", "needle"));
         assert_eq!(first_line(b"needle here\x00tail", "needle", NO_CAP), None);
+        assert_eq!(line_ranges(b"needle here\x00tail", "needle", NO_CAP), None);
 
         // The control, so this is pinning the shared config rather than an
         // input that never matched.
@@ -526,13 +527,17 @@ mod matching_line {
             first_line(b"needle here", "needle", NO_CAP).as_deref(),
             Some("needle here")
         );
+        assert_eq!(
+            line_ranges(b"needle here", "needle", NO_CAP),
+            Some(("needle here".to_string(), vec![0, 6]))
+        );
     }
 
     #[test]
-    fn test_the_two_entry_points_share_one_matcher() {
-        // Both go through `with_matcher`, so a pattern compiled by one is
-        // reused by the other. That is the point — but it also means a stale
-        // slot would let one entry point answer with the other's matcher, which
+    fn test_the_three_entry_points_share_one_matcher() {
+        // All three go through `with_matcher`, so a pattern compiled by one is
+        // reused by the others. That is the point — but it also means a stale
+        // slot would let one entry point answer with another's matcher, which
         // is the same silent-wrong-answer failure `mod search` guards for
         // `search_bytes` alone.
         assert!(matches(b"one wiseman", "wiseman"));
@@ -540,10 +545,15 @@ mod matching_line {
             first_line(b"one wiseman", "wiseman", NO_CAP).as_deref(),
             Some("one wiseman")
         );
+        assert_eq!(
+            line_ranges(b"one wiseman", "wiseman", NO_CAP),
+            Some(("one wiseman".to_string(), vec![4, 11]))
+        );
 
         // Smart case is decided at compile time, so these need different
         // matchers despite differing by one bit.
         assert_eq!(first_line(b"one wiseman", "Wiseman", NO_CAP), None);
+        assert_eq!(line_ranges(b"one wiseman", "Wiseman", NO_CAP), None);
         assert!(matches(b"one wiseman", "wiseman"));
     }
 
@@ -565,7 +575,7 @@ mod matching_line {
     }
 }
 
-/// Ranges within the matching line — Task 2 of capture ranges.
+/// Ranges within the matching line.
 ///
 /// `line_ranges` returns the same line as `first_line` plus flat `[start,
 /// end, …]` pairs in UTF-16 code units, so a caller can `line.slice(start,
@@ -605,7 +615,7 @@ mod line_ranges_tests {
     fn test_offsets_are_utf16_units_not_bytes() {
         // 'é' is 2 bytes in UTF-8 but 1 UTF-16 unit; '𝄞' (U+1D11E) is 4 bytes
         // in UTF-8 and a surrogate PAIR — 2 UTF-16 units. Byte offsets would be
-        // 2 and 6; char offsets 1 and 3; only UTF-16 gives 1 and 4.
+        // 6 and 12; char offsets 2 and 8; only UTF-16 gives 3 and 9.
         let (_, ranges) = line_ranges("é𝄞needle\n".as_bytes(), "needle", 4096).unwrap();
         assert_eq!(ranges, vec![3, 9]);
     }
