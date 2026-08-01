@@ -13,23 +13,17 @@ Each defect is pinned by a test, so it cannot change unnoticed.
 
 netgrep holds back the incomplete last *line* of each chunk and prepends it to the next, which is exact — a match can never cross a newline — so ordinary text is unaffected no matter how the network splits the response. The exception is a line with no terminator in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the retained bytes become a plain 64 KB window, so a match **longer** than the window is lost, `^` can match at a window edge where no line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line — which can also leave `ranges` empty, since the fragment need not contain the match. `result` stays correct in that last case. Newline-free input is also answered more slowly, because nothing can be searched until the ceiling fills or the download ends.
 
-Tracked as [BACKLOG 3g](https://github.com/dgopsq/netgrep/blob/main/docs/BACKLOG.md#3g), and pinned by a test.
-
 <a id="nul-byte"></a>
 
 ### A file containing a NUL byte reports no match
 
 The block of lines containing the NUL reports no match, even when the match came earlier. ripgrep's binary detection abandons what it is given rather than stopping at the NUL, and a boolean cannot distinguish “binary, not searched” from “no match”. Plain text — the intended use — is unaffected.
 
-Tracked as [BACKLOG 3f](https://github.com/dgopsq/netgrep/blob/main/docs/BACKLOG.md#3f), and pinned by a test.
-
 <a id="crlf-dollar"></a>
 
 ### `$` does not match on CRLF files
 
 The line terminator is `\n`, so on Windows-authored text the `\r` sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
-
-Tracked as [BACKLOG 17](https://github.com/dgopsq/netgrep/blob/main/docs/BACKLOG.md#17), and pinned by a test.
 
 <a id="concurrent-dedup"></a>
 

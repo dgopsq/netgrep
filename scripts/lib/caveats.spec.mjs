@@ -43,8 +43,11 @@ describe('renderGuideSection', () => {
     expect(out.indexOf('## Defects')).toBeLessThan(out.indexOf('## By design'));
   });
 
-  it('names the backlog item for a defect that has one', () => {
-    expect(renderGuideSection(CAVEATS)).toContain('BACKLOG.md#3f');
+  it('never links the internal backlog, which a reader cannot act on', () => {
+    const out = renderGuideSection(CAVEATS);
+
+    expect(out).not.toContain('BACKLOG');
+    expect(out).not.toContain('3f');
   });
 
   it('opens with the generated banner', () => {

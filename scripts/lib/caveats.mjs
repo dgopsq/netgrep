@@ -14,8 +14,13 @@ export const BEGIN = '<!-- BEGIN GENERATED CAVEATS -->';
 export const END = '<!-- END GENERATED CAVEATS -->';
 
 const DOCS_URL = 'https://netgrep.diegopasquali.com/docs/';
-const BACKLOG_URL =
-  'https://github.com/dgopsq/netgrep/blob/main/docs/BACKLOG.md';
+
+/**
+ * The data file's `backlog` field is deliberately read by nothing. It records
+ * which item pins a defect, for whoever edits the file; published
+ * documentation does not send a reader to an internal tracker. Keep it — it is
+ * provenance, not dead weight.
+ */
 
 /** `kind: 'defect'` first — a reader scanning for bugs should not wade past
  *  the things that are working as intended. */
@@ -38,12 +43,7 @@ export function renderGuideSection(caveats) {
       `### ${caveat.title}`,
       '',
       caveat.body,
-      caveat.backlog
-        ? `\nTracked as [BACKLOG ${caveat.backlog}](${BACKLOG_URL}#${caveat.backlog}), and pinned by a test.`
-        : null,
-    ]
-      .filter((part) => part !== null)
-      .join('\n');
+    ].join('\n');
 
   return [
     `<!-- ${GENERATED_BY} -->`,
