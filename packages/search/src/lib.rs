@@ -73,6 +73,44 @@ pub fn search_bytes_line(
     try_search_bytes_line(chunk, pattern, max_line_bytes).map_err(|error| JsError::new(&error))
 }
 
+/// The value `search_bytes_line_ranges` hands to JavaScript.
+///
+/// `getter_with_clone` because both fields are heap types: the getters return
+/// copies, and the caller frees the carrier after reading them.
+#[wasm_bindgen(getter_with_clone)]
+pub struct LineWithRanges {
+    /// The first matching line — terminator stripped, truncated, lossily
+    /// decoded, exactly as `search_bytes_line` returns it.
+    pub line: String,
+    /// Flat `[start, end, …]` pairs, UTF-16 code units into `line`, one pair
+    /// per match within it. Can be empty: every match can sit past the
+    /// truncation cut, and `result` is still true.
+    pub ranges: Vec<u32>,
+}
+
+/// Search a bytes array, returning the first matching line and where the
+/// pattern matches within it.
+///
+/// `undefined` means no match, exactly as for `search_bytes_line` — a match on
+/// an empty line yields an empty `line` with one `[0, 0]` range, so test for
+/// `undefined`, never for truthiness.
+///
+/// A third entry point rather than a flag on the second, so each capture mode
+/// pays only its own cost: the boolean path allocates nothing, the line path
+/// runs no ranges pass.
+///
+/// Throws the same way the other two do when the pattern will not compile.
+#[wasm_bindgen]
+pub fn search_bytes_line_ranges(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<Option<LineWithRanges>, JsError> {
+    try_search_bytes_line_ranges(chunk, pattern, max_line_bytes)
+        .map(|hit| hit.map(|(line, ranges)| LineWithRanges { line, ranges }))
+        .map_err(|error| JsError::new(&error))
+}
+
 /// The engine, as plain Rust.
 ///
 /// `search_bytes` above is a two-line wrapper around this, and the split is
