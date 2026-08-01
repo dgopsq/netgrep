@@ -55,6 +55,13 @@ describe('renderGuideSection', () => {
   it('opens with the generated banner', () => {
     expect(renderGuideSection(CAVEATS)).toContain('pnpm docs:sync');
   });
+
+  it('anchors each entry on its id, not a slug of its title', () => {
+    const out = renderGuideSection(CAVEATS);
+
+    expect(out).toContain('<a id="nul-byte"></a>');
+    expect(out).toContain('<a id="no-ranking"></a>');
+  });
 });
 
 describe('renderReadmeList', () => {

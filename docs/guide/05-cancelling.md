@@ -15,4 +15,5 @@ function onInput(pattern: string) {
 }
 ```
 
-Aborted searches surface as an `error` on batch results, so filter them out as shown above.
+Aborted searches surface as an `error` on batch results, so filter them out as shown in
+[Batch results never reject](02-searching.md#batch-results-never-reject).

@@ -27,6 +27,14 @@ export function renderGuideSection(caveats) {
 
   const entry = (caveat) =>
     [
+      // An explicit anchor, because the fragment has to be the caveat's `id`
+      // and not a slug of its title. The README's generated bullets link to
+      // `/docs/#<id>`, and a title is edited far more often than an id — "No
+      // ranking" has already been retitled twice. GitHub renders a bare
+      // anchor element invisibly, and markdown-it passes it through, so the
+      // same fragment resolves on both surfaces.
+      `<a id="${caveat.id}"></a>`,
+      '',
       `### ${caveat.title}`,
       '',
       caveat.body,
