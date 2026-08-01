@@ -31,13 +31,15 @@ no stream to resolve early against. The platform's cache is compatible with 0002
 split it out of item 11, and named as defect 2 in 0006 itself from the day that record was written. The full
 bytes of every file searched, retained for the instance's lifetime, on by default.
 
-**Both of this library's historical P1 correctness defects came out of it.** BACKLOG 3b, where an early
-resolution left a *prefix* in the cache with nothing marking it partial and the next search for a different
-pattern answered `false` about text that was never downloaded. And the sharp half of BACKLOG 18, where the
-entry was appended to per chunk and two concurrent downloads joined the file to itself, forming a seam line
-that existed in no file — `needle` cached as `needleneedle`. Both are fixed, and both were caused by the same
-object; there is no third defect to point at, but there was also nothing in the design making a fourth
-unlikely.
+**Two of the P1 correctness defects this repository has closed came out of it — and they are the only two
+that came from state the library chose to keep.** BACKLOG **3b**, where an early resolution left a *prefix*
+in the cache with nothing marking it partial, and the next search for a different pattern answered `false`
+about text that was never downloaded. And the sharp half of BACKLOG **18**, where the entry was appended to
+per chunk and two concurrent downloads joined the file to itself, forming a seam line that existed in no file
+— `needle` cached as `needleneedle`. The rest of that list came from somewhere else: **3a** from *not*
+retaining enough between chunks, **3c** and **3e** from the engine. Both of these were closed by narrowing
+the cache rather than by removing it, which left the object that produced them in place — one entry, written
+once, from a drained stream. That is a smaller target than it was, and still a target.
 
 ## Decision
 

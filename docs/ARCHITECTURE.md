@@ -151,7 +151,9 @@ tiny cap, instead of only through a >64 KB fixture in a browser.
 
 The constructor takes no arguments — the library retains nothing between searches, so there is nothing to
 configure ([0024](decisions/0024-remove-the-in-memory-cache.md)).
-`NetgrepSearchConfig { signal }` is per-call and threads an `AbortSignal` into `fetch`.
+`NetgrepSearchConfig { signal, capture, maxLineBytes }` is per-call and is all the configuration there is:
+`signal` threads an `AbortSignal` into `fetch`, and the other two select and bound what comes back beside the
+boolean ([0020](decisions/0020-the-matching-line.md), [0022](decisions/0022-capture-ranges.md)).
 
 `metadata` is an opaque generic `T` carried through untouched and returned on the result — the mechanism by
 which a caller correlates results back to domain objects (a blog post, a document record).

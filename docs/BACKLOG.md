@@ -15,8 +15,10 @@ items move to the bottom rather than disappearing.
 **One number was used twice, and it is staying that way.** **19** is both *Return the matching line alongside
 the boolean* (Done, cited as `BACKLOG 19` from `Netgrep.ts`, `Netgrep.spec.ts` and
 `Netgrep.integration.spec.ts`) and *The cache has no eviction, size cap or TTL* (Done as of 2026-08-01, cited
-as `item **19**` from decisions 0006 and 0019). The second was renumbered out of item 11 by
-[0018](decisions/0018-line-oriented-tail-buffer.md) onto a number already in use. Renumbering either would
+as `item **19**` from decisions 0006 and 0019). The cache item had it first —
+[0018](decisions/0018-line-oriented-tail-buffer.md) split it out of item 11 onto what was then the next free
+number. The matching line landed in *Done* the next day and took its number from
+[issue #19](https://github.com/dgopsq/netgrep/issues/19), which had already been used. Renumbering either would
 break the citations that make these numbers worth having, so both keep it — which is why a reference should
 say what it points at, not only its number.
 
@@ -51,10 +53,11 @@ means inverting its assertion in the same PR.**
 > every one of them lives once in [`guide/caveats.data.json`](guide/caveats.data.json). Delete the entry and
 > run `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
 >
-> **The two lists are not mirrors of each other.** Every P1 item here has an entry there today, but that file
-> also carries two `by-design` entries — concurrent downloads of one url, and no ranking — that appear
-> nowhere on this list, because neither is a defect. An entry earns its place by affecting a visitor, which
-> is a judgement call rather than a lookup. `pnpm docs:sync --check` keeps the two rendered surfaces honest
+> **The two lists are not mirrors of each other.** Every P1 item still open here has an entry there today,
+> but that file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
+> which has never been a backlog item at all, and *concurrent downloads of one url*, which is item **18** —
+> in *Done*, and staying there. An entry earns its place there by affecting a visitor, which is a judgement
+> call rather than a lookup. `pnpm docs:sync --check` keeps the two rendered surfaces honest
 > to that file; what it cannot tell you is that an item here needs an entry there at all, or that an entry
 > there has stopped being one — `concurrent-dedup` moved from `defect` to `by-design` on 2026-08-01 when
 > [0024](decisions/0024-remove-the-in-memory-cache.md) removed the cache, and nothing but a reader would have
