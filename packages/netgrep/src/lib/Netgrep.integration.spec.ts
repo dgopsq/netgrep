@@ -97,7 +97,10 @@ function streamOfChunks(
  * queuing strategy pulls one chunk ahead of the consumer, so counting inside
  * `pull` overstates consumption by one and would make this assertion a lie.
  */
-function countingBody(stream: ReadableStream, state: { reads: number }) {
+function countingBody(
+  stream: ReadableStream,
+  state: { reads: number; cancelCalls: number },
+) {
   const body = {
     getReader() {
       const reader = stream.getReader();
@@ -111,7 +114,15 @@ function countingBody(stream: ReadableStream, state: { reads: number }) {
         // Forwarded because the searcher cancels on a match. Without it this
         // fake reader is missing a method the real one has, and every
         // early-resolving test throws instead of asserting.
+        //
+        // Counted here rather than via the underlying stream's `cancel()`
+        // callback: once a stream reaches "closed" (the `done` branch has
+        // already run), the Streams spec makes cancel() a no-op that never
+        // reaches the underlying source — so a stray call in the `done`
+        // branch would be invisible to any assertion downstream of the
+        // stream itself. Counting the consumer's call catches it.
         cancel() {
+          state.cancelCalls += 1;
           return reader.cancel();
         },
       };
@@ -156,7 +167,7 @@ globalThis.fetch = mockFetch;
  * locked". The read counter is shared across all of them.
  */
 function serve(chunks: Array<Uint8Array>) {
-  const state = { reads: 0, cancelled: false };
+  const state = { reads: 0, cancelled: false, cancelCalls: 0 };
 
   mockFetch.mockImplementation(() =>
     Promise.resolve({
@@ -263,6 +274,7 @@ describe('Netgrep integration (real WASM)', () => {
 
       expect(result.result).toBe(true);
       expect(state.cancelled).toBe(true);
+      expect(state.cancelCalls).toBe(1);
     });
 
     it('does not cancel a stream that ended on its own', async () => {
@@ -276,10 +288,13 @@ describe('Netgrep integration (real WASM)', () => {
 
       expect(result.result).toBe(false);
       expect(state.cancelled).toBe(false);
-      // Cancelling an already-closed stream is a no-op per the Streams spec, so
-      // `cancelled` alone can't tell an intentional skip from a stray cancel()
-      // call in the `done` branch. Pin that the stream was actually drained.
+      // Cancelling an already-closed stream is a no-op per the Streams spec —
+      // it reaches neither the underlying source's `cancel` callback nor
+      // another read — so `cancelled` and `reads` alone can't tell an
+      // intentional skip from a stray cancel() call in the `done` branch.
+      // `cancelCalls` counts the consumer's call directly and catches it.
       expect(state.reads).toBe(chunks.length + 1);
+      expect(state.cancelCalls).toBe(0);
     });
 
     it('finds a pattern straddling a chunk boundary', async () => {
