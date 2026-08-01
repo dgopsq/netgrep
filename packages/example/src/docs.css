@@ -6,42 +6,6 @@
  * dev and silently lose its styles in a production build.
  */
 
-.site-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 1rem 1.25rem;
-  font-size: 0.875rem;
-}
-
-/*
- * Deliberately NOT sticky. The demo page has a sticky search field — see the
- * comment in App.tsx — and two stacked sticky bars need offset coordination
- * that buys nothing on a page you scroll once.
- */
-.site-nav-mark {
-  font-family: var(--font-mono);
-  font-weight: 600;
-}
-
-.site-nav nav {
-  display: flex;
-  gap: 1.25rem;
-}
-
-.site-nav a {
-  color: var(--muted-foreground);
-  text-decoration: none;
-}
-
-.site-nav a:hover,
-.site-nav a[aria-current="page"] {
-  color: var(--primary);
-}
-
 .docs-layout {
   display: grid;
   gap: 3rem;

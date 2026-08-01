@@ -117,6 +117,49 @@
   }
 }
 
+/*
+ * The site nav is injected into BOTH documents at build time by the guide
+ * plugin, so its rules live here — in the stylesheet both entries import —
+ * rather than beside the rest of the docs styling in docs.css, which only the
+ * /docs entry loads. When they were there the demo page rendered the nav with
+ * browser defaults.
+ */
+.site-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1rem 1.25rem;
+  font-size: 0.875rem;
+}
+
+/*
+ * Deliberately NOT sticky. The demo page has a sticky search field — see the
+ * comment in App.tsx — and two stacked sticky bars need offset coordination
+ * that buys nothing on a page you scroll once.
+ */
+.site-nav-mark {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.site-nav nav {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.site-nav a {
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+  color: var(--primary);
+}
+
 @utility text-gradient {
   /* Wordmark treatment: white falling off to teal. The README banner is a
      screenshot of it, so this rule is the wordmark rather than a copy of one. */
