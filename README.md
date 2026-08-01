@@ -2,7 +2,7 @@
 
 # netgrep
 
-Search remote text files from the browser while they are still downloading. netgrep is
+Search remote text files from the browser **while they are still downloading**. netgrep is
 [ripgrep](https://github.com/BurntSushi/ripgrep)'s search engine compiled to WebAssembly and pointed
 at plain static files. There is no index to build and no backend to run.
 

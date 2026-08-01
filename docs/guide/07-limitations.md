@@ -2,7 +2,7 @@
 
 # Limitations
 
-netgrep is experimental, and the following are real and **documented rather than fixed**.
+netgrep is experimental, and the following are documented rather than fixed.
 Each defect is pinned by a test, so it cannot change unnoticed.
 
 ## Defects
@@ -33,7 +33,7 @@ With `enableMemoryCache: true` the second caller waits for the first and is answ
 
 ## By design
 
-These are not bugs and will not be fixed. They are what the shape of the answer costs.
+These are not bugs and will not be fixed.
 
 <a id="no-ranking"></a>
 
