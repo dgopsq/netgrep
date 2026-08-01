@@ -1,3 +1,4 @@
+import type { NetgrepMatchRange } from '@netgrep/netgrep';
 import { Netgrep } from '@netgrep/netgrep';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type Story, stories } from '@/data/stories';
@@ -19,17 +20,23 @@ export type StoryStatus = 'idle' | 'searching' | 'match' | 'miss' | 'error';
  */
 const MAX_LINE_BYTES = 240;
 
+export type MatchedLine = {
+  text: string;
+  ranges: NetgrepMatchRange[];
+};
+
 export type SearchState = {
   /** Status per story id. */
   statuses: Record<string, StoryStatus>;
   /**
-   * The first matching line, per story id, for stories that matched.
+   * The first matching line and where the pattern matches within it, per
+   * story id, for stories that matched.
    *
    * Kept across runs for the same reason `statuses` is — see the
    * stale-while-revalidate note below. A card's line is replaced when that
    * card's own new answer arrives, not when the query changes.
    */
-  lines: Record<string, string>;
+  lines: Record<string, MatchedLine>;
   /** The order the grid renders in — see `settle()` below. */
   order: string[];
   matched: number;
@@ -193,7 +200,9 @@ export function useCorpusSearch(pattern: string): SearchState {
           // Read off the discriminant rather than off `status`: narrowing
           // `result.result` is what gives `result.line` its `string` type, and
           // the derived `status` above carries none of that.
-          const line = result.result ? result.line : null;
+          const line: MatchedLine | null = result.result
+            ? { text: result.line, ranges: result.ranges }
+            : null;
 
           const statuses = { ...prev.statuses, [id]: status };
           const matched = prev.matched + (status === 'match' ? 1 : 0);
@@ -220,7 +229,7 @@ export function useCorpusSearch(pattern: string): SearchState {
       },
       {
         signal: controller.signal,
-        captureLine: true,
+        capture: 'line-ranges',
         maxLineBytes: MAX_LINE_BYTES,
       },
     );
