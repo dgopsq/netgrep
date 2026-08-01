@@ -2,6 +2,9 @@
 
 **Status:** Accepted. Widens the public API for the first time, and **amends [0003](0003-boolean-only-results.md)**,
 whose decision — "the answer is a boolean" — no longer holds unconditionally.
+**Amended by [0022](0022-capture-ranges.md):** `captureLine` is now `capture: 'line'`, and the "Highlight
+ranges" rejection below was reopened — its rationale assumed JS re-matching, which cannot reproduce the
+engine's semantics.
 
 Proposed in [issue #19](https://github.com/dgopsq/netgrep/issues/19).
 
@@ -121,8 +124,8 @@ the cost. Each of these is a reasonable follow-up ask, and each is more expensiv
 | **Match counts** | Directly contradicts the short-circuit: counting means scanning the whole file, which is early exit deleted. Measured at 16.4ms → 1.3ms in [0016](0016-compiled-matcher-memo.md), in the wrong direction. |
 | **All matching lines** | Same objection, plus an unbounded result size per file. |
 | **Context lines (`-A`/`-B`)** | Needs lines the block may not contain — the preceding line can be in the previous chunk, already discarded. |
-| **Highlight ranges** | Offsets by another name, and the caller can re-run the pattern against a line it now has. |
+| **Highlight ranges** | ~~Offsets by another name, and the caller can re-run the pattern against a line it now has.~~ Reopened by [0022](0022-capture-ranges.md): a JS re-match cannot reproduce smart case or the engine's syntax. Shipped as `capture: 'line-ranges'`. |
 | **Ranking** | netgrep has no term statistics, no document frequencies and no index. There is nothing to rank *with*. The honest answer stays "use an index". |
 
-The line is the last of these that is cheap. If a future ask needs any of the above, the answer is very
-probably Pagefind.
+Each remaining row is refused for its stated reason, not by blanket policy — 0022 reopened one when its reason
+failed. A future ask that needs file-wide positions, counts or ranking is still better served by an index.

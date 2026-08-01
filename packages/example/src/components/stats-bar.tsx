@@ -64,7 +64,7 @@ export function StatsBar({ state }: { state: SearchState }) {
 
       <p className="text-muted-foreground/70 ml-auto max-w-xs text-xs leading-relaxed">
         {formatBytes(totalBytes)} of text across {stories.length} files, plus a
-        1.16 MB WebAssembly download once per page load. A query that matches
+        1.17 MB WebAssembly download once per page load. A query that matches
         nothing reads all of it.
       </p>
     </div>

@@ -30,7 +30,7 @@ At the moment Netgrep is just going to tell whether a pattern is present on a re
 
 - **A browser.** Netgrep needs `fetch` with a readable response body stream. There is no Node.js support.
 - **ESM.** The package is distributed as ESM only — there is no CommonJS `require` entry point.
-- **A ~1.16 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is the regex
+- **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is the regex
   engine's Unicode tables. This is the main cost of the approach, and it is worth weighing against your
   corpus size before adopting it.
 
@@ -124,30 +124,49 @@ A single search resolves to a result carrying the answer and whatever metadata y
 }
 ```
 
-### The matching line
+### The matching line, and where the matches are in it
 
-Pass `captureLine` and the result also carries the **first matching line** of the file. Nothing else changes,
-and a search without it costs exactly what it always did — the engine has a separate entry point, so the
-boolean path allocates nothing and copies no string out of WebAssembly.
+Pass `capture` and the result also carries the **first matching line** of the file — and, in `'line-ranges'`
+mode, **every match's position within that line**. Nothing else changes, and a search without `capture` costs
+exactly what it always did: each mode has its own engine entry point, so the boolean path allocates nothing
+and copies no string out of WebAssembly.
 
 ```ts
-const output = await NG.search(url, 'Sherlock', undefined, { captureLine: true });
+const output = await NG.search(url, 'Sherlock', undefined, { capture: 'line-ranges' });
 
 if (output.result) {
   console.log(output.line); // `string` — no null check needed
+
+  // output.ranges: [{ start, end }] — UTF-16 offsets into output.line,
+  // so this is the matched text:
+  output.ranges.map((r) => output.line.slice(r.start, r.end));
 }
 ```
 
-The flag's effect is in the type, so TypeScript tells you which shape you have:
+The option's effect is in the type, so TypeScript tells you which shape you have:
 
 | Called with | Type of the result |
 |---|---|
-| no config, or `{ captureLine: false }` | `{ url, pattern, result: boolean, metadata? }` — **there is no `line` key**, and reading one is a compile error |
-| `{ captureLine: true }` | `result` becomes a discriminant: `{ result: true, line: string }` or `{ result: false, line: null }` |
+| no config, or no `capture` | `{ url, pattern, result: boolean, metadata? }` — **there is no `line` key and no `ranges` key**, and reading either is a compile error |
+| `{ capture: 'line' }` | `result` becomes a discriminant: `{ result: true, line: string }` or `{ result: false, line: null }` |
+| `{ capture: 'line-ranges' }` | the same, plus ranges: `{ result: true, line: string, ranges: { start, end }[] }` or `{ result: false, line: null, ranges: null }` |
 
-`maxLineBytes` caps it, defaulting to **4096**. The truncation happens inside WebAssembly, before the copy, so
-pointing netgrep at minified JavaScript costs you a snippet rather than a megabyte per file. The cut is taken
-on a UTF-8 character boundary, and setting the cap without `captureLine` is a compile error.
+The ranges come from the engine's own matcher run over the line, not from re-running your pattern in
+JavaScript — which could not reproduce smart case or the Rust regex syntax, and would highlight differently
+than netgrep matched. Two things to know about them:
+
+- **They are all the matches in the first matching line**, and only that line. The search still stops there.
+- **`ranges` can be empty on a match.** If every match falls past `maxLineBytes` the returned line cannot show
+  any of them, and `ranges` is `[]` while `result` stays `true`. Do not branch on `ranges.length`.
+
+`maxLineBytes` caps the line, defaulting to **4096**. The truncation happens inside WebAssembly, before the
+copy, so pointing netgrep at minified JavaScript costs you a snippet rather than a megabyte per file. The cut
+is taken on a UTF-8 character boundary — and on a range boundary too: a range past the cut is dropped, one
+straddling it is clamped. Setting the cap without `capture` is a compile error.
+
+> [!IMPORTANT]
+> **Renamed:** `captureLine: true` is now `capture: 'line'`. The boolean is gone, with no alias — a union was
+> the only way to add a third mode without carrying two flags forever. Behaviour is otherwise unchanged.
 
 Three things to know about the string:
 
@@ -158,10 +177,10 @@ Three things to know about the string:
 - **Decoding is lossy.** Bytes that are not valid UTF-8 — a latin-1 file, say — become `U+FFFD`. The match
   itself is unaffected; the engine works on bytes.
 
-Line numbers, byte offsets, match counts, every matching line, context lines and highlight ranges are all
+Line numbers, file-wide byte offsets, match counts, every matching line, context lines and ranking are all
 deliberately absent, and each was considered and refused —
-[decision 0020](docs/decisions/0020-the-matching-line.md) says why for each. If you need them, you need an
-index.
+[decision 0020](docs/decisions/0020-the-matching-line.md) and
+[decision 0022](docs/decisions/0022-capture-ranges.md) say why for each. If you need them, you need an index.
 
 The batch methods add an `error` field, and this is the part worth reading twice:
 
@@ -241,8 +260,9 @@ tests so they cannot change unnoticed; the full analysis is in
   text is unaffected no matter how the network splits the response. The exception is a line with no terminator
   in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the retained bytes become a
   plain 64 KB window, so a match **longer** than the window is lost, `^` can match at a window edge where no
-  line actually begins, and a line captured with `captureLine` is a mid-line fragment rather than a line —
-  `result` stays correct in that last case. Newline-free input is also answered more slowly, because nothing can
+  line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line — which
+  can also leave `ranges` empty, since the fragment need not contain the match. `result` stays correct in that
+  last case. Newline-free input is also answered more slowly, because nothing can
   be searched until the ceiling fills or the download ends.
 - **A file containing a NUL byte reports no match** for the block of lines containing it, even when the match
   came earlier. Binary detection abandons what it is given rather than stopping at the NUL.
@@ -266,8 +286,8 @@ code; this one describes the gap until the next release.
   entry — so the entry held the file twice, joined with no separator, forming a line the file never contained.
   A per-URL registry of in-flight downloads now makes the second caller wait for the first. See the limitation
   above for the case that remains.
-- **The matching line was not available at all.** `captureLine` is new; the version on npm returns a boolean
-  and nothing else.
+- **The matching line was not available at all.** `capture` is new; the version on npm returns a boolean and
+  nothing else — no line, and no match positions within it.
 - **The cache could answer a later search wrongly.** A search resolves the moment it finds a match and stops
   downloading, which used to leave the cache holding only the beginning of the file with nothing marking it
   incomplete. An entry is now written **only once the whole file has been read**, so a search that resolves

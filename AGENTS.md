@@ -12,7 +12,8 @@ Everything below was verified end-to-end on **2026-07-30** (macOS arm64, Node 24
 netgrep is a port of [ripgrep](https://github.com/BurntSushi/ripgrep) to WebAssembly that searches remote
 files **over HTTP while they are still downloading**. It answers exactly one question: *does this pattern
 occur in the file at this URL?* — a boolean, plus, if the caller asks for it, the first matching line
-([decision 0020](docs/decisions/0020-the-matching-line.md)). Nothing more: no line numbers, no offsets, no
+([decision 0020](docs/decisions/0020-the-matching-line.md)) and each match's position within that line
+([decision 0022](docs/decisions/0022-capture-ranges.md)). Nothing more: no line numbers, no file offsets, no
 match counts, no ranking.
 
 The intended use case is a client-side search over a small, static, file-based corpus (e.g. Markdown posts
@@ -40,10 +41,11 @@ friction is the point and it is kept. So:
 - **The record ships with the change**, in the same PR — including a *Rejected alongside* section naming what
   the feature does **not** open the door to. Every widening makes the next ask more reasonable; writing the
   refusals down at the moment of acceptance is the only brake this repository has.
-- **The API is still deliberately small.** A boolean per URL, plus the matching line on request. Line numbers,
-  byte offsets, match counts, all-matches, context lines, highlight ranges and ranking have each been
-  considered and refused — see 0020's table before re-opening any of them. Node support is untouched by this
-  and remains a design conversation.
+- **The API is still deliberately small.** A boolean per URL, plus, on request, the matching line and each
+  match's position within it. Line numbers, file-absolute byte offsets, match counts, all-matches, context
+  lines and ranking have each been considered and refused — see
+  [0022](docs/decisions/0022-capture-ranges.md)'s table, which carries 0020's forward, before re-opening any
+  of them. Node support is untouched by this and remains a design conversation.
 - **If it changes what a result contains or costs, §2.3 applies**: the published demo has to agree with it.
 
 ---
@@ -110,13 +112,13 @@ is exactly why it is in this section rather than in a comment somewhere.
 | Fix 3f | Remove or rewrite its entry in the `CAVEATS` array of [`packages/example/src/components/limitations.tsx`](packages/example/src/components/limitations.tsx) — it is the only open defect with one |
 | Fix 3g or 17 | Nothing on the site to remove: neither has an entry, for the reasons below. Check that still holds rather than assuming it |
 | Add a new defect to `docs/BACKLOG.md` | Decide whether a visitor is affected. If so, add a caveat; if not, no action — but make it a decision, not an omission |
-| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state the scope of a result and the 1.16 MB WebAssembly download |
+| Change what netgrep returns or costs | Check the hero copy and the `StatsBar` line, which state the scope of a result and the 1.17 MB WebAssembly download |
 
 **The three caveats currently on the site map to backlog items like this**, so you can find yours quickly:
 
 | Caveat on the site | Backlog |
 |---|---|
-| No ranking, no positions | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md) as amended by [0020](docs/decisions/0020-the-matching-line.md). Will never be "fixed". It was titled "One boolean per file" until `captureLine` made that false |
+| No ranking | *none* — by design, [decision 0003](docs/decisions/0003-boolean-only-results.md) as amended by [0020](docs/decisions/0020-the-matching-line.md) and [0022](docs/decisions/0022-capture-ranges.md). Will never be "fixed". Retitled twice as those two landed: "One boolean per file" until the line existed, then "No ranking, no positions" until positions within the line did |
 | This demo runs with the cache off | *none* — a choice about what the page measures, see below |
 | Binary files stop at the first NUL | **3f** |
 
@@ -179,14 +181,14 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 |---|---|---|
 | Prepare a checkout | `pnpm bootstrap` | Install + WASM + browser. Idempotent — see §4.1 |
 | New worktree | `pnpm worktree <branch>` | `git worktree add` beside this checkout, then bootstrap it |
-| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.16 MB `index_bg.wasm` |
+| Build WASM | `pnpm build:wasm` | → `packages/search/pkg/`, ~1.17 MB `index_bg.wasm` |
 | Build TS | `pnpm build` | → `packages/netgrep/dist/` |
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **110 tests**: 63 unit in Node, 47 integration in headless Chromium |
+| Test TS | `pnpm test` | Vitest — **122 tests**: 70 unit in Node, 52 integration in headless Chromium |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **45 tests** |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **57 tests** |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
 | Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
@@ -331,11 +333,15 @@ Three packages, ~530 lines of first-party source. pnpm workspaces link them; the
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         ~250 lines, mostly comment. Exports two functions, sharing
-                       one compiled-matcher memo (decision 0016):
+    src/lib.rs         ~430 lines, mostly comment. Exports three functions,
+                       sharing one compiled-matcher memo (decision 0016) and one
+                       searcher, so a caller pays only for the mode it names:
                          search_bytes(&[u8], &str) -> Result<bool, JsError>
                          search_bytes_line(&[u8], &str, usize)
                              -> Result<Option<String>, JsError>   see decision 0020
+                         search_bytes_line_ranges(&[u8], &str, usize)
+                             -> Result<Option<LineWithRanges>, JsError>
+                                                                  see decision 0022
     tests/search.rs    plain native `cargo test` — no browser, no WebDriver.
                        Ends with a `documented_defects` module; read §2.1 first
     scripts/post_build.js   fixes up the generated pkg/ (see below)
@@ -344,11 +350,11 @@ packages/
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts               the whole public API (~510 lines)
+    src/lib/Netgrep.ts               the whole public API (~560 lines)
     src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
                                      unit-tested on its own. NOT re-exported by
                                      index.ts — see decision 0018
-    src/lib/data/*.ts                5 type definitions, one per file
+    src/lib/data/*.ts                7 type definitions, one per file
     src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
     src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop,
                                           in headless Chromium (§4.2)
@@ -406,7 +412,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 | Goal | File |
 |---|---|
 | Matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
-| What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md) first — it lists what has already been refused |
+| What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md) and [0022](docs/decisions/0022-capture-ranges.md) first — 0022's table is the current list of what has been refused |
 | Streaming, batching, caching, abort behaviour | `packages/netgrep/src/lib/Netgrep.ts` |
 | A config option | `packages/netgrep/src/lib/data/NetgrepConfig.ts` or `NetgrepSearchConfig.ts` |
 | Build or release steps | root `package.json` scripts, `packages/*/package.json` scripts, `.github/workflows/` |
@@ -432,6 +438,12 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    marker or a `Release-As:` footer unless you were explicitly asked to — `bump-minor-pre-major` caps a stray
    `!` at a minor bump rather than 1.0.0, but the number it produces is still published and cannot be taken
    back.
+
+   **When a breaking change does have to be recorded, record it as a `BREAKING CHANGE:` footer in the commit
+   body, never as a `!` on the subject.** Both produce the same bump under `bump-minor-pre-major`, but the
+   footer keeps the subject line plain and states the migration in the changelog, and `!` is simply the form
+   this repository does not use. `68ff771` — `feat(netgrep): replace captureLine with capture: 'line' |
+   'line-ranges'` — is the example to copy.
 
 2. **Never bump dependencies opportunistically.** A version change is its own deliberate, tested task, never
    a side effect of unrelated work. If a tool suggests an upgrade while you are doing something else, add it

@@ -11,9 +11,11 @@ import { Info } from 'lucide-react';
  *
  * Nothing enforces this. No test fails and CI stays green.
  *
- *   "No ranking, no positions"           -> by design. Stays. Was "One boolean
- *                                           per file" until captureLine landed
- *                                           (BACKLOG 19) and made that false
+ *   "No ranking"                          -> by design. Stays. Was "No ranking,
+ *                                           no positions" until `capture:
+ *                                           'line-ranges'` landed and gave a
+ *                                           match its position within the line;
+ *                                           ranking across files is still refused
  *   "This demo runs with the cache off"  -> not a defect: the cache is safe now,
  *                                           but a warm one stops the timings
  *                                           measuring the network
@@ -29,8 +31,8 @@ import { Info } from 'lucide-react';
  */
 const CAVEATS = [
   {
-    title: 'No ranking, no positions',
-    body: 'netgrep answers whether a pattern occurs in a file, and — if you ask — the first line it occurs on. That is the whole result. No line numbers, byte offsets, match counts, surrounding context or relevance ordering, so it cannot rank these cards by how well they match. If you need that, a prebuilt index — Pagefind, Lunr, FlexSearch — is the right tool.',
+    title: 'No ranking',
+    body: 'netgrep answers whether a pattern occurs in a file and — if you ask — the first line it occurs on, with each match highlighted within it. It does not rank: no match counts, no line numbers, no relevance ordering, so it cannot sort these cards by how well they match. If you need that, a prebuilt index — Pagefind, Lunr, FlexSearch — is the right tool.',
   },
   {
     title: 'This demo runs with the cache off',

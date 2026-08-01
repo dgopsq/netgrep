@@ -32,8 +32,9 @@ reasoning got wrong.
 | [0017](0017-example-as-hosted-demo.md) | The example becomes the hosted demo, and goes back on the maintenance path | Accepted — **reverses the example's frozen-dependency exemption**; amended — custom domain, base path now `/` |
 | [0018](0018-line-oriented-tail-buffer.md) | Retain the incomplete trailing *line* between chunks, and cache only a drained stream | Accepted — closes the chunk-boundary and poisoned-cache defects; **amends 0006** |
 | [0019](0019-in-flight-fetch-registry.md) | De-duplicate concurrent downloads of one url, but only when the cache is on | Accepted — closes the duplicate-fetch defect; **the cache entry is the handover**, so with the cache off both callers still fetch |
-| [0020](0020-the-matching-line.md) | Return the first matching line, opt-in per search | Accepted — **the first widening of the public API**; **amends 0003**, and names the match details still refused |
+| [0020](0020-the-matching-line.md) | Return the first matching line, opt-in per search | Accepted — **the first widening of the public API**; **amends 0003**, and names the match details still refused — amended by 0022 (`captureLine` renamed, one refusal reopened) |
 | [0021](0021-release-please.md) | release-please cuts releases; merging its PR is the trigger | Accepted — replaces tag-push publishing and push-to-main deploys; **amends 0017** (the demo now deploys on release, not on every push to `main`) |
+| [0022](0022-capture-ranges.md) | Return each match's position within the captured line | Accepted — **amends 0020**: `capture: 'line' \| 'line-ranges'` replaces `captureLine`, and the "highlight ranges" refusal is reopened because **a JS re-match cannot reproduce the engine**; file-wide positions stay refused |
 
 ## Format
 

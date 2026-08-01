@@ -80,8 +80,8 @@ pnpm build:wasm        # must run first: the TS package compiles against pkg/ind
 pnpm lint              # Biome + clippy
 pnpm typecheck
 pnpm build
-pnpm test              # 110 tests: 63 unit in Node, 47 integration in headless Chromium
-pnpm test:rust         # 45 tests, native cargo test
+pnpm test              # 122 tests: 70 unit in Node, 52 integration in headless Chromium
+pnpm test:rust         # 57 tests, native cargo test
 pnpm verify:pack       # the tarballs that would actually reach npm
 ```
 
@@ -107,7 +107,7 @@ as ESM, copies the version out of `Cargo.toml`, **and deletes the `.gitignore` w
 `pkg/`** — that file contains `*`, npm honours it, and it is what emptied the tarball. Do not skip the
 second step.
 
-→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.16 MB), `index.d.ts`,
+→ `packages/search/pkg/`: `index.js`, `index_bg.js`, `index_bg.wasm` (~1.17 MB), `index.d.ts`,
 `package.json`. Gitignored.
 
 **What gets published is `packages/search/package.json`**, a hand-written wrapper with `"files": ["pkg"]` —

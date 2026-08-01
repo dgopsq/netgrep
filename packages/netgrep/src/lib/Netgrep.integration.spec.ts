@@ -579,7 +579,7 @@ describe('Netgrep integration (real WASM)', () => {
   });
 
   /**
-   * `captureLine` through the real engine — BACKLOG 19.
+   * `capture: 'line'` through the real engine — BACKLOG 19.
    *
    * What a line CONTAINS given a block of bytes is pinned natively in
    * `packages/search/tests/search.rs`, and the wiring is pinned with the engine
@@ -598,8 +598,8 @@ describe('Netgrep integration (real WASM)', () => {
    * is split. The first test below is that claim, and it is the reason this
    * feature could be built at all.
    */
-  describe('captureLine', () => {
-    const CAPTURE = { captureLine: true } as const;
+  describe('capture: line', () => {
+    const CAPTURE = { capture: 'line' } as const;
 
     it('returns the whole line, not the matched fragment', async () => {
       serve([encoder.encode(POEM)]);
@@ -748,7 +748,7 @@ describe('Netgrep integration (real WASM)', () => {
         'url',
         'needle',
         undefined,
-        { captureLine: true, maxLineBytes: 12 },
+        { capture: 'line', maxLineBytes: 12 },
       );
 
       // 'needle ' is 7 bytes, leaving 5 for two-byte characters — so two of
@@ -792,6 +792,106 @@ describe('Netgrep integration (real WASM)', () => {
           CAPTURE,
         ),
       ).rejects.toThrow('unclosed group');
+    });
+  });
+
+  describe('capture: line-ranges', () => {
+    it('returns UTF-16 ranges that slice the line to the matched text', async () => {
+      // 'é' forces the byte/UTF-16 distinction through the REAL decoder and
+      // marshalling — the one thing the mocked unit suite cannot check.
+      serve([encoder.encode('café needle café\n')]);
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'needle',
+        undefined,
+        { capture: 'line-ranges' },
+      );
+
+      expect(result.result).toBe(true);
+      if (result.result) {
+        expect(result.line).toBe('café needle café');
+        expect(result.ranges).toEqual([{ start: 5, end: 11 }]);
+        const [range] = result.ranges;
+        expect(result.line.slice(range.start, range.end)).toBe('needle');
+      }
+    });
+
+    it('returns every match within the line, under any chunking', async () => {
+      // Same across chunk sizes: the tail buffer hands the engine whole lines,
+      // so the seam cannot split a match or drop a range.
+      for (const size of [1, 3, 7, 16, 64]) {
+        serve(chunked('nothing\ncat and cat\ncat again\n', size));
+
+        const result = await new Netgrep({ enableMemoryCache: false }).search(
+          'url',
+          'cat',
+          undefined,
+          { capture: 'line-ranges' },
+        );
+
+        expect(result.result).toBe(true);
+        if (result.result) {
+          expect(result.line).toBe('cat and cat');
+          expect(result.ranges).toEqual([
+            { start: 0, end: 3 },
+            { start: 8, end: 11 },
+          ]);
+        }
+      }
+    });
+
+    it('applies smart case to the ranges, not just the verdict', async () => {
+      serve([encoder.encode('Needle\n')]);
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'needle',
+        undefined,
+        { capture: 'line-ranges' },
+      );
+
+      expect(result.result).toBe(true);
+      if (result.result) {
+        expect(result.ranges).toEqual([{ start: 0, end: 6 }]);
+      }
+    });
+
+    it('drops ranges past the maxLineBytes cut, keeping result true', async () => {
+      serve([encoder.encode('aaaa needle\n')]);
+
+      const result = await new Netgrep({ enableMemoryCache: false }).search(
+        'url',
+        'needle',
+        undefined,
+        { capture: 'line-ranges', maxLineBytes: 4 },
+      );
+
+      expect(result.result).toBe(true);
+      if (result.result) {
+        expect(result.line).toBe('aaaa');
+        expect(result.ranges).toEqual([]);
+      }
+    });
+
+    it('agrees between a cold fetch and a warm cache hit', async () => {
+      serve([encoder.encode('one cat two cat\n')]);
+      const ng = new Netgrep({ enableMemoryCache: true });
+
+      const cold = await ng.search('url', 'zzz-absent'); // drains, caches
+      expect(cold.result).toBe(false);
+
+      const warm = await ng.search('url', 'cat', undefined, {
+        capture: 'line-ranges',
+      });
+
+      expect(warm.result).toBe(true);
+      if (warm.result) {
+        expect(warm.ranges).toEqual([
+          { start: 4, end: 7 },
+          { start: 12, end: 15 },
+        ]);
+      }
     });
   });
 
@@ -1023,7 +1123,7 @@ describe('Netgrep integration (real WASM)', () => {
     });
 
     it('BACKLOG 3g: a captured line is a mid-line FRAGMENT inside an over-long line', async () => {
-      // The third consequence of 3g, and the one `captureLine` added.
+      // The third consequence of 3g, and the one `capture: 'line'` added.
       //
       // Once a line outgrows the 64 KB ceiling the buffer handed to the engine
       // starts mid-line, so what comes back is not a line: it begins at an
@@ -1043,7 +1143,7 @@ describe('Netgrep integration (real WASM)', () => {
       serve([encoder.encode(`START${filler}needle\n`)]);
 
       const whole = await NG.search('a', 'needle', undefined, {
-        captureLine: true,
+        capture: 'line',
         maxLineBytes: 16,
       });
 
@@ -1057,7 +1157,7 @@ describe('Netgrep integration (real WASM)', () => {
       ]);
 
       const fragment = await NG.search('b', 'needle', undefined, {
-        captureLine: true,
+        capture: 'line',
         maxLineBytes: 16,
       });
 

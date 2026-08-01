@@ -38,3 +38,9 @@ testem.log
 .DS_Store
 Thumbs.db
 /target
+
+# Agent working artifacts. Plans and design specs are scaffolding for one session; the durable
+# argument is the decision record under docs/decisions/. They live in a private store outside this
+# repo, so feature PRs stay reviewable.
+/docs/superpowers
+/.superpowers

@@ -1,7 +1,13 @@
-import init, { search_bytes, search_bytes_line } from '@netgrep/search';
+import init, {
+  search_bytes,
+  search_bytes_line,
+  search_bytes_line_ranges,
+} from '@netgrep/search';
 import type { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
+import type { NetgrepCapture } from './data/NetgrepCapture.js';
 import type { NetgrepConfig } from './data/NetgrepConfig.js';
 import type { NetgrepInput } from './data/NetgrepInput.js';
+import type { NetgrepMatchRange } from './data/NetgrepMatchRange.js';
 import type { NetgrepResult } from './data/NetgrepResult.js';
 import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
 import { splitAtLastLine } from './splitAtLastLine.js';
@@ -25,7 +31,7 @@ const defaultConfig: NetgrepConfig = {
 const MAX_TAIL_BYTES = 64 * 1024;
 
 /**
- * Ceiling on the returned line when `captureLine` is on and the caller names no
+ * Ceiling on the returned line when `capture` is set and the caller names no
  * other. Far past any line of prose, and small enough that a minified bundle
  * costs a snippet rather than a copy of itself.
  */
@@ -34,43 +40,65 @@ const DEFAULT_MAX_LINE_BYTES = 4096;
 /**
  * What one call into the engine produced.
  *
- * `line` is `null` whenever no line was captured — because there was no match,
- * or because the caller never asked for one. The two are told apart by
- * `result`, never by inspecting `line`.
+ * `line` and `ranges` are `null` whenever they were not captured — because
+ * there was no match, or because the caller never asked. The two are told
+ * apart by `result`, never by inspecting either field.
  */
 type EngineHit = {
   result: boolean;
   line: string | null;
+  ranges: Array<NetgrepMatchRange> | null;
 };
 
 /** No match, and nothing to show for it. */
-const NO_HIT: EngineHit = { result: false, line: null };
+const NO_HIT: EngineHit = { result: false, line: null, ranges: null };
 
 /**
  * Run one block of bytes through the engine — BACKLOG 19.
  *
- * Two entry points rather than one taking a flag, so the `captureLine: false`
- * path is the call it has always been: nothing allocated, decoded or copied out
- * of WebAssembly for a caller who only wants membership.
+ * Three entry points rather than one taking a flag, so the `capture:
+ * undefined` path is the call it has always been: nothing allocated, decoded
+ * or copied out of WebAssembly for a caller who only wants membership.
  */
 function runEngine(
   block: Uint8Array,
   pattern: string,
-  captureLine: boolean,
+  capture: NetgrepCapture,
   maxLineBytes: number,
 ): EngineHit {
-  if (!captureLine) {
-    return { result: search_bytes(block, pattern), line: null };
+  if (capture === undefined) {
+    return { result: search_bytes(block, pattern), line: null, ranges: null };
   }
 
-  const line = search_bytes_line(block, pattern, maxLineBytes);
+  if (capture === 'line') {
+    const line = search_bytes_line(block, pattern, maxLineBytes);
 
-  // ⚠️ `undefined` is the ONLY no-match signal. A pattern matching an empty
-  // line returns an EMPTY STRING, which is falsy — testing `if (line)` here
-  // would report a match as a miss. Pinned by
-  // `test_a_match_on_an_empty_line_is_an_empty_string` in
-  // `packages/search/tests/search.rs`.
-  return line === undefined ? NO_HIT : { result: true, line };
+    // ⚠️ `undefined` is the ONLY no-match signal. A pattern matching an empty
+    // line returns an EMPTY STRING, which is falsy — testing `if (line)` here
+    // would report a match as a miss. Pinned by
+    // `test_a_match_on_an_empty_line_is_an_empty_string` in
+    // `packages/search/tests/search.rs`.
+    return line === undefined ? NO_HIT : { result: true, line, ranges: null };
+  }
+
+  const hit = search_bytes_line_ranges(block, pattern, maxLineBytes);
+
+  if (hit === undefined) return NO_HIT;
+
+  // Read out, then free: the carrier is a wasm-bindgen object owning WASM
+  // memory, and waiting for GC would leak it for the page's lifetime under
+  // engines without weak-ref finalization.
+  const line = hit.line;
+  const flat = hit.ranges;
+  hit.free();
+
+  const ranges: Array<NetgrepMatchRange> = [];
+
+  for (let i = 0; i + 1 < flat.length; i += 2) {
+    ranges.push({ start: flat[i], end: flat[i + 1] });
+  }
+
+  return { result: true, line, ranges };
 }
 
 /**
@@ -107,45 +135,57 @@ function resolveMaxLineBytes(requested: number | undefined): number {
 /**
  * Assemble a resolved result.
  *
- * The `line` key is OMITTED, not set to `null`, when nothing was captured —
- * `NetgrepResult<T, false>` says the key does not exist, and a result carrying
- * it anyway would make that a lie to anything reading the object rather than
- * its type.
+ * The `line` and `ranges` keys are OMITTED, not set to `null`, when nothing
+ * was captured — `NetgrepResult<T, undefined>` says the keys do not exist,
+ * and a result carrying them anyway would make that a lie to anything reading
+ * the object rather than its type.
  *
  * The cast is unavoidable, and confined here and to `withError` below: the
- * result type is a conditional on `L`, and TypeScript cannot evaluate a
+ * result type is a conditional on `C`, and TypeScript cannot evaluate a
  * conditional whose parameter is still generic, so no literal built here is
- * assignable to it. The invariant it asserts — `line` is a `string` exactly
- * when `result` is `true` — is upheld by `runEngine` above and pinned by the
- * type tests in `Netgrep.spec.ts`.
+ * assignable to it — not even through a single assertion, since the three
+ * branches do not structurally overlap enough for TypeScript to trust one
+ * without routing through `unknown` first. The invariant it asserts — `line`
+ * (and `ranges`) exist exactly when `result` is `true` and were asked for —
+ * is upheld by `runEngine` above and pinned by the type tests in
+ * `Netgrep.spec.ts`.
  */
-function toResult<T extends object, L extends boolean>(
+function toResult<T extends object, C extends NetgrepCapture>(
   url: string,
   pattern: string,
   metadata: T | undefined,
   hit: EngineHit,
-  captureLine: boolean,
-): NetgrepResult<T, L> {
+  capture: NetgrepCapture,
+): NetgrepResult<T, C> {
   const base = { url, pattern, result: hit.result, metadata };
 
-  return (captureLine ? { ...base, line: hit.line } : base) as NetgrepResult<
-    T,
-    L
-  >;
+  if (capture === undefined) {
+    return base as unknown as NetgrepResult<T, C>;
+  }
+
+  if (capture === 'line') {
+    return { ...base, line: hit.line } as unknown as NetgrepResult<T, C>;
+  }
+
+  return {
+    ...base,
+    line: hit.line,
+    ranges: hit.ranges,
+  } as unknown as NetgrepResult<T, C>;
 }
 
 /**
  * Attach a batch's per-url error slot to a result.
  *
  * Cast for the same reason as `toResult`: spreading a value whose type is a
- * conditional on `L` produces something TypeScript cannot check against the
+ * conditional on `C` produces something TypeScript cannot check against the
  * same conditional.
  */
-function withError<T extends object, L extends boolean>(
-  result: NetgrepResult<T, L>,
+function withError<T extends object, C extends NetgrepCapture>(
+  result: NetgrepResult<T, C>,
   error: string | null,
-): BatchNetgrepResult<T, L> {
-  return { ...result, error } as BatchNetgrepResult<T, L>;
+): BatchNetgrepResult<T, C> {
+  return { ...result, error } as BatchNetgrepResult<T, C>;
 }
 
 /**
@@ -217,27 +257,29 @@ export class Netgrep {
    * as been found in the file.
    * @param config
    * An optional configuration respecting the `NetgrepSearchConfig` type. Pass
-   * `{ captureLine: true }` to get the first matching line back alongside the
-   * boolean; the result type changes to match, so `line` is a `string` wherever
-   * `result` has been narrowed to `true`.
+   * `{ capture: 'line' }` to get the first matching line back alongside the
+   * boolean, or `{ capture: 'line-ranges' }` to also get each match's position
+   * within it; the result type changes to match, so `line` (and `ranges`) are
+   * present wherever `result` has been narrowed to `true`.
    * @returns
-   * A promise resolving to a `NetgrepResult<T, L>` as soon as a match will
+   * A promise resolving to a `NetgrepResult<T, C>` as soon as a match will
    * be found in the remote file.
    */
-  public async search<T extends object, L extends boolean = false>(
+  public async search<T extends object, C extends NetgrepCapture = undefined>(
     url: string,
     pattern: string,
     metadata?: T,
-    config?: NetgrepSearchConfig<L>,
-  ): Promise<NetgrepResult<T, L>> {
+    config?: NetgrepSearchConfig<C>,
+  ): Promise<NetgrepResult<T, C>> {
     // Nothing below can run before the engine exists.
     await wasmReady;
 
     // One cast, here, rather than at every read: `maxLineBytes` is typed
-    // `L extends true ? number : never`, which is not a `number` while `L` is
-    // still generic. Its runtime value is whatever the caller passed, and
-    // `resolveMaxLineBytes` treats that as untrusted anyway.
-    const captureLine = config?.captureLine === true;
+    // `C extends 'line' | 'line-ranges' ? number : never`, which is not a
+    // `number` while `C` is still generic. Its runtime value is whatever the
+    // caller passed, and `resolveMaxLineBytes` treats that as untrusted
+    // anyway.
+    const capture = config?.capture;
     const maxLineBytes = resolveMaxLineBytes(
       config?.maxLineBytes as number | undefined,
     );
@@ -260,22 +302,22 @@ export class Netgrep {
       if (cached) {
         // The whole file in one buffer, so the first matching line here is the
         // file's first matching line — the same one a cold fetch reports.
-        return toResult<T, L>(
+        return toResult<T, C>(
           url,
           pattern,
           metadata,
-          runEngine(cached, pattern, captureLine, maxLineBytes),
-          captureLine,
+          runEngine(cached, pattern, capture, maxLineBytes),
+          capture,
         );
       }
     }
 
-    const running = this.executeSearch<T, L>(
+    const running = this.executeSearch<T, C>(
       url,
       pattern,
       metadata,
       config,
-      captureLine,
+      capture,
       maxLineBytes,
     );
 
@@ -302,14 +344,14 @@ export class Netgrep {
    * Knows nothing about the cache read or the in-flight registry: `search`
    * decides whether this needs to run at all.
    */
-  private executeSearch<T extends object, L extends boolean>(
+  private executeSearch<T extends object, C extends NetgrepCapture>(
     url: string,
     pattern: string,
     metadata: T | undefined,
-    config: NetgrepSearchConfig<L> | undefined,
-    captureLine: boolean,
+    config: NetgrepSearchConfig<C> | undefined,
+    capture: NetgrepCapture,
     maxLineBytes: number,
-  ): Promise<NetgrepResult<T, L>> {
+  ): Promise<NetgrepResult<T, C>> {
     return new Promise((resolve, reject) => {
       // The incomplete final line seen so far, held back until the rest of it
       // arrives — BACKLOG 3a. Annotated because `subarray` yields an
@@ -345,12 +387,12 @@ export class Netgrep {
             // match a line that begins earlier.
             const hit =
               tailPending && tail.length > 0
-                ? runEngine(tail, pattern, captureLine, maxLineBytes)
+                ? runEngine(tail, pattern, capture, maxLineBytes)
                 : NO_HIT;
 
             this.commitMemoryCache(url, chunks, caching);
 
-            resolve(toResult<T, L>(url, pattern, metadata, hit, captureLine));
+            resolve(toResult<T, C>(url, pattern, metadata, hit, capture));
             return;
           }
 
@@ -372,11 +414,11 @@ export class Netgrep {
           // A chunk with no terminator in it searches nothing and grows the tail.
           const hit =
             searchable.length > 0
-              ? runEngine(searchable, pattern, captureLine, maxLineBytes)
+              ? runEngine(searchable, pattern, capture, maxLineBytes)
               : NO_HIT;
 
           if (hit.result) {
-            resolve(toResult<T, L>(url, pattern, metadata, hit, captureLine));
+            resolve(toResult<T, C>(url, pattern, metadata, hit, capture));
           } else {
             // `.catch` because this promise is not chained to the executor's:
             // without it, a rejection from any chunk after the first (dropped
@@ -411,22 +453,22 @@ export class Netgrep {
    * The pattern to search for. This can be anything `ripgrep` can understand.
    * @param config
    * An optional configuration respecting the `NetgrepSearchConfig` type.
-   * `captureLine` applies to every url in the batch, and shapes every result.
+   * `capture` applies to every url in the batch, and shapes every result.
    * @returns
    * A promise waiting for all the executed searches to complete.
    */
-  public searchBatch<T extends object, L extends boolean = false>(
+  public searchBatch<T extends object, C extends NetgrepCapture = undefined>(
     inputs: Array<NetgrepInput<T>>,
     pattern: string,
-    config?: NetgrepSearchConfig<L>,
-  ): Promise<Array<BatchNetgrepResult<T, L>>> {
+    config?: NetgrepSearchConfig<C>,
+  ): Promise<Array<BatchNetgrepResult<T, C>>> {
     return Promise.all(
       inputs.map((input) => {
         const { url } = input;
 
-        return this.search<T, L>(url, pattern, input.metadata, config)
-          .then((res) => withError<T, L>(res, null))
-          .catch((err) => this.toFailure<T, L>(input, pattern, err, config));
+        return this.search<T, C>(url, pattern, input.metadata, config)
+          .then((res) => withError<T, C>(res, null))
+          .catch((err) => this.toFailure<T, C>(input, pattern, err, config));
       }),
     );
   }
@@ -444,41 +486,45 @@ export class Netgrep {
    * The pattern to search for. This can be anything `ripgrep` can understand.
    * @param cb
    * The callback that will be triggered at every match. It takes
-   * a `BatchNetgrepResult<T, L>` as a parameter.
+   * a `BatchNetgrepResult<T, C>` as a parameter.
    * @param config
    * An optional configuration respecting the `NetgrepSearchConfig` type.
-   * `captureLine` applies to every url in the batch, and shapes every result.
+   * `capture` applies to every url in the batch, and shapes every result.
    */
-  public searchBatchWithCallback<T extends object, L extends boolean = false>(
+  public searchBatchWithCallback<
+    T extends object,
+    C extends NetgrepCapture = undefined,
+  >(
     inputs: Array<NetgrepInput<T>>,
     pattern: string,
-    cb: (result: BatchNetgrepResult<T, L>) => void,
-    config?: NetgrepSearchConfig<L>,
+    cb: (result: BatchNetgrepResult<T, C>) => void,
+    config?: NetgrepSearchConfig<C>,
   ): void {
     inputs.forEach((input) => {
-      this.search<T, L>(input.url, pattern, input.metadata, config)
-        .then((res) => cb(withError<T, L>(res, null)))
-        .catch((err) => cb(this.toFailure<T, L>(input, pattern, err, config)));
+      this.search<T, C>(input.url, pattern, input.metadata, config)
+        .then((res) => cb(withError<T, C>(res, null)))
+        .catch((err) => cb(this.toFailure<T, C>(input, pattern, err, config)));
     });
   }
 
   /**
    * The result for a url that never answered.
    *
-   * `result: false` — and therefore `line: null`, when one was asked for. An
-   * error is not a match, and it is emphatically not a match with nothing to
-   * show: a caller narrowing on `result` must not be handed a `line` here.
+   * `result: false` — and therefore `line: null` (and `ranges: null`), when
+   * capture was asked for. An error is not a match, and it is emphatically
+   * not a match with nothing to show: a caller narrowing on `result` must not
+   * be handed a `line` here.
    */
-  private toFailure<T extends object, L extends boolean>(
+  private toFailure<T extends object, C extends NetgrepCapture>(
     input: NetgrepInput<T>,
     pattern: string,
     err: unknown,
-    config: NetgrepSearchConfig<L> | undefined,
-  ): BatchNetgrepResult<T, L> {
-    const captureLine = config?.captureLine === true;
+    config: NetgrepSearchConfig<C> | undefined,
+  ): BatchNetgrepResult<T, C> {
+    const capture = config?.capture;
 
-    return withError<T, L>(
-      toResult<T, L>(input.url, pattern, input.metadata, NO_HIT, captureLine),
+    return withError<T, C>(
+      toResult<T, C>(input.url, pattern, input.metadata, NO_HIT, capture),
       this.serializeError(err),
     );
   }

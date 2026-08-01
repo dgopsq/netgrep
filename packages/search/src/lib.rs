@@ -1,3 +1,4 @@
+use grep_matcher::Matcher;
 use grep_regex::{RegexMatcher, RegexMatcherBuilder};
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder, Sink, SinkMatch};
 use std::cell::RefCell;
@@ -72,6 +73,44 @@ pub fn search_bytes_line(
     try_search_bytes_line(chunk, pattern, max_line_bytes).map_err(|error| JsError::new(&error))
 }
 
+/// The value `search_bytes_line_ranges` hands to JavaScript.
+///
+/// `getter_with_clone` because both fields are heap types: the getters return
+/// copies, and the caller frees the carrier after reading them.
+#[wasm_bindgen(getter_with_clone)]
+pub struct LineWithRanges {
+    /// The first matching line — terminator stripped, truncated, lossily
+    /// decoded, exactly as `search_bytes_line` returns it.
+    pub line: String,
+    /// Flat `[start, end, …]` pairs, UTF-16 code units into `line`, one pair
+    /// per match within it. Can be empty: every match can sit past the
+    /// truncation cut, and `result` is still true.
+    pub ranges: Vec<u32>,
+}
+
+/// Search a bytes array, returning the first matching line and where the
+/// pattern matches within it.
+///
+/// `undefined` means no match, exactly as for `search_bytes_line` — a match on
+/// an empty line yields an empty `line` with one `[0, 0]` range, so test for
+/// `undefined`, never for truthiness.
+///
+/// A third entry point rather than a flag on the second, so each capture mode
+/// pays only its own cost: the boolean path allocates nothing, the line path
+/// runs no ranges pass.
+///
+/// Throws the same way the other two do when the pattern will not compile.
+#[wasm_bindgen]
+pub fn search_bytes_line_ranges(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<Option<LineWithRanges>, JsError> {
+    try_search_bytes_line_ranges(chunk, pattern, max_line_bytes)
+        .map(|hit| hit.map(|(line, ranges)| LineWithRanges { line, ranges }))
+        .map_err(|error| JsError::new(&error))
+}
+
 /// The engine, as plain Rust.
 ///
 /// `search_bytes` above is a two-line wrapper around this, and the split is
@@ -96,12 +135,28 @@ pub fn try_search_bytes_line(
     })
 }
 
+/// `search_bytes_line_ranges`, as plain Rust. Split from the export for the
+/// same reason as `try_search_bytes`.
+///
+/// The tuple is the line (terminator stripped, truncated, lossily decoded) and
+/// flat `[start, end, …]` pairs — UTF-16 code units into that string, so a
+/// JavaScript caller can `line.slice(start, end)` without conversion.
+pub fn try_search_bytes_line_ranges(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<Option<(String, Vec<u32>)>, String> {
+    with_matcher(pattern, |matcher| {
+        search_line_ranges_with(matcher, chunk, max_line_bytes)
+    })
+}
+
 /// Run `use_matcher` against the compiled form of `pattern`, compiling it only
 /// if the memo is not already holding it.
 ///
-/// Generic over the return type so both entry points share one memo: the slot
-/// caches the *matcher*, which is the expensive part, and is indifferent to
-/// what the caller then does with it.
+/// Generic over the return type so all three entry points share one memo: the
+/// slot caches the *matcher*, which is the expensive part, and is indifferent
+/// to what the caller then does with it.
 fn with_matcher<T>(
     pattern: &str,
     use_matcher: impl FnOnce(&RegexMatcher) -> T,
@@ -142,11 +197,11 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
 /// Build a searcher with netgrep's fixed reading semantics: quit on a NUL, and
 /// do not count lines.
 ///
-/// Shared by both entry points rather than spelled out in each. They must agree
-/// — a caller who adds `captureLine` to an existing search is entitled to the
-/// same answer — and binary detection in particular decides whether a whole
-/// block is abandoned, so a divergence here would be a difference in `result`,
-/// not merely in what is returned alongside it.
+/// Shared by all three entry points rather than spelled out in each. They must
+/// agree — a caller who adds `capture: 'line-ranges'` to an existing search is
+/// entitled to the same answer — and binary detection in particular decides
+/// whether a whole block is abandoned, so a divergence here would be a
+/// difference in `result`, not merely in what is returned alongside it.
 fn build_searcher() -> Searcher {
     SearcherBuilder::new()
         .binary_detection(BinaryDetection::quit(b'\x00'))
@@ -228,6 +283,102 @@ impl Sink for LineSink {
         // last matching line instead of the first.
         Ok(false)
     }
+}
+
+/// Run a compiled matcher over one block of bytes, keeping the first matching
+/// line and where the pattern matches within it.
+///
+/// The ranges pass runs AFTER the search, over one line's bytes — it does not
+/// touch the early exit, and a `capture: 'line'` or boolean caller never pays
+/// for it.
+///
+/// `find_iter` runs over the full stripped line, not the truncated slice:
+/// truncating first would let `$` match at the cut, reporting a match the
+/// real line does not contain. Ranges past the cut are then dropped, and one
+/// straddling it is clamped — the string cannot show what it does not hold.
+fn search_line_ranges_with(
+    matcher: &RegexMatcher,
+    chunk: &[u8],
+    max_line_bytes: usize,
+) -> Option<(String, Vec<u32>)> {
+    let mut searcher = build_searcher();
+    let mut sink = LineSink { first: None };
+
+    let _ = searcher.search_slice(matcher, chunk, &mut sink);
+
+    sink.first.map(|line| {
+        let content = strip_terminator(&line);
+        let cap = floor_char_boundary(content, max_line_bytes);
+
+        let mut byte_offsets: Vec<usize> = Vec::new();
+        let _ = matcher.find_iter(content, |m| {
+            byte_offsets.push(m.start());
+            byte_offsets.push(m.end());
+            true
+        });
+
+        // Drop pairs starting at or past the cut; clamp ends to it. `start ==
+        // cap` survives only for the empty match on an empty line, where
+        // dropping it would break "a match always has a range" in the one case
+        // a caller cannot re-derive.
+        let mut kept: Vec<usize> = Vec::with_capacity(byte_offsets.len());
+        for pair in byte_offsets.chunks_exact(2) {
+            let (start, end) = (pair[0], pair[1]);
+            if start < cap || (start == 0 && cap == 0) {
+                kept.push(start);
+                kept.push(end.min(cap));
+            }
+        }
+
+        let capped = &content[..cap];
+        let ranges = byte_offsets_to_utf16(capped, &kept);
+
+        (String::from_utf8_lossy(capped).into_owned(), ranges)
+    })
+}
+
+/// Map ascending byte offsets in `bytes` to UTF-16 code-unit offsets in
+/// `String::from_utf8_lossy(bytes)`.
+///
+/// One walk serves every offset. `utf8_chunks` yields exactly the segments
+/// `from_utf8_lossy` replaces — each non-empty invalid part becomes one
+/// U+FFFD — so counting UTF-16 units per segment reproduces the decoded
+/// string's indexing without materialising a second copy. An offset landing
+/// inside a character (a regex over bytes can split one) floors to that
+/// character's start.
+fn byte_offsets_to_utf16(bytes: &[u8], offsets: &[usize]) -> Vec<u32> {
+    let mut out = Vec::with_capacity(offsets.len());
+    let mut next = 0;
+    let mut byte_pos = 0usize;
+    let mut utf16_pos = 0u32;
+
+    for chunk in bytes.utf8_chunks() {
+        for ch in chunk.valid().chars() {
+            while next < offsets.len() && offsets[next] < byte_pos + ch.len_utf8() {
+                out.push(utf16_pos);
+                next += 1;
+            }
+            byte_pos += ch.len_utf8();
+            utf16_pos += ch.len_utf16() as u32;
+        }
+
+        let invalid = chunk.invalid();
+        if !invalid.is_empty() {
+            while next < offsets.len() && offsets[next] < byte_pos + invalid.len() {
+                out.push(utf16_pos);
+                next += 1;
+            }
+            byte_pos += invalid.len();
+            utf16_pos += 1;
+        }
+    }
+
+    while next < offsets.len() {
+        out.push(utf16_pos);
+        next += 1;
+    }
+
+    out
 }
 
 /// Turn one matched line's raw bytes into the string that crosses the boundary.

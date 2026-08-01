@@ -8,9 +8,10 @@ How netgrep is built and why it behaves the way it does. For *decisions* and the
 ## Scope
 
 netgrep answers one question: **does `pattern` occur in the file at `url`?** The answer is a `boolean`, and —
-if the caller passes `captureLine` — the **first matching line**. No line numbers, no byte offsets, no match
-counts, no ranking; [decision 0020](decisions/0020-the-matching-line.md) records why the line was the only one
-of these worth adding, and why the rest stay refused.
+if the caller passes `capture` — the **first matching line**, and with `capture: 'line-ranges'` each match's
+position within that line. No line numbers, no file-wide byte offsets, no match counts, no ranking;
+[decision 0020](decisions/0020-the-matching-line.md) records why the line was worth adding and
+[0022](decisions/0022-capture-ranges.md) why positions within it are, along with why the rest stay refused.
 
 The distinguishing property is *when* it answers: the search runs against each chunk of the HTTP response
 **as it arrives**, so a match in the first kilobyte resolves without waiting for the remaining megabytes.
@@ -20,13 +21,14 @@ bundler configuration**: since 0.2.0 the WASM is loaded through a standard
 `new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
 understand out of the box.
 
-**Non-goals:** indexing, ranking, highlighting, match positions, Node.js support, filesystem search, a CLI.
+**Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
+(Positions within the returned line are in scope since 0022; nothing else about locating a match is.)
 
 **It is an experiment rather than a recommended way to build search**, and the public README leads with that.
 A prebuilt index will usually beat it on size, speed and capability; what netgrep tests is whether ripgrep's
 real engine is usable over HTTP against files as they download. That framing is why the correctness caveats
 below are documented rather than hidden, and why the API has widened exactly once, deliberately, in four
-years.
+years — twice if the follow-up that added match positions within that line is counted separately.
 
 ---
 
@@ -69,25 +71,34 @@ never compiled. See [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md).
 
 ## The Rust core — `packages/search`
 
-`src/lib.rs` is ~135 lines, most of them comment, and exposes exactly one `#[wasm_bindgen]` function:
+`src/lib.rs` is ~430 lines, most of them comment, and exposes three `#[wasm_bindgen]` functions:
 
 ```rust
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError>
 pub fn search_bytes_line(chunk: &[u8], pattern: &str, max_line_bytes: usize)
     -> Result<Option<String>, JsError>
+pub fn search_bytes_line_ranges(chunk: &[u8], pattern: &str, max_line_bytes: usize)
+    -> Result<Option<LineWithRanges>, JsError>
 ```
 
 wasm-bindgen unwraps those `Result`s, so the TypeScript a consumer sees is
-`search_bytes(chunk: Uint8Array, pattern: string): boolean` and
-`search_bytes_line(chunk: Uint8Array, pattern: string, max_line_bytes: number): string | undefined` — both
-simply **throw** on a pattern the regex engine will not accept, rather than trapping the instance as they did
-until 2026.
+`search_bytes(chunk: Uint8Array, pattern: string): boolean`,
+`search_bytes_line(chunk: Uint8Array, pattern: string, max_line_bytes: number): string | undefined`, and a
+third returning a `LineWithRanges | undefined` carrying the same `line` plus a flat
+`Uint32Array` of `[start, end, …]` — all three simply **throw** on a pattern the regex engine will not accept,
+rather than trapping the instance as they did until 2026.
 
-The second entry point exists so the first stays free. `Netgrep.ts` calls one or the other depending on
-`captureLine`, so a caller who wants only membership allocates nothing, decodes nothing and copies no string
-out of WebAssembly — the same call it has always made. `undefined` is the only no-match signal it returns: a
-pattern matching an empty line yields `""`, which is falsy. Both share one compiled-matcher memo, so their
-matching semantics cannot drift apart.
+The extra entry points exist so the first stays free. `Netgrep.ts` calls one of the three depending on
+`capture`, so a caller who wants only membership allocates nothing, decodes nothing and copies no string out
+of WebAssembly — the same call it has always made, and the line path pays for no ranges it did not ask for.
+`undefined` is the only no-match signal any of them returns: a pattern matching an empty line yields `""`,
+which is falsy. All three share one compiled-matcher memo and one searcher, so their matching semantics and
+binary detection cannot drift apart.
+
+The ranges are computed only after the search has ended, by running the same compiled matcher over the kept
+line — bounded by the line, off the hot path. Conversion to UTF-16 code units happens against the decoded,
+truncated string, since a byte offset into the input would be wrong wherever lossy decoding substituted
+`U+FFFD`. See [decision 0022](decisions/0022-capture-ranges.md).
 
 Per call it:
 
@@ -116,7 +127,7 @@ The release profile (`lto`, `opt-level = 's'`, `codegen-units = 1`, `panic = 'ab
 **workspace root** `Cargo.toml`. It has to: Cargo silently ignores `[profile.*]` in a member package, and for
 most of this project's life the size-tuned profile sat in `packages/search/Cargo.toml` doing nothing at all.
 
-`index_bg.wasm` is **~1.16 MB** (1,164,691 bytes; ~500 KB gzipped) — every consumer downloads it. Roughly a
+`index_bg.wasm` is **~1.17 MB** (1,169,300 bytes; ~500 KB gzipped) — every consumer downloads it. Roughly a
 third is `regex-automata`'s DFA and Unicode tables.
 
 ---
@@ -239,8 +250,9 @@ a seam.
 > past a 64 KB ceiling (`MAX_TAIL_BYTES`, not configurable) the tail degrades to a plain window on the last
 > 64 KB. Inside such a line, three things break: a match **longer** than 64 KB is lost; `^` can match at the
 > window's first byte, because a windowed tail starts mid-line and the engine cannot be told so; and a line
-> captured with `captureLine` begins at that same arbitrary byte, so it is a fragment rather than a line —
-> `result` stays correct, and returning `null` there was rejected in
+> captured with `capture` begins at that same arbitrary byte, so it is a fragment rather than a line — and
+> with `capture: 'line-ranges'` its `ranges` can come back empty, since the fragment need not contain the
+> match. `result` stays correct, and returning `null` there was rejected in
 > [decision 0020](decisions/0020-the-matching-line.md). All three need a line longer than 64 KB, so all three
 > are unreachable in hand-written text — the demo corpus is 2.6 MB of prose whose longest line is 76 bytes.
 > Pinned by the three `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each alongside its control case.
@@ -284,8 +296,8 @@ dropped even when it occurs before the NUL, and even on an earlier line. Any rem
 NUL therefore reports "no match" for content that is demonstrably present.
 
 Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
-"binary, not searched" from "no match" — `captureLine` does not help, since a discarded block reports no match
-and therefore no line.
+"binary, not searched" from "no match" — `capture` does not help, since a discarded block reports no match and
+therefore no line.
 
 Decision 0018 changed the *shape* of this without fixing it. What the engine is handed is no longer the network
 chunk but the block of complete lines within it, so how far a NUL reaches now depends on where the last `\n`
@@ -421,10 +433,10 @@ components straight out of `rust-toolchain.toml`.
 
 | Suite | Runner | What it covers |
 |---|---|---|
-| `splitAtLastLine.spec.ts` | Vitest in **Node**, 11 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
-| `Netgrep.spec.ts` | Vitest in **Node**, 34 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 32 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 28 tests | `try_search_bytes` as pure Rust — bytes in, bool out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, and the compiled-matcher cache. No browser involved. |
+| `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
+| `Netgrep.spec.ts` | Vitest in **Node**, 58 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, config defaults, cache scope and accumulation, and all three public methods including `searchBatchWithCallback`. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 52 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 57 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin

@@ -1,8 +1,9 @@
 import { Check, TriangleAlert } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { Card } from '@/components/ui/card';
 import type { Story } from '@/data/stories';
-import type { StoryStatus } from '@/hooks/use-corpus-search';
+import type { MatchedLine, StoryStatus } from '@/hooks/use-corpus-search';
 import { formatBytes } from '@/lib/story-url';
 import { cn } from '@/lib/utils';
 
@@ -10,8 +11,42 @@ type StoryCardProps = {
   story: Story;
   status: StoryStatus;
   /** The first matching line, when this story matched. */
-  line?: string;
+  line?: MatchedLine;
 };
+
+/**
+ * The matched line with each match wrapped in <mark>.
+ *
+ * Ranges are UTF-16 offsets into `text` — exactly what `slice` takes — and
+ * arrive sorted and non-overlapping, so one forward walk covers the string.
+ * `ranges` can be empty (every match past the byte cap): then the line
+ * renders unmarked, which is honest — the visible text contains no match.
+ */
+function highlight({ text, ranges }: MatchedLine): ReactNode[] {
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+
+  ranges.forEach(({ start, end }) => {
+    if (start > cursor) parts.push(text.slice(cursor, start));
+    if (end > start) {
+      // `start` alone is a stable key: ranges are sorted and non-overlapping,
+      // so starts are strictly increasing and unique.
+      parts.push(
+        <mark
+          key={start}
+          className="bg-primary/20 text-foreground rounded-[2px] px-0.5"
+        >
+          {text.slice(start, end)}
+        </mark>,
+      );
+    }
+    cursor = Math.max(cursor, end);
+  });
+
+  if (cursor < text.length) parts.push(text.slice(cursor));
+
+  return parts;
+}
 
 /**
  * One file in the corpus.
@@ -103,7 +138,7 @@ export const StoryCard = memo(function StoryCard({
           */}
           {isMatch && line !== undefined && (
             <p className="border-primary/30 text-foreground/80 mt-2 line-clamp-2 border-l-2 pl-2 font-mono text-[11px] leading-relaxed break-words">
-              {line}
+              {highlight(line)}
             </p>
           )}
         </div>
