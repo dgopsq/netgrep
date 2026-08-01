@@ -53,19 +53,17 @@ export default defineConfig({
         },
       },
       {
-        // Build-time tooling: the docs generator and the guide renderer.
-        // Neither touches the library, `pkg/` or a browser — they are pure
-        // functions over strings — so this project boots nothing. It is
-        // separate from `unit` rather than folded into it because that
-        // project's include path is the library's source, and widening it
-        // would blur what a red `test:unit` means.
+        // Build-time tooling and example-site data: the docs generator, the
+        // guide renderer, and pure data modules like `visible-caveats.ts`.
+        // None of these touch the library, `pkg/` or a browser — so this
+        // project boots nothing. It is separate from `unit` rather than
+        // folded into it because that project's include path is the
+        // library's source, and widening it would blur what a red
+        // `test:unit` means.
         test: {
           name: 'tools',
           environment: 'node',
-          include: [
-            'scripts/**/*.spec.mjs',
-            'packages/example/plugins/**/*.spec.ts',
-          ],
+          include: ['scripts/**/*.spec.mjs', 'packages/example/**/*.spec.ts'],
         },
       },
     ],
