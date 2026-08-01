@@ -200,10 +200,26 @@ html {
   text-transform: uppercase;
 }
 
+/*
+ * styleAlerts emits five kinds; Note, Tip and Important keep the blockquote's
+ * default teal, which is the right weight for an aside. Only the two that
+ * interrupt the reader are recoloured, and they are recoloured apart: amber for
+ * Warning, red for Caution, following GitHub's own ordering where Caution is
+ * the more severe. The kind is also spelled out in .alert-label, so the
+ * distinction does not rest on hue alone.
+ */
 .guide .alert-warning {
-  border-left-color: var(--destructive);
+  border-left-color: var(--warning);
 }
 
 .guide .alert-warning .alert-label {
+  color: var(--warning);
+}
+
+.guide .alert-caution {
+  border-left-color: var(--destructive);
+}
+
+.guide .alert-caution .alert-label {
   color: var(--destructive);
 }
