@@ -10,6 +10,26 @@ const GUIDE = join(ROOT, 'docs/guide');
 /** `[text](target)` — captures the target only. */
 const LINK = /\[[^\]]*\]\(([^)]+)\)/g;
 
+/**
+ * Lines outside fenced code blocks, joined back with `\n`. A heading or a
+ * real link cannot occur inside a fence — a `# ` there is a shell comment,
+ * and a `[text](target)` there is illustrative, not a real link — so this is
+ * the correct reading of the file, not a workaround.
+ */
+function stripFences(source) {
+  let inFence = false;
+  return source
+    .split('\n')
+    .filter((line) => {
+      if (/^```/.test(line)) {
+        inFence = !inFence;
+        return false;
+      }
+      return !inFence;
+    })
+    .join('\n');
+}
+
 const files = (await readdir(GUIDE)).filter((name) => name.endsWith('.md'));
 
 describe('the guide', () => {
@@ -27,13 +47,15 @@ describe('the guide', () => {
 
   it.each(files)('%s opens with a single H1', async (name) => {
     const source = await readFile(join(GUIDE, name), 'utf8');
-    const h1s = source.split('\n').filter((line) => /^# /.test(line));
+    const h1s = stripFences(source)
+      .split('\n')
+      .filter((line) => /^# /.test(line));
 
     expect(h1s).toHaveLength(1);
   });
 
   it.each(files)('%s has no broken relative links', async (name) => {
-    const source = await readFile(join(GUIDE, name), 'utf8');
+    const source = stripFences(await readFile(join(GUIDE, name), 'utf8'));
 
     const broken = [...source.matchAll(LINK)]
       .map(([, target]) => target)

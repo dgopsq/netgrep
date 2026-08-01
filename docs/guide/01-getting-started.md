@@ -17,10 +17,10 @@ static files. There is no index to build and no backend to run.
 ## Install
 
 ```bash
-## Using pnpm
+# Using pnpm
 pnpm add @netgrep/netgrep
 
-## Using npm
+# Using npm
 npm install @netgrep/netgrep
 ```
 
