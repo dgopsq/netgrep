@@ -118,7 +118,7 @@ Two things the generator does not decide, and you must:
 | Field | What it means |
 |---|---|
 | `kind` | `defect` (a bug, listed in the README) or `by-design` (never fixed, shown on the site and in the guide but not in the README's defect list) |
-| `demoCorpusCanTrigger` | Whether *this corpus* can hit it. `false` keeps it off the demo page — 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false` |
+| `demoCorpusCanTrigger` | Whether *this corpus* can hit it. It filters **defects only** — the demo shows an entry when `kind` is `by-design` **or** the flag is true, so a by-design entry appears whatever it says (`no-ranking` is exactly that). `false` therefore keeps a defect off the demo page: 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false` |
 
 **Adding a defect is still a judgement call, and `--check` cannot make it for you.** CI verifies that
 the three generated surfaces agree with `caveats.data.json`. Nothing detects a defect that was never
@@ -193,9 +193,11 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **122 tests**: 70 unit in Node, 52 integration in headless Chromium |
-| — one suite | `pnpm test:unit` / `pnpm test:browser` | The two Vitest projects separately. `test:unit` needs no WASM and no browser |
+| Test TS | `pnpm test` | Vitest — **194 tests**: 70 unit in Node, 52 integration in headless Chromium, 72 tooling in Node |
+| — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
+| Test the tooling | `pnpm test:tools` | **72 tests** over the docs generator, the guide renderer and the example's data modules. Touches neither the library nor `pkg/` |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **57 tests** |
+| Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide, the README and the demo. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
 | Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
@@ -269,14 +271,14 @@ now ship as one pinned unit. See [decision 0013](docs/decisions/0013-playwright-
 `test-and-lint.yml` is **five jobs grouped by toolchain**, so the check that goes red names the tools
 involved and the step list inside it names the command:
 
-| Job | Waits for | Commands |
-|---|---|---|
-| `wasm` | — | `pnpm build:wasm`, then uploads `packages/search/pkg` as an artefact |
-| `rust` | — | `pnpm lint:rust`, `pnpm test:rust` |
-| `js` | — | `pnpm lint:js`, `pnpm test:unit` |
-| `browser` | `wasm` | `pnpm exec playwright install chromium`, `pnpm test:browser` |
-| `bundle` | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack`, `pnpm typecheck:example`, `pnpm build:example` |
-| `ci` | all | Aggregate — **this is the check to require on the branch** |
+| Job | Shows as | Waits for | Commands |
+|---|---|---|---|
+| `wasm` | Build WASM | — | `pnpm build:wasm`, then uploads `packages/search/pkg` as an artefact |
+| `rust` | Rust (clippy + tests) | — | `pnpm lint:rust`, `pnpm test:rust` |
+| `js` | JS (Biome + unit tests + docs) | — | `pnpm lint:js`, `pnpm test:unit`, `pnpm test:tools`, `pnpm docs:sync --check` |
+| `browser` | Browser tests | `wasm` | `pnpm exec playwright install --with-deps chromium`, `pnpm test:browser` |
+| `bundle` | Typecheck, build & package | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack`, `pnpm typecheck:example`, `pnpm build:example` |
+| `ci` | CI | all | Aggregate — **this is the check to require on the branch** |
 
 **`test-and-lint.yml` no longer triggers on `push: main`.** It runs on pull requests, and `release.yml` calls
 it on every push to `main`. That is one run per push where there used to be two — its own, plus the copy
@@ -374,16 +376,33 @@ packages/
     src/hooks/use-corpus-search.ts   the whole netgrep integration. Runs with the
                                      memory cache OFF on purpose — read the comment
     src/lib/story-url.ts             the ONLY module that knows the base path
-    index.html                       canonical, Open Graph, JSON-LD — spells the
-                                     domain out in full; so do public/robots.txt
-                                     and public/sitemap.xml. Nothing checks them
+    src/data/visible-caveats.ts      which caveats the demo shows, and why. The
+                                     library's own come from caveats.generated.ts,
+                                     which `pnpm docs:sync` writes
+    index.html                       the DEMO entry: canonical, Open Graph, JSON-LD —
+                                     spells the domain out in full; so do
+                                     public/robots.txt and public/sitemap.xml.
+                                     Nothing checks them
+    docs/index.html                  the /docs entry. A second rollup input, not a
+                                     route: no router, no React, no markdown parser
+    plugins/guide-render.ts          pure renderers — markdown → HTML, the TOC, the
+                                     site nav, the link rewriting. Unit-tested
+    plugins/guide.ts                 the Vite plugin that reads docs/guide/ and
+                                     splices the result into docs/index.html
     scripts/build-manifest.mjs       regenerates src/data/stories.ts from public/stories/
     public/stories/                  the corpus, 56 files, 2.6 MB
     → deployed by .github/workflows/deploy-pages.yml. See decision 0017
 
+docs/guide/               THE CANONICAL PROSE. Seven numbered .md files, readable as
+                          they are on GitHub and rendered into /docs at build time, plus
+                          caveats.data.json — the one place a limitation is written.
+
 scripts/verify-pack.mjs   Packaging guard, run in CI.
 scripts/bootstrap.mjs     Prepares a checkout: install, browser, WASM (§4.1).
 scripts/worktree.mjs      `git worktree add` + bootstrap, in one command.
+scripts/docs-sync.mjs     Renders docs/guide/caveats.data.json onto the guide, the README
+                          and the demo. `--check` writes nothing and fails CI (§2.3).
+scripts/lib/              Its pure renderers and their tests, run by `pnpm test:tools`.
 scripts/cargo-cache.mjs   Wraps cargo/wasm-pack so worktrees share one COMPILER cache,
                           via sccache. Each keeps its own target/ — sharing that is unsafe,
                           see §4.1 and decision 0014.
@@ -575,5 +594,6 @@ rather than a network chunk, which changed the shape of the NUL defect's blast r
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, data flow, build/release pipeline, known limitations |
 | [`docs/decisions/`](docs/decisions/) | Why the system is shaped this way — one record per decision |
 | [`docs/BACKLOG.md`](docs/BACKLOG.md) | Sanctioned maintenance work, prioritised |
-| [`README.md`](README.md) | Public-facing usage docs. Audience is consumers, not contributors. |
+| [`docs/guide/`](docs/guide/) | The canonical usage prose. Audience is consumers; rendered to `/docs` at build time and readable as-is on GitHub. |
+| [`README.md`](README.md) | Landing page: what netgrep is, one example, the defect list, and links onward. The reference used to live here and no longer does. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Human on-ramp: prerequisites, first run, worktrees, PR checklist. Points here for depth. |
