@@ -8,6 +8,9 @@
   "//separate-pull-requests": "One PR covering every component. Three PRs would have to be merged in dependency order by hand, which is the ordering problem release.yml exists to remove.",
   "separate-pull-requests": false,
 
+  "//group-pull-request-title-pattern": "Titles the one merged PR the setting above produces; the default is `chore: release ${branch}`, which reads `chore: release main`. Static on purpose: the title is re-parsed with this same pattern at tagging time, and `${version}` compiles to a REQUIRED match group — no package sits at the root, so there is no version to substitute and the title would fail its own regex, tagging nothing. The `chore:` prefix has to stay: it is hidden below, which is what stops the release commit from bumping the next release.",
+  "group-pull-request-title-pattern": "chore: release netgrep",
+
   "//bump-minor-pre-major": "A breaking change gives 0.3.0, not 1.0.0. 1.0.0 is a claim this project does not make by accident — reaching it needs an explicit `Release-As: 1.0.0` footer.",
 
   "//changelog-sections": "`hidden` decides what RELEASES, not only what is listed: release-please skips a release whose notes come out empty, and any visible type that is not feat or breaking falls through to a patch bump. Hiding a type is therefore how `chore` and `docs` ship nothing. Set once here; every component inherits it.",

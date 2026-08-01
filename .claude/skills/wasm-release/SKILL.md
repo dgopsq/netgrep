@@ -5,7 +5,7 @@ description: Build, verify and prepare a release of the netgrep packages (@netgr
 
 # Releasing netgrep
 
-Releases are cut by **release-please**. It keeps a `chore: release main` pull request up to date as commits
+Releases are cut by **release-please**. It keeps a `chore: release netgrep` pull request up to date as commits
 land on `main`; merging that PR tags both packages, publishes them to npm in dependency order, and deploys
 the demo — one run, no further confirmation. This skill covers building, verifying and **preparing**.
 
@@ -149,7 +149,7 @@ first. Do not use `--local`: it runs `git checkout` in the directory you point i
 
 There are no tag commands any more. Say:
 
-> Merge the `chore: release main` pull request. That tags `search-<version>` and `netgrep-<version>`,
+> Merge the `chore: release netgrep` pull request. That tags `search-<version>` and `netgrep-<version>`,
 > publishes both packages, and deploys the demo.
 
 If a publish fails **after** the tag exists, re-running `release.yml` will not retry it — release-please

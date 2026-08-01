@@ -191,7 +191,7 @@ you touched, not from the scope.
 
 ## Releases
 
-Releases are cut by release-please. It keeps a "chore: release main" pull request up to date as commits land;
+Releases are cut by release-please. It keeps a "chore: release netgrep" pull request up to date as commits land;
 merging it tags, publishes both npm packages and deploys the demo, in one run and in that order.
 
 **Version bumps and publishing are maintainer-only** — please do not include them in a pull request. Do not
