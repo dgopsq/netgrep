@@ -57,9 +57,15 @@ export function Limitations() {
           docs/BACKLOG.md
         </a>{' '}
         and{' '}
+        {/*
+          Composed from Vite's base rather than written as `/docs/`: the site
+          sat at `/netgrep/` before the custom domain, and a root-relative link
+          would 404 there with nothing to say why. `BASE_URL` always ends in a
+          slash.
+        */}
         <a
           className="text-primary/90 hover:text-primary underline underline-offset-4"
-          href="/docs/#limitations"
+          href={`${import.meta.env.BASE_URL}docs/#limitations`}
         >
           the documentation
         </a>
