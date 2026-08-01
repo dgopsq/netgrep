@@ -1,47 +1,52 @@
 import { Info } from 'lucide-react';
+import { CAVEATS } from '@/data/caveats.generated';
 
 /**
- * ⚠️ THIS LIST IS PUBLISHED, AND GOES STALE SILENTLY. ⚠️
+ * WHAT THIS PAGE TELLS VISITORS IT CANNOT DO.
  *
- * These are the defects the live site tells its visitors about. When one is
- * fixed in the library, DELETE ITS ENTRY HERE IN THE SAME PR — otherwise the
- * page carries on warning the world about a bug that no longer exists, which is
- * worse than saying nothing, because being accurate is the only reason anyone
- * should believe the rest of the page.
+ * The library's caveats are no longer typed here: they come from
+ * `docs/guide/caveats.data.json` via `pnpm docs:sync`, which also writes the
+ * README's list and the guide's Limitations page. Fixing a defect means
+ * deleting ONE entry from that file — CI fails if the three surfaces disagree.
  *
- * Nothing enforces this. No test fails and CI stays green.
+ * Two things are still decided HERE, and both are deliberate:
  *
- *   "No ranking"                          -> by design. Stays. Was "No ranking,
- *                                           no positions" until `capture:
- *                                           'line-ranges'` landed and gave a
- *                                           match its position within the line;
- *                                           ranking across files is still refused
- *   "This demo runs with the cache off"  -> not a defect: the cache is safe now,
- *                                           but a warm one stops the timings
- *                                           measuring the network
- *   "Binary files stop at the first NUL" -> BACKLOG 3f
+ * 1. `demoCorpusCanTrigger` filters the library's defects. `$` on CRLF (17)
+ *    and the 64 KB line ceiling (3g) are excluded because this corpus is all
+ *    LF and its longest line is 76 bytes. An unreachable caveat dilutes a list
+ *    whose whole value is that every entry is live.
  *
- * ABSENT because this corpus cannot trigger them, and an unreachable caveat
- * dilutes a list whose value is that every entry is live:
+ * 2. DEMO_CAVEATS below are not library caveats at all. They describe this
+ *    page, no library fix retires them, and they must never move into the
+ *    shared data file.
  *
- *   Backlog 17  `$` on CRLF input. Every file here is LF.
- *   Backlog 3g  Needs a line over 64 KB. The longest here is 76 bytes.
- *
- * Add either if the corpus changes shape.
+ * Do not delete a caveat to tidy the page. The list is short because the
+ * defects are few. See AGENTS.md §2.3.
  */
-const CAVEATS = [
+const DEMO_CAVEATS = [
   {
-    title: 'No ranking',
-    body: 'netgrep answers whether a pattern occurs in a file and — if you ask — the first line it occurs on, with each match highlighted within it. It does not rank: no match counts, no line numbers, no relevance ordering, so it cannot sort these cards by how well they match. If you need that, a prebuilt index — Pagefind, Lunr, FlexSearch — is the right tool.',
-  },
-  {
+    id: 'cache-off',
     title: 'This demo runs with the cache off',
-    body: 'netgrep can hold downloaded bytes in memory, and does by default. The demo turns it off so the timings above keep measuring the network rather than a warm buffer — searching while downloading is the thing this page exists to show. It re-reads the corpus each time: 2.6 MB, served from the browser cache on repeats.',
+    demoBody:
+      'netgrep can hold downloaded bytes in memory, and does by default. The demo turns it off so the timings above keep measuring the network rather than a warm buffer — searching while downloading is the thing this page exists to show. It re-reads the corpus each time: 2.6 MB, served from the browser cache on repeats.',
   },
-  {
-    title: 'Binary files stop at the first NUL',
-    body: "ripgrep's binary detection quits on a NUL byte, and a boolean cannot distinguish “binary, not searched” from “no match”. Plain text — the intended use — is unaffected.",
-  },
+];
+
+/**
+ * `demoBody` rather than `short`: `short` is a one-line README bullet, and the
+ * cards are the page's explanation of what it cannot do. `demoBody` is plain
+ * text for the same reason — it is rendered into a `<dd>`, so markdown in it
+ * would show up as literal backticks.
+ */
+const VISIBLE = [
+  ...CAVEATS.filter(
+    (caveat) => caveat.kind === 'by-design' || caveat.demoCorpusCanTrigger,
+  ).map((caveat) => ({
+    id: caveat.id,
+    title: caveat.title,
+    demoBody: caveat.demoBody ?? caveat.short,
+  })),
+  ...DEMO_CAVEATS,
 ];
 
 export function Limitations() {
@@ -74,11 +79,11 @@ export function Limitations() {
       </div>
 
       <dl className="mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2">
-        {CAVEATS.map((caveat) => (
-          <div key={caveat.title}>
+        {VISIBLE.map((caveat) => (
+          <div key={caveat.id}>
             <dt className="text-foreground font-medium">{caveat.title}</dt>
             <dd className="text-muted-foreground mt-1.5 text-sm leading-relaxed">
-              {caveat.body}
+              {caveat.demoBody}
             </dd>
           </div>
         ))}
@@ -95,9 +100,9 @@ export function Limitations() {
         and{' '}
         <a
           className="text-primary/90 hover:text-primary underline underline-offset-4"
-          href="https://github.com/dgopsq/netgrep#known-limitations"
+          href="/docs/#limitations"
         >
-          the README
+          the documentation
         </a>
         .
       </p>
