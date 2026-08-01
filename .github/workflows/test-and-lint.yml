@@ -97,7 +97,7 @@ jobs:
   # AND the engine (AGENTS.md §2.2), so it never touches `pkg/` — which is why
   # this does not wait for the WASM and is usually the first check to report.
   js:
-    name: JS (Biome + unit tests)
+    name: JS (Biome + unit tests + docs)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -106,6 +106,14 @@ jobs:
 
       - run: pnpm lint:js
       - run: pnpm test:unit
+        if: '!cancelled()'
+      - run: pnpm test:tools
+        if: '!cancelled()'
+      # The caveat list is generated onto three surfaces from one data file.
+      # Without this check that is a convention, and AGENTS.md §2.3 records
+      # what conventions are worth here: the site kept warning about a fixed
+      # bug until a human noticed.
+      - run: pnpm docs:sync --check
         if: '!cancelled()'
 
   browser:

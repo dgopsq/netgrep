@@ -255,25 +255,12 @@ Netgrep is experimental, and the following are real and **documented rather than
 tests so they cannot change unnoticed; the full analysis is in
 [`docs/ARCHITECTURE.md`](https://github.com/dgopsq/netgrep/blob/main/docs/ARCHITECTURE.md#known-limitations--correctness-caveats).
 
-- **Inside a line longer than 64 KB, results are approximate.** Netgrep holds back the incomplete last *line*
-  of each chunk and prepends it to the next, which is exact — a match can never cross a newline — so ordinary
-  text is unaffected no matter how the network splits the response. The exception is a line with no terminator
-  in 64 KB, such as minified JavaScript or a one-line data dump: past that ceiling the retained bytes become a
-  plain 64 KB window, so a match **longer** than the window is lost, `^` can match at a window edge where no
-  line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line — which
-  can also leave `ranges` empty, since the fragment need not contain the match. `result` stays correct in that
-  last case. Newline-free input is also answered more slowly, because nothing can
-  be searched until the ceiling fills or the download ends.
-- **A file containing a NUL byte reports no match** for the block of lines containing it, even when the match
-  came earlier. Binary detection abandons what it is given rather than stopping at the NUL.
-- **`$` does not match on CRLF files.** The line terminator is `\n`, so on Windows-authored text the `\r`
-  sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
-- **Concurrent searches of one URL are only de-duplicated when the cache is on.** With
-  `enableMemoryCache: true` the second caller waits for the first and is answered from the entry it writes.
-  With the cache off there is no entry to hand over, so both download the file — the answers are still correct,
-  the second request is simply wasted. Two residuals even with the cache on: a first caller that matches early
-  resolves without reading to the end, so it writes no entry and its waiter fetches after all; and a failed
-  download is not inherited, so the waiter retries with its own signal.
+<!-- BEGIN GENERATED CAVEATS -->
+- **[Inside a line longer than 64 KB, results are approximate](https://netgrep.diegopasquali.com/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.
+- **[A file containing a NUL byte reports no match](https://netgrep.diegopasquali.com/docs/#nul-byte)** — A NUL byte discards the block of lines containing it, even when the match came earlier.
+- **[`$` does not match on CRLF files](https://netgrep.diegopasquali.com/docs/#crlf-dollar)** — On Windows-authored text the `\r` sits between your text and the anchor, so `needle$` misses what `needle` finds.
+- **[Concurrent searches of one URL are only de-duplicated when the cache is on](https://netgrep.diegopasquali.com/docs/#concurrent-dedup)** — With the cache off, two concurrent searches of one URL both download it — correct answers, wasted request.
+<!-- END GENERATED CAVEATS -->
 
 ### Fixed, and not yet in a published release
 
