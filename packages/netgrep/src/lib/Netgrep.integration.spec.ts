@@ -572,9 +572,9 @@ describe('Netgrep integration (real WASM)', () => {
    * `packages/search/tests/search.rs`, and the wiring is pinned with the engine
    * mocked in `Netgrep.spec.ts`. What only this suite can establish is the
    * property the feature actually rests on: that the line survives the trip
-   * through `fetch`, the tail buffer, the cache and the WASM boundary — and
-   * that it is the FILE's first matching line rather than the first one in
-   * whichever chunk happened to match.
+   * through `fetch`, the tail buffer and the WASM boundary — and that it is
+   * the FILE's first matching line rather than the first one in whichever
+   * chunk happened to match.
    *
    * That property is owed entirely to the tail buffer — BACKLOG 3a. Before it,
    * each chunk was searched in isolation, so a first occurrence straddling a seam

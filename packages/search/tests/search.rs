@@ -21,7 +21,7 @@
 //! returned line contains — is cheapest to pin here: no browser to boot, and a
 //! failure names the engine rather than the streaming loop wrapped around it.
 //!
-//! Anything involving `fetch`, chunking, caching or the WASM boundary belongs
+//! Anything involving `fetch`, chunking, aborting or the WASM boundary belongs
 //! in `Netgrep.integration.spec.ts` instead. The two suites overlap on purpose
 //! at exactly one point — smart case — because that is the behaviour most
 //! likely to change silently under a dependency bump, and knowing *which*

@@ -30,9 +30,9 @@ export function genReadableStreamFromString(str: string): ReadableStream {
  * a real response body arrives.
  *
  * The chunks are `Uint8Array`s rather than strings because the streaming loop
- * hands them to the engine as bytes and joins them to the tail with
- * `concatBytes` — a string-valued chunk would reach a length-0 view and make
- * the assertions below vacuously true.
+ * hands the buffer to `splitAtLastLine`, which calls `buffer.subarray` on it —
+ * a string-valued chunk throws `TypeError: buffer.subarray is not a
+ * function`, a loud failure rather than a silently wrong one.
  */
 function genReadableStreamFromChunks(
   chunks: Array<Uint8Array>,
@@ -108,9 +108,8 @@ const mockFetch = vi.fn();
 // module's `init()`, which Netgrep awaits before every search.
 //
 // The arguments are forwarded rather than dropped so that tests can assert
-// WHICH bytes reached the engine — the only way to tell a cache hit from a
-// re-fetch that happened to return the same thing — and, for the line
-// entry points, which cap did.
+// WHICH bytes reached the engine and, for the line entry points, which cap
+// did.
 //
 // All three are mocked even though most tests touch only one, because WHICH
 // of them a search calls is itself behaviour: `capture` is meant to leave the
