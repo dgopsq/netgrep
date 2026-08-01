@@ -914,10 +914,12 @@ describe('Netgrep integration (real WASM)', () => {
    * Tracked in `docs/BACKLOG.md`.
    *
    * AND the published demo tells its visitors about these defects, so the fix
-   * is not finished until it stops. Remove the caveat from the `CAVEATS` array
-   * in `packages/example/src/components/limitations.tsx` in the same PR.
-   * Nothing tests that — inverting the assertion below turns this suite green
-   * and the site keeps warning about a bug you just fixed. See AGENTS.md §2.3.
+   * is not finished until it stops. Delete the caveat from
+   * `docs/guide/caveats.data.json` and run `pnpm docs:sync` in the same PR.
+   * That much is now checked: `pnpm docs:sync --check` fails CI when the guide,
+   * the README and the demo disagree with that file. Inverting the assertion
+   * below still turns this suite green on its own, so the deletion is the step
+   * to remember.
    */
   describe('documented defects (asserting current, incorrect behaviour)', () => {
     it('BACKLOG 3a (FIXED): a match straddling a chunk boundary is found', async () => {

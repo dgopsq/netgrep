@@ -110,7 +110,7 @@ export type Caveat = {
 
 /**
  * EVERY library caveat, unfiltered. The demo decides which of them apply to
- * its own corpus — see the filter in \`limitations.tsx\`, and the reasoning
+ * its own corpus — see the filter in \`visible-caveats.ts\`, and the reasoning
  * beside it.
  */
 export const CAVEATS: Caveat[] = [

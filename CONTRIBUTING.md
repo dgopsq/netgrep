@@ -120,7 +120,8 @@ reclaims that one; sccache's own cache is bounded and evicts itself.
 ## Before opening a pull request
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:rust && pnpm verify:pack
+pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:rust && pnpm test:tools &&
+  pnpm docs:sync --check && pnpm verify:pack
 ```
 
 That is everything CI checks. `pnpm build` is not optional here even though nothing else needs it:
@@ -128,7 +129,8 @@ That is everything CI checks. `pnpm build` is not optional here even though noth
 
 CI groups these into **five jobs by toolchain** — `wasm`, `rust`, `js`, `browser`, `bundle` — so a red check
 names the tools rather than the whole workflow, and the step list inside it names the command.
-`pnpm lint:js`, `pnpm lint:rust`, `pnpm test:unit` and `pnpm test:browser` reproduce the halves locally. See
+`pnpm lint:js`, `pnpm lint:rust`, `pnpm test:unit`, `pnpm test:tools` and `pnpm test:browser` reproduce the
+halves locally. See
 [AGENTS.md §4.3](AGENTS.md#43-what-ci-runs-and-where-a-red-check-comes-from).
 
 Then, in rough order of how likely each is to bite:
@@ -143,10 +145,12 @@ Then, in rough order of how likely each is to bite:
   [AGENTS.md §2.1](AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) has the full story.
 - **Fixing a defect also means updating the demo site.** <https://netgrep.diegopasquali.com/> lists the
   defects that affect its visitors, so a fix that leaves the list alone ships a page warning about a bug
-  that no longer exists. Remove the entry from the `CAVEATS` array in
-  `packages/example/src/components/limitations.tsx` in the same PR. **No test catches this**, which is why it
-  is worth remembering. (Note the demo's cache stays off even though the defects that justified it are fixed —
-  it is off so the page's timings keep measuring the network, and no library fix changes that.)
+  that no longer exists. Every limitation lives once, in `docs/guide/caveats.data.json`: delete the entry and
+  run `pnpm docs:sync`, in the same PR. **CI catches this now** — `pnpm docs:sync --check` fails if the guide,
+  the README and the demo have drifted from that file. What it cannot catch is a defect nobody entered into it
+  in the first place, so adding one is still yours to judge. (Note the demo's cache stays off even though the
+  defects that justified it are fixed — it is off so the page's timings keep measuring the network, and no
+  library fix changes that.)
   [AGENTS.md §2.3](AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 - **Do not bump dependencies as a side effect.** A version change is its own deliberate, tested change. If a
   tool suggests one while you are doing something else, add it to `docs/BACKLOG.md`.
