@@ -183,8 +183,16 @@ export function renderNav(current: 'demo' | 'docs', base: string): string {
   const link = (href: string, label: string, page: 'demo' | 'docs') =>
     `<a href="${href}"${page === current ? ' aria-current="page"' : ''}>${label}</a>`;
 
+  // A small version of the hero's `new Netgrep();` wordmark (see hero.tsx):
+  // same four parts — muted `new `, gradient `Netgrep`, primary-coloured `()`,
+  // muted `;` — at nav size. Plain classes rather than Tailwind utilities:
+  // this HTML is generated at build time, outside Tailwind's scanner, so
+  // utilities here would work in dev and vanish from the production build.
+  // Styled in index.css beside the rest of .site-nav.
+  const mark = `<a class="site-nav-mark" href="${base}"><span class="site-nav-mark-new">new </span><span class="site-nav-mark-name">Netgrep</span><span class="site-nav-mark-paren">()</span><span class="site-nav-mark-semi">;</span></a>`;
+
   return `<header class="site-nav">
-  <a class="site-nav-mark" href="${base}">netgrep</a>
+  ${mark}
   <nav aria-label="Site">
     ${link(base, 'Demo', 'demo')}
     ${link(`${base}docs/`, 'Docs', 'docs')}

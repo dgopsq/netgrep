@@ -61,6 +61,17 @@
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
   --ring: oklch(0.812 0.128 181 / 55%);
+
+  /*
+   * The wordmark treatment: white falling off to teal. Defined once here so
+   * the hero's `.text-gradient` utility and the nav mark's `.site-nav-mark-name`
+   * below share one definition instead of two copies drifting apart.
+   */
+  --wordmark-gradient: linear-gradient(
+    100deg,
+    oklch(0.99 0 0) 20%,
+    oklch(0.812 0.128 181) 85%
+  );
 }
 
 @theme inline {
@@ -143,6 +154,25 @@
 .site-nav-mark {
   font-family: var(--font-mono);
   font-weight: 600;
+  font-size: 1rem;
+}
+
+/* The nav's small `new Netgrep();` mark — see renderNav's comment for why
+   this is plain CSS rather than Tailwind utilities. Same four-part
+   composition as the hero's <h1>, just subordinate in size. */
+.site-nav-mark-new,
+.site-nav-mark-semi {
+  color: var(--muted-foreground);
+}
+
+.site-nav-mark-name {
+  background-image: var(--wordmark-gradient);
+  background-clip: text;
+  color: transparent;
+}
+
+.site-nav-mark-paren {
+  color: var(--primary);
 }
 
 .site-nav nav {
@@ -162,12 +192,10 @@
 
 @utility text-gradient {
   /* Wordmark treatment: white falling off to teal. The README banner is a
-     screenshot of it, so this rule is the wordmark rather than a copy of one. */
-  background-image: linear-gradient(
-    100deg,
-    oklch(0.99 0 0) 20%,
-    oklch(0.812 0.128 181) 85%
-  );
+     screenshot of it, so this rule is the wordmark rather than a copy of one.
+     The gradient itself lives in --wordmark-gradient on :root, shared with
+     the nav mark's .site-nav-mark-name. */
+  background-image: var(--wordmark-gradient);
   background-clip: text;
   color: transparent;
 }
