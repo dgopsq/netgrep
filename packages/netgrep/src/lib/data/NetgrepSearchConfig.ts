@@ -1,27 +1,28 @@
+import type { NetgrepCapture } from './NetgrepCapture.js';
+
 /**
- * The optional configuration passed in
- * a single search method.
+ * The optional configuration passed in a single search method.
  *
- * The `L` generic is inferred from `captureLine` at the call site — it is
- * *constrained* to `boolean` rather than typed as one, which is what makes
- * TypeScript keep the literal `true` instead of widening it — and it decides
- * the shape of the result. See `NetgrepResult`.
+ * The `C` generic is inferred from `capture` at the call site — constrained to
+ * `NetgrepCapture` rather than typed as one, which is what makes TypeScript
+ * keep the literal instead of widening it — and it decides the shape of the
+ * result. See `NetgrepResult`.
  */
-export type NetgrepSearchConfig<L extends boolean = false> = {
+export type NetgrepSearchConfig<C extends NetgrepCapture = undefined> = {
   /**
-   * A `Signal` used to abort the remote file
-   * search and download.
+   * A `Signal` used to abort the remote file search and download.
    */
   signal?: AbortSignal;
 
   /**
-   * Return the first matching line alongside the boolean.
+   * What to return alongside the boolean: nothing, the first matching line,
+   * or the line plus every match's position within it.
    *
-   * Off by default, and the cost really is zero when it is off: the engine has
-   * a separate entry point for this, so nothing is allocated, decoded or copied
+   * Off by default, and the cost really is zero when it is off: each mode has
+   * a separate engine entry point, so nothing is allocated, decoded or copied
    * across the WebAssembly boundary for a caller who only wants membership.
    */
-  captureLine?: L;
+  capture?: C;
 
   /**
    * Ceiling on the bytes of the returned line. Defaults to 4096.
@@ -35,8 +36,8 @@ export type NetgrepSearchConfig<L extends boolean = false> = {
    * Values below 1, and fractions, are clamped rather than rejected: the number
    * becomes a Rust `usize`, and wasm-bindgen does not validate it.
    *
-   * Typed `never` unless `captureLine` is `true`, so setting it on its own is a
+   * Typed `never` unless `capture` is set, so setting it on its own is a
    * compile error rather than a ceiling that silently governs nothing.
    */
-  maxLineBytes?: L extends true ? number : never;
+  maxLineBytes?: C extends 'line' | 'line-ranges' ? number : never;
 };

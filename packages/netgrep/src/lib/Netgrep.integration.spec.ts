@@ -599,7 +599,7 @@ describe('Netgrep integration (real WASM)', () => {
    * feature could be built at all.
    */
   describe('captureLine', () => {
-    const CAPTURE = { captureLine: true } as const;
+    const CAPTURE = { capture: 'line' } as const;
 
     it('returns the whole line, not the matched fragment', async () => {
       serve([encoder.encode(POEM)]);
@@ -748,7 +748,7 @@ describe('Netgrep integration (real WASM)', () => {
         'url',
         'needle',
         undefined,
-        { captureLine: true, maxLineBytes: 12 },
+        { capture: 'line', maxLineBytes: 12 },
       );
 
       // 'needle ' is 7 bytes, leaving 5 for two-byte characters — so two of
@@ -1043,7 +1043,7 @@ describe('Netgrep integration (real WASM)', () => {
       serve([encoder.encode(`START${filler}needle\n`)]);
 
       const whole = await NG.search('a', 'needle', undefined, {
-        captureLine: true,
+        capture: 'line',
         maxLineBytes: 16,
       });
 
@@ -1057,7 +1057,7 @@ describe('Netgrep integration (real WASM)', () => {
       ]);
 
       const fragment = await NG.search('b', 'needle', undefined, {
-        captureLine: true,
+        capture: 'line',
         maxLineBytes: 16,
       });
 

@@ -96,32 +96,40 @@ function serveExcept(failing: string, message = 'nope') {
 // `vi.hoisted` is required, not stylistic: `vi.mock` is lifted above the module
 // body, and its factory runs while `./Netgrep.js` is being imported — before a
 // plain `const` here would have been initialised.
-const { mockSearch, mockSearchLine } = vi.hoisted(() => ({
+const { mockSearch, mockSearchLine, mockSearchLineRanges } = vi.hoisted(() => ({
   mockSearch: vi.fn(),
   mockSearchLine: vi.fn(),
+  mockSearchLineRanges: vi.fn(),
 }));
 
 const mockFetch = vi.fn();
 
-// Mocking the engine's two entry points. `default` stands in for the WASM
+// Mocking the engine's three entry points. `default` stands in for the WASM
 // module's `init()`, which Netgrep awaits before every search.
 //
 // The arguments are forwarded rather than dropped so that tests can assert
 // WHICH bytes reached the engine — the only way to tell a cache hit from a
-// re-fetch that happened to return the same thing — and, for
-// `search_bytes_line`, which cap did.
+// re-fetch that happened to return the same thing — and, for the line
+// entry points, which cap did.
 //
-// Both are mocked even though most tests touch only one, because WHICH of them
-// a search calls is itself behaviour: `captureLine` is meant to leave the
-// boolean path untouched, and that is only assertable if the other is
-// observable.
+// All three are mocked even though most tests touch only one, because WHICH
+// of them a search calls is itself behaviour: `capture` is meant to leave the
+// other modes' entry points untouched, and that is only assertable if they
+// are observable.
 vi.mock('@netgrep/search', () => {
   return {
     default: () => Promise.resolve(),
     search_bytes: (...args: Array<unknown>) => mockSearch(...args),
     search_bytes_line: (...args: Array<unknown>) => mockSearchLine(...args),
+    search_bytes_line_ranges: (...args: Array<unknown>) =>
+      mockSearchLineRanges(...args),
   };
 });
+
+/** What the real `search_bytes_line_ranges` hands back: a carrier with `free`. */
+function lineWithRanges(line: string, flat: Array<number>) {
+  return { line, ranges: new Uint32Array(flat), free: vi.fn() };
+}
 
 // Mocking `fetch` function.
 global.fetch = mockFetch;
@@ -775,16 +783,16 @@ describe('Netgrep', () => {
   });
 
   /**
-   * `captureLine` — BACKLOG 19.
+   * `capture` — BACKLOG 19.
    *
-   * What a captured line CONTAINS is the engine's business and is pinned in
-   * `packages/search/tests/search.rs`; what reaches it through the real
-   * boundary is `Netgrep.integration.spec.ts`. What is left for here is the
-   * wiring, and the wiring is where this feature can go wrong quietly: calling
-   * the wrong entry point, mistaking an empty line for a miss, or handing Rust
-   * a `usize` it cannot hold.
+   * What a captured line or range CONTAINS is the engine's business and is
+   * pinned in `packages/search/tests/search.rs`; what reaches it through the
+   * real boundary is `Netgrep.integration.spec.ts`. What is left for here is
+   * the wiring, and the wiring is where this feature can go wrong quietly:
+   * calling the wrong entry point, mistaking an empty line for a miss,
+   * leaking the wasm carrier, or handing Rust a `usize` it cannot hold.
    */
-  describe('Netgrep::captureLine', () => {
+  describe('Netgrep::capture', () => {
     const NG = new Netgrep({ enableMemoryCache: false });
     const url = 'url';
     const pattern = 'pattern';
@@ -793,6 +801,7 @@ describe('Netgrep', () => {
       mockFetch.mockClear();
       mockSearch.mockClear();
       mockSearchLine.mockClear();
+      mockSearchLineRanges.mockClear();
 
       mockFetch.mockImplementation(() =>
         Promise.resolve({ body: genReadableStreamFromString('test\n') }),
@@ -818,7 +827,7 @@ describe('Netgrep', () => {
       mockSearchLine.mockReturnValue('a matching line');
 
       const result = await NG.search(url, pattern, undefined, {
-        captureLine: true,
+        capture: 'line',
       });
 
       expect(mockSearch).not.toHaveBeenCalled();
@@ -835,7 +844,7 @@ describe('Netgrep', () => {
       mockSearchLine.mockReturnValue(undefined);
 
       await expect(
-        NG.search(url, pattern, undefined, { captureLine: true }),
+        NG.search(url, pattern, undefined, { capture: 'line' }),
       ).resolves.toMatchObject({ result: false, line: null });
     });
 
@@ -847,7 +856,7 @@ describe('Netgrep', () => {
       mockSearchLine.mockReturnValue('');
 
       await expect(
-        NG.search(url, pattern, undefined, { captureLine: true }),
+        NG.search(url, pattern, undefined, { capture: 'line' }),
       ).resolves.toMatchObject({ result: true, line: '' });
     });
 
@@ -861,9 +870,9 @@ describe('Netgrep', () => {
       mockSearchLine.mockReturnValueOnce(undefined);
       mockSearchLine.mockReturnValue('from the cached buffer');
 
-      await cached.search(url, pattern, undefined, { captureLine: true });
+      await cached.search(url, pattern, undefined, { capture: 'line' });
       const second = await cached.search(url, pattern, undefined, {
-        captureLine: true,
+        capture: 'line',
       });
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -873,20 +882,92 @@ describe('Netgrep', () => {
       });
     });
 
+    it('routes `capture: "line-ranges"` to the ranges entry point and unflattens pairs', async () => {
+      mockSearchLineRanges.mockReturnValue(
+        lineWithRanges('a cat and a cat', [2, 5, 12, 15]),
+      );
+
+      const res = await NG.search(url, pattern, undefined, {
+        capture: 'line-ranges',
+      });
+
+      expect(mockSearch).not.toHaveBeenCalled();
+      expect(mockSearchLine).not.toHaveBeenCalled();
+      expect(res.result).toBe(true);
+      if (res.result) {
+        expect(res.line).toBe('a cat and a cat');
+        expect(res.ranges).toEqual([
+          { start: 2, end: 5 },
+          { start: 12, end: 15 },
+        ]);
+      }
+    });
+
+    it('frees the wasm carrier after reading it', async () => {
+      const carrier = lineWithRanges('x', [0, 1]);
+      mockSearchLineRanges.mockReturnValue(carrier);
+
+      await NG.search(url, pattern, undefined, { capture: 'line-ranges' });
+
+      expect(carrier.free).toHaveBeenCalled();
+    });
+
+    it('routes `capture: "line"` to the line entry point, exactly as captureLine did', async () => {
+      mockSearchLine.mockReturnValue('the line');
+
+      const res = await NG.search(url, pattern, undefined, {
+        capture: 'line',
+      });
+
+      expect(mockSearchLineRanges).not.toHaveBeenCalled();
+      expect(res).toMatchObject({ result: true, line: 'the line' });
+      expect(res).not.toHaveProperty('ranges');
+    });
+
+    it('treats an EMPTY line with a zero-width range as a match, not a miss', async () => {
+      mockSearchLineRanges.mockReturnValue(lineWithRanges('', [0, 0]));
+
+      const res = await NG.search(url, pattern, undefined, {
+        capture: 'line-ranges',
+      });
+
+      expect(res.result).toBe(true);
+      if (res.result) expect(res.ranges).toEqual([{ start: 0, end: 0 }]);
+    });
+
+    it('reports no match as `line: null, ranges: null`', async () => {
+      mockSearchLineRanges.mockReturnValue(undefined);
+
+      const res = await NG.search(url, pattern, undefined, {
+        capture: 'line-ranges',
+      });
+
+      expect(res).toMatchObject({ result: false, line: null, ranges: null });
+    });
+
+    it('omits `line` and `ranges` keys entirely when capture is off', async () => {
+      mockSearch.mockReturnValue(true);
+
+      const res = await NG.search(url, pattern);
+
+      expect(res).not.toHaveProperty('line');
+      expect(res).not.toHaveProperty('ranges');
+    });
+
     describe('the cap', () => {
       const capOf = (call: number) => mockSearchLine.mock.calls[call][2];
 
       beforeEach(() => mockSearchLine.mockReturnValue('x'));
 
       it('defaults to 4096', async () => {
-        await NG.search(url, pattern, undefined, { captureLine: true });
+        await NG.search(url, pattern, undefined, { capture: 'line' });
 
         expect(capOf(0)).toBe(4096);
       });
 
       it('passes a caller-supplied value through', async () => {
         await NG.search(url, pattern, undefined, {
-          captureLine: true,
+          capture: 'line',
           maxLineBytes: 120,
         });
 
@@ -899,7 +980,7 @@ describe('Netgrep', () => {
         // fraction would be truncated somewhere less visible than here.
         for (const maxLineBytes of [0, -1, -4096, 0.5]) {
           await NG.search(url, pattern, undefined, {
-            captureLine: true,
+            capture: 'line',
             maxLineBytes,
           });
         }
@@ -915,7 +996,7 @@ describe('Netgrep', () => {
         // produced the one answer this API cannot afford to be ambiguous about.
         for (const maxLineBytes of [2 ** 32, 2 ** 40, 0xffffffff]) {
           await NG.search(url, pattern, undefined, {
-            captureLine: true,
+            capture: 'line',
             maxLineBytes,
           });
         }
@@ -927,11 +1008,11 @@ describe('Netgrep', () => {
 
       it('reads `Infinity` as "no cap", and `NaN` as no request at all', async () => {
         await NG.search(url, pattern, undefined, {
-          captureLine: true,
+          capture: 'line',
           maxLineBytes: Number.POSITIVE_INFINITY,
         });
         await NG.search(url, pattern, undefined, {
-          captureLine: true,
+          capture: 'line',
           maxLineBytes: Number.NaN,
         });
 
@@ -946,7 +1027,7 @@ describe('Netgrep', () => {
 
       it('floors a fractional value rather than passing it on', async () => {
         await NG.search(url, pattern, undefined, {
-          captureLine: true,
+          capture: 'line',
           maxLineBytes: 12.7,
         });
 
@@ -962,7 +1043,7 @@ describe('Netgrep', () => {
           [{ url: 'a' }, { url: 'b' }],
           pattern,
           {
-            captureLine: true,
+            capture: 'line',
           },
         );
 
@@ -981,12 +1062,34 @@ describe('Netgrep', () => {
         const results = await NG.searchBatch(
           [{ url: 'ok' }, { url: 'broken' }],
           pattern,
-          { captureLine: true },
+          { capture: 'line' },
         );
 
         expect(results).toMatchObject([
           { url: 'ok', result: true, line: 'found here', error: null },
           { url: 'broken', result: false, line: null, error: 'nope' },
+        ]);
+      });
+
+      it('gives a failed url `ranges: null` too, under `line-ranges`', async () => {
+        mockSearchLineRanges.mockReturnValue(lineWithRanges('found here', []));
+        serveExcept('broken');
+
+        const results = await NG.searchBatch(
+          [{ url: 'ok' }, { url: 'broken' }],
+          pattern,
+          { capture: 'line-ranges' },
+        );
+
+        expect(results).toMatchObject([
+          { url: 'ok', result: true, line: 'found here', error: null },
+          {
+            url: 'broken',
+            result: false,
+            line: null,
+            ranges: null,
+            error: 'nope',
+          },
         ]);
       });
 
@@ -1006,25 +1109,44 @@ describe('Netgrep', () => {
      * shape of the result is the feature's main safety property, and nothing
      * at runtime can check it.
      */
-    it('states in the type whether a line was asked for', async () => {
+    it('states in the type what capture was asked for', async () => {
       const plain = await NG.search(url, pattern);
       const _result: boolean = plain.result;
-      // @ts-expect-error no `line` key exists without `captureLine`
+      // @ts-expect-error no `line` key exists without `capture`
       plain.line;
+      // @ts-expect-error no `ranges` key exists without `capture`
+      plain.ranges;
+      // @ts-expect-error `captureLine` is gone — `capture: 'line'` replaced it
+      await NG.search(url, pattern, undefined, { captureLine: true });
 
-      const captured = await NG.search(url, pattern, undefined, {
-        captureLine: true,
+      const withLine = await NG.search(url, pattern, undefined, {
+        capture: 'line',
       });
 
-      if (captured.result) {
-        // Narrowed to `string` — no null check, because a line exists exactly
-        // when there was a match.
-        const _line: string = captured.line;
+      if (withLine.result) {
+        const _line: string = withLine.line;
+        // @ts-expect-error `'line'` does not carry ranges — that is `'line-ranges'`
+        withLine.ranges;
       } else {
-        const _none: null = captured.line;
+        const _none: null = withLine.line;
       }
 
-      // @ts-expect-error a cap governs nothing without `captureLine`
+      const withRanges = await NG.search(url, pattern, undefined, {
+        capture: 'line-ranges',
+      });
+
+      if (withRanges.result) {
+        const _line: string = withRanges.line;
+        // An array, not `NetgrepMatchRange` — `[]` is reachable, so the type must
+        // not promise a first element.
+        const _ranges: Array<{ start: number; end: number }> =
+          withRanges.ranges;
+      } else {
+        const _noLine: null = withRanges.line;
+        const _noRanges: null = withRanges.ranges;
+      }
+
+      // @ts-expect-error a cap governs nothing without `capture`
       await NG.search(url, pattern, undefined, { maxLineBytes: 100 });
 
       expect(true).toBe(true);
