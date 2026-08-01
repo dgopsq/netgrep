@@ -120,7 +120,7 @@ reclaims that one; sccache's own cache is bounded and evicts itself.
 ## Before opening a pull request
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:rust && pnpm test:tools &&
+pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:rust &&
   pnpm docs:sync --check && pnpm verify:pack
 ```
 

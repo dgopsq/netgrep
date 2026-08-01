@@ -118,7 +118,7 @@ Two things the generator does not decide, and you must:
 | Field | What it means |
 |---|---|
 | `kind` | `defect` (a bug, listed in the README) or `by-design` (never fixed, shown on the site and in the guide but not in the README's defect list) |
-| `demoCorpusCanTrigger` | Whether *this corpus* can hit it. It filters **defects only** — the demo shows an entry when `kind` is `by-design` **or** the flag is true, so a by-design entry appears whatever it says (`no-ranking` is exactly that). `false` therefore keeps a defect off the demo page: 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false` |
+| `demoCorpusCanTrigger` | Whether *this corpus* can hit it. It filters **defects only** — the demo shows an entry when `kind` is `by-design` **or** the flag is true, so a by-design entry appears whatever it says (`no-ranking` is exactly that). `false` therefore keeps a defect off the demo page: 17 (`$` on CRLF; every file is LF) and 3g (needs a line over 64 KB; the longest is 76 bytes) are both `false`, and so is concurrent-dedup, since the demo issues one search per URL per query and so never triggers it |
 
 **Adding a defect is still a judgement call, and `--check` cannot make it for you.** CI verifies that
 the three generated surfaces agree with `caveats.data.json`. Nothing detects a defect that was never

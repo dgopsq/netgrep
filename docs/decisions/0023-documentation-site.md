@@ -85,7 +85,7 @@ prevent.**
 | Field | What it decides |
 |---|---|
 | `kind` | `defect` (a real bug, listed in the README) or `by-design` (never going to be fixed — shown on the site and in the guide, and kept out of the README's *defect* list, where it would be a bug report for a decision) |
-| `demoCorpusCanTrigger` | Whether **this corpus** can reach it, which gates **defects only**: the demo shows an entry when `kind` is `by-design` **or** this is true, so "No ranking" appears despite being `false`. `$` on CRLF and the 64 KB line ceiling are the two it does exclude — every corpus file is LF and its longest line is 76 bytes |
+| `demoCorpusCanTrigger` | Whether **this corpus** can reach it, which gates **defects only**: the demo shows an entry when `kind` is `by-design` **or** this is true, so "No ranking" appears despite being `false`. Three are excluded: `$` on CRLF and the 64 KB line ceiling, because every corpus file is LF and its longest line is 76 bytes, and concurrent-dedup, because the demo issues one search per URL per query |
 
 The `demoCorpusCanTrigger` filter is not tidying. The demo's list is worth reading precisely because every
 entry on it is live *on the page you are looking at* — a visitor can go and reproduce any of them. Adding a
