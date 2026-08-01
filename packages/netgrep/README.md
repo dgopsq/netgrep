@@ -14,6 +14,7 @@ The main `netgrep` package. See the [main README](https://github.com/dgopsq/netg
 > downloading*.
 >
 > It answers one question per URL — *does this pattern occur?* — as a boolean, and will hand you the first
-> matching line if you pass `captureLine`. That is the whole result: no ranking, no line numbers, no match
-> positions. It has [known limitations](https://github.com/dgopsq/netgrep#known-limitations) that are worth
-> reading before you build on it.
+> matching line if you pass `capture: 'line'`, or that line plus each match's position within it with
+> `capture: 'line-ranges'`. That is the whole result: no ranking, no line numbers, no positions in the file.
+> It has [known limitations](https://github.com/dgopsq/netgrep#known-limitations) that are worth reading
+> before you build on it.
