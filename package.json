@@ -16,6 +16,7 @@
     "build:wasm": "pnpm --filter @netgrep/search build",
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
+    "test:tools": "vitest run --project tools",
     "test:browser": "vitest run --project browser",
     "test:rust": "pnpm --filter @netgrep/search test",
     "verify:pack": "node scripts/verify-pack.mjs",
