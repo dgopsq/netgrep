@@ -16,15 +16,17 @@ occur in the file at this URL?* — a boolean, plus, if the caller asks for it, 
 ([decision 0022](docs/decisions/0022-capture-ranges.md)). Nothing more: no line numbers, no file offsets, no
 match counts, no ranking.
 
-The intended use case is a client-side search over a small, static, file-based corpus (e.g. Markdown posts
-emitted by a static site generator), instead of standing up an index-based search backend.
+The case it is built for is being handed a URL with no shell on the machine that holds the file: an
+artefact on a CI platform, a published corpus, a log a support agent can open but not download. It
+also works for a small static corpus you own — a blog's raw post files, searched with nothing new
+deployed — but that is an example, not the definition.
 
-**It is an experiment, and the README says so first.** netgrep is not claimed to be a good way to build
-search — a prebuilt index (Pagefind, Lunr, FlexSearch, a hosted service) is usually smaller, faster and more
-capable, and can rank and locate matches, neither of which netgrep does. What the project explores is the
-narrower question of whether ripgrep's real engine can usefully run over HTTP against files as they download.
-Keep that framing when you touch user-facing text: describe what it does and what it costs, and do not sell
-it.
+**Positioning is deliberate and is documented in [decision 0025](docs/decisions/0025-streaming-grep-over-http.md).**
+Describe what netgrep does and what it costs. The WebAssembly download is stated wherever the project
+is introduced; where a prebuilt index beats netgrep is stated plainly on the limitations page and in
+the guide, once. Neither belongs above the fold, and neither may be quietly dropped — the test for any
+sentence is whether a developer who reads it, installs the package, and hits the limit an hour later
+would feel informed or misled.
 
 **Project status: maintained, conservative.** The toolchain is current and CI is green. Keep it that way: fix
 defects, keep dependencies from rotting, keep it working for existing consumers. That is still the bulk of the

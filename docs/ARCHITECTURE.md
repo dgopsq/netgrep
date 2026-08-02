@@ -24,11 +24,12 @@ understand out of the box.
 **Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
 (Positions within the returned line are in scope since 0022; nothing else about locating a match is.)
 
-**It is an experiment rather than a recommended way to build search**, and the public README leads with that.
-A prebuilt index will usually beat it on size, speed and capability; what netgrep tests is whether ripgrep's
-real engine is usable over HTTP against files as they download. That framing is why the correctness caveats
-below are documented rather than hidden, and why the API has widened exactly once, deliberately, in four
-years — twice if the follow-up that added match positions within that line is counted separately.
+**The positioning is deliberate** — [decision 0025](decisions/0025-streaming-grep-over-http.md).
+netgrep is grep over HTTP: a regex engine answering a question about a remote file in constant memory,
+before the download finishes. Against a large corpus, or one you can preprocess, a prebuilt index wins
+on size, speed and capability; netgrep's ground is a file you do not control, cannot preprocess, and
+have no shell on the machine that holds. That is also why the correctness caveats below are documented
+rather than hidden, and why the API has widened exactly once in four years.
 
 ---
 

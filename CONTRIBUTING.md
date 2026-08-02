@@ -1,7 +1,7 @@
 # Contributing
 
-netgrep is an **experiment**, and it is maintained conservatively: fix defects, keep dependencies from
-rotting, keep it working for existing consumers. That is most of the work, and
+netgrep is maintained conservatively: fix defects, keep dependencies from rotting, keep it working for
+existing consumers. That is most of the work, and
 [`docs/BACKLOG.md`](docs/BACKLOG.md) lists what is already sanctioned.
 
 **A feature starts as an issue, not as a pull request.** The public API is deliberately small — a boolean per
