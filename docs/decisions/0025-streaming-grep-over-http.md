@@ -70,8 +70,9 @@ the tool that is already installed. The constraint that actually produces netgre
 procurement, it is **having no shell on the machine that holds the file** — an artefact on a CI platform you
 are a customer of, a published corpus on someone else's host, a log a support agent can open in a browser and
 nowhere else. The niche is defined by a **person**, not by a workload or a corpus size. That inversion is the
-single most useful thing this investigation produced, and it is why the guide's *What this is for* is now
-written around an audience.
+single most useful thing this investigation produced, and it is what the guide's
+*When to use it* is written from — stated there as which files netgrep applies to, rather than as the
+audience argument made here.
 
 ## Decision
 
@@ -132,7 +133,7 @@ someone landing there most needs to be told. A surface that states the lede and 
 subject are both correct; only a surface that states neither is a regression.
 
 Where the old framing chose to compare, the new one states, and the comparison survives once — plainly, on the
-limitations page and in the guide's *What this is for*, where a reader who needs an index is routed to one.
+limitations page and in the guide's *When to use it*, where a reader who needs an index is routed to one.
 
 ## Consequences
 
@@ -165,7 +166,7 @@ host can answer `Access-Control-Allow-Origin: *` and still hand an anonymous rea
 bound is not a subset of the CORS one and cannot be left implied by it. It was recorded twice, in
 [`BACKLOG`](../BACKLOG.md) item **22** and in *Rejected alongside* below, and both of those are read by
 maintainers; nothing a consumer reads said it. It now sits beside the CORS line in all four places, and the
-guide's *What this is for* is qualified to match: a CI artefact behind a provider login and a session-gated
+guide's *When to use it* is qualified to match: a CI artefact behind a provider login and a session-gated
 support log are named as out of reach today, with the signed or openly published URL that puts them back in.
 Refusing to soften the audience was deliberate — the niche argued above is a **person** with no shell, and
 that person is still real; what changed is that the guide now says which of their files netgrep can actually

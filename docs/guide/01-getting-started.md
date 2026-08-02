@@ -50,25 +50,21 @@ console.log(output.result); // boolean — did the pattern occur?
 For a plain search that boolean is the whole answer. [Searching](02-searching.md) covers metadata and
 batches, and [The matching line](03-the-matching-line.md) covers getting the line itself back.
 
-## What this is for
+## When to use it
 
-The case netgrep is built for is being handed a URL with no shell on the machine that holds the file:
-a published corpus on someone else's host, a build log or an artefact whose URL opens in a browser
-tab, a file a support agent can read but not download. An index cannot help there — building one
-means owning the build, and it cannot find a file that appeared thirty seconds ago. netgrep searches
-the file itself, as it arrives.
+netgrep applies to a file you can address but cannot preprocess, and that a browser can fetch
+without signing in: a published corpus, an artefact or build log served openly or behind a signed
+URL, a document in a bucket you do not own. An index would answer faster, but building one means
+owning the build, and it cannot answer about a file that appeared a minute ago. Anything that loads
+only because you are signed in is out of reach — netgrep sends no credentials.
 
-The niche is a **person** rather than a corpus size, but the file still has to be one an anonymous
-request can fetch. An artefact behind your CI provider's login, or a log that only loads because a
-session cookie rides along, is out of reach today — netgrep sends neither, so the request comes back
-unauthenticated. The same resources published under a signed or otherwise unguessable URL, or copied
-to a bucket that serves them openly, behave like any other file.
-
-The same property makes it work for a small static corpus you *do* own: a real-time search over a
-blog's raw post files needs nothing new deployed. One runs on
+It also fits a corpus you *do* own, when standing up a search backend is not worth it: a real-time
+search over a blog's raw post files needs nothing deployed. One runs on
 [my blog](https://diegopasquali.com/search), and its [source](https://github.com/dgopsq/writings) is
 public.
 
-What netgrep is not is a search *system*. It does not rank, and it reads every byte of a file it
-does not match — so against a large corpus, or one you can preprocess, a prebuilt index wins on both
-counts. The [limitations](07-limitations.md) page is specific about where that line falls.
+Use an index instead when the corpus is large, when you can preprocess it, or when results have to
+be ranked. netgrep reads every byte of a file that does not match, and it answers per file rather
+than ordering them; [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and
+[FlexSearch](https://github.com/nextapps-de/flexsearch) do those things well. The
+[limitations](07-limitations.md) page is specific about where the line falls.
