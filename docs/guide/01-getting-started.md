@@ -13,17 +13,12 @@ memory. There is no index to build and no backend to run.
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
   the regex engine's Unicode tables. It is the main cost of the approach.
-- **A URL the browser will let you read.** A cross-origin file needs `Access-Control-Allow-Origin`
-  from the host serving it; without that header the fetch fails before the search starts, and the
-  failure arrives as an opaque network error rather than as anything netgrep can explain. This is
-  the first gate a remote file has to pass, so check it first — but it is not the only one.
-- **A file that is readable without signing in.** netgrep builds its own request and sets nothing on
-  it: no `Authorization` header, no API key, and no cookies, since a cross-origin request sends none
-  by default. Anything behind a login is fetched as an anonymous stranger and comes back as the
-  host's 401, 403 or sign-in page, so a file you can only reach while authenticated cannot be
-  searched — a host can send `Access-Control-Allow-Origin: *` and still refuse an anonymous reader.
-  Letting a caller supply its own request options is a real ask, and it is deferred rather than
-  refused.
+- **A URL the browser can fetch anonymously.** A cross-origin file needs `Access-Control-Allow-Origin`
+  from its host, or the fetch fails before the search starts, as an opaque network error rather than
+  as anything netgrep can explain. That header is necessary and not sufficient: netgrep sets nothing
+  on the request — no `Authorization`, no API key, and no cookies, since a cross-origin request sends
+  none by default — so a file behind a login comes back as the host's 401 or sign-in page however
+  permissive its CORS policy. Supplying your own request options is deferred rather than refused.
 
 ## Install
 

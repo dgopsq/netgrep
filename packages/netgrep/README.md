@@ -9,12 +9,10 @@ netgrep streams a URL's response through [ripgrep](https://github.com/BurntSushi
 regex engine and answers the moment a matching line arrives — without waiting for the last byte, and
 without holding the file in memory. No index to build, no backend to run.
 
-It runs in a browser and nowhere else: it needs `fetch` with a streaming response body, it is ESM
-only, and a cross-origin URL has to send `Access-Control-Allow-Origin` or the request fails before
-the search starts. That header is the first gate a remote file has to pass, not the only one: netgrep
-builds its own request and puts nothing on it — no `Authorization` header, no API key, and no
-cookies, since a cross-origin request sends none by default. A file behind a login is fetched
-anonymously and so cannot be searched, however permissive its CORS policy is.
+It runs in a browser and nowhere else: it needs `fetch` with a streaming response body, and it is ESM
+only. The file has to be one the browser can fetch anonymously — a cross-origin URL needs
+`Access-Control-Allow-Origin`, and netgrep puts nothing on the request, so anything behind a login is
+out of reach however permissive its CORS policy.
 
 It answers one question per URL — *does this pattern occur?* — as a boolean, plus the first matching
 line if you pass `capture: 'line'`, or that line with each match's position within it under
