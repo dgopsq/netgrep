@@ -272,7 +272,15 @@ export function LogPanel({
               )}
             >
               {/* Stale: the text is context, the marks would be a claim. */}
-              {line !== undefined && (pending ? line.text : highlight(line))}
+              {/*
+                Highlighted only while this row is actually quoting a match of
+                the current query. A row that has gone stale, or has just
+                settled as a miss, keeps its old text as plain characters — the
+                300ms collapse animates from something, and marking a phrase
+                nobody searched for would be a claim rather than a fade.
+              */}
+              {line !== undefined &&
+                (pending || !quoting ? line.text : highlight(line))}
             </p>
           </div>
         </div>

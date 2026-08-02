@@ -10,7 +10,7 @@
       THE CANONICAL ORIGIN IS WRITTEN OUT IN FULL, SEVERAL TIMES, BELOW.
 
       Everywhere else in this app a URL is composed from `import.meta.env.BASE_URL`
-      (see src/lib/story-url.ts). That cannot be done here: `canonical`, `og:url`
+      (see `logUrl` in src/data/logs.ts). That cannot be done here: `canonical`, `og:url`
       and `og:image` are required to be absolute, and Vite's `base` is a path with
       no origin in it. So if the domain moves again, these have to be edited by
       hand — grep this file for `netgrep.diegopasquali.com`, and do not forget
