@@ -1,28 +1,24 @@
 import { CircleAlert } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Hero } from '@/components/hero';
+import { LogPanel, LogPanelHeader } from '@/components/log-panel';
 import { SearchField } from '@/components/search-field';
 import { StatsBar } from '@/components/stats-bar';
-import { StoryCard } from '@/components/story-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useCorpusSearch, useOrderedStories } from '@/hooks/use-corpus-search';
+import { sources } from '@/data/logs';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { useFlip } from '@/hooks/use-flip';
+import { useLogSearch } from '@/hooks/use-log-search';
 
 /**
- * Every keystroke starts 56 downloads, so the field is debounced before it
- * reaches the search rather than after.
+ * Every keystroke starts four downloads totalling hundreds of megabytes, so the
+ * field is debounced before it reaches the search rather than after.
  */
 const DEBOUNCE_MS = 250;
 
 export function App() {
   const [query, setQuery] = useState('');
   const pattern = useDebouncedValue(query.trim(), DEBOUNCE_MS);
-  const state = useCorpusSearch(pattern);
-  const ordered = useOrderedStories(state.order);
-  const gridRef = useRef<HTMLUListElement>(null);
-
-  useFlip(gridRef, state.order);
+  const state = useLogSearch(pattern);
 
   return (
     <div className="relative pb-24">
@@ -41,10 +37,12 @@ export function App() {
       </div>
 
       {/*
-        The field stays reachable while scrolling 56 cards.
+        The field stays sticky. Four panels no longer scroll past it the way 56
+        cards did, but the field is still the page's only control and a search
+        that runs for seconds is a search you may have scrolled away from.
 
         Two things here are deliberate. A gradient fade was tried first and is
-        wrong: its transparent end lets card borders show through the bar, so
+        wrong: its transparent end lets panel borders show through the bar, so
         rows appear to slide over the chips. And the panel is FULL BLEED,
         outside the max-width container — constrained to the container it ends
         mid-viewport, leaving a visible vertical seam where the blur stops.
@@ -67,11 +65,11 @@ export function App() {
       */}
       <div className="mx-auto w-full max-w-6xl px-5 pt-6">
         {/*
-        A pattern that will not compile is reported once per file, so 56
-        identical failures would otherwise fill the grid. The message is the
-        regex crate's own diagnostic, surfaced through the `Result` that
-        `search_bytes` returns.
-      */}
+          A pattern that will not compile is reported once per source, so
+          without this the list would carry four copies of the same complaint.
+          The message is the regex crate's own diagnostic, surfaced through the
+          `Result` that `search_bytes` returns.
+        */}
         {state.error && (
           <Alert className="mb-6">
             <CircleAlert />
@@ -84,29 +82,45 @@ export function App() {
 
         <StatsBar state={state} />
 
-        <ul
-          ref={gridRef}
-          className="mt-6 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {ordered.map((story) => (
-            <li key={story.id} data-flip-id={story.id}>
-              <StoryCard
-                story={story}
-                status={state.statuses[story.id] ?? 'idle'}
-                line={state.lines[story.id]}
-              />
-            </li>
-          ))}
-        </ul>
+        {/*
+          The panels are listed smallest source first and never reorder. That
+          order is the demonstration: reading down the column of elapsed times
+          against the column of sizes is how a visitor sees that answering is
+          paced by bytes read, not by file count. Sorting by who answered first
+          would scramble exactly that pairing.
+        */}
+        <div className="mt-6">
+          <LogPanelHeader />
+
+          <ul className="space-y-1.5">
+            {sources.map((source) => (
+              <li key={source.id}>
+                <LogPanel
+                  source={source}
+                  status={state.statuses[source.id] ?? 'idle'}
+                  line={state.lines[source.id]}
+                  elapsedMs={state.elapsedMs[source.id]}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
 
         <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
           <p>
-            Corpus: the Sherlock Holmes canon, public domain, from{' '}
+            Corpus: synthetic logs tiled from{' '}
             <a
               className="hover:text-primary underline underline-offset-4"
-              href="https://sherlock-holm.es/"
+              href="https://zenodo.org/records/8275861"
             >
-              sherlock-holm.es
+              loghub-2.0
+            </a>{' '}
+            samples (Apache, ZooKeeper, Hadoop, OpenSSH),{' '}
+            <a
+              className="hover:text-primary underline underline-offset-4"
+              href="https://creativecommons.org/licenses/by/4.0/"
+            >
+              CC BY 4.0
             </a>
             .
           </p>
