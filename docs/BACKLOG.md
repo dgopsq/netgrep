@@ -87,8 +87,9 @@ directions:
   minified input reaches.
 
 Needs one line longer than 64 KB **and** a match spanning most of it, so it is unreachable in hand-written
-text: the demo corpus is 2.6 MB of prose whose longest line is 76 bytes. Reachable in minified JavaScript or a
-single-line data dump.
+text — or in machine-written log output: the demo corpus is 408.6 MB whose longest line, across all four
+sources, is 387 bytes. Corpus size does not reach this; line length does. Reachable in minified JavaScript or
+a single-line data dump.
 
 Pinned by the three `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each with the control case that must
 not regress — a match arriving complete in **one** chunk is found, because the buffer is searched whole before
@@ -97,8 +98,8 @@ single chunk starts where the line starts.
 
 **Published anyway**, in [`guide/caveats.data.json`](guide/caveats.data.json) and so in the guide and the
 README, like item 17. The demo used to filter its own list down to what its corpus could reach; it no longer
-carries one, and a reader running netgrep over minified JavaScript reaches this whether or not the Sherlock
-canon does.
+carries one, and a reader running netgrep over minified JavaScript reaches this whether or not the demo's logs
+do.
 
 Not obviously worth fixing. Raising the ceiling trades memory for a case nobody has hit; removing it means
 buffering without bound. Left recorded rather than planned.
@@ -227,8 +228,11 @@ the same thread — the one workload the positioning in
 transferring chunks across the boundary, a second WASM instantiation per worker, and an abort path that has to
 cross it too.
 
-No consumer has reported it, and the demo does not show it: 56 files of prose are matched faster than a frame.
-Recorded so it is not rediscovered rather than because it is planned.
+No consumer has reported it, and nothing visibly stuttered while the demo was being rebuilt and checked in a
+browser on 2026-08-02. **But the demo has stopped being evidence against it.** It now puts 408.6 MB through
+the matcher between paints over roughly 1.8 seconds, where the old 2.6 MB corpus was matched faster than a
+frame — so this is a thing a visitor could plausibly notice rather than a note kept against rediscovery.
+Still not planned: a worker is a widening and needs its own issue and record.
 
 ---
 
@@ -239,6 +243,7 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 24 | The demo could not demonstrate what the project claims | **Shipped, 2026-08-02** — see [0026](decisions/0026-demo-as-log-dashboard.md). Never an Open item: it was recorded in [0025](decisions/0025-streaming-grep-over-http.md)'s *Consequences* as a gap that record could not close itself, and it is here so the closure is on the list rather than only in a decision. The demo searched 56 files averaging 46 KB under a hero reading *on files your tab could never hold*, so the corpus was a standing counterexample to the claim above it, and an answer-before-the-last-byte on a file that arrives in two chunks is invisible. Four generated logs — 8.3, 40.0, 120.1 and 240.2 MB, 408.6 MB together — tiled from four committed ~512 KB CC BY 4.0 loghub-2.0 seeds into a gitignored `public/logs/`, served as `.txt` so Pages compresses them. Measured in a browser: an early match answers at ~16 ms while the 240 MB source still streams, all four settle at ~1.8 s, and a marker a quarter of the way into that source answers at ~467 ms against ~1.8 s for a full read of it. **Half the gap only.** Constant memory is still not demonstrated on the page and is not scheduled to be — the page reports elapsed time and nothing else, because nothing else is honestly measurable from inside a tab. Two costs accepted: `pnpm dev` and `pnpm build:example` now depend on a ~0.8 s generation step, and the corpus is repetitive by construction, so the four `NETGREP-MARKER-*` lines are its only deep needles. Made item **23** visible — see above. |
 | 19 | The cache has no eviction, size cap or TTL | **Closed by deleting the cache**, not by adding eviction — see [0024](decisions/0024-remove-the-in-memory-cache.md). This was what remained of item **11** after [0018](decisions/0018-line-oriented-tail-buffer.md) fixed its O(n²) half. The eviction it asked for is the browser HTTP cache's, and always was: netgrep now retains nothing between searches, so there is no growth to bound. ⚠️ **This is the second item numbered 19** — see the note under *Item numbers are stable*, above. |
 | 21 | Early resolution did not cancel the request | **Fixed.** `resolve()` on a match stopped issuing reads but left the request open, so the remaining bytes still arrived and were still paid for — the saving was latency only. `reader.cancel()` at the match site ends the transfer. Never an Open item on this list: it was recorded in [0002](decisions/0002-search-while-downloading.md)'s *Consequences* and nowhere else, which is why it went unclosed for years. Pinned by "cancels the response stream on a match, ending the transfer" in `Netgrep.integration.spec.ts`, with the stream-ends-normally control beside it. |
 | 19 | Return the matching line alongside the boolean | **Shipped, and only because 3a landed first.** [Issue #19](https://github.com/dgopsq/netgrep/issues/19) proposed it against a `MemSink` that no longer existed — item 13 had already made it short-circuit, so the "closes 13 for free" argument was void and the sketch's ~10 lines were a diff already applied. What made it worth doing instead was [0018](decisions/0018-line-oriented-tail-buffer.md): before it, each chunk was searched alone, so a first occurrence straddling a seam was missed and the line returned was silently the file's *second* match, varying with how the network split the response. With whole lines delivered in order, the line is the file's first matching line under any chunking — pinned across six chunk sizes, and two searches of one url agree. Opt-in via a flag — `captureLine` then, `capture: 'line'` since 0022 — and a **second** WASM export so `search_bytes` is untouched and the boolean path allocates nothing, capped in Rust before the copy (`maxLineBytes`, default 4096), terminator stripped, decoded lossily. The flag's effect is in the type: no `line` key at all when off, and `result` is a discriminant when on. Left a residual in **3g** — inside an over-long line the "line" is a fragment. `.wasm` +15,769 bytes. 16 Rust tests, 20 TypeScript. See [0020](decisions/0020-the-matching-line.md), which also names the match details refused alongside it. Each match's position *within* that line shipped a day later as `capture: 'line-ranges'`, a third export on the same pattern — [0022](decisions/0022-capture-ranges.md), which reopened 0020's refusal of highlight ranges because its stated reason (re-run the pattern in JS) cannot reproduce smart case. |

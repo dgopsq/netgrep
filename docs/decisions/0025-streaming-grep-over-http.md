@@ -214,3 +214,25 @@ them is not mistaken for refusing them on the merits — the distinction the tab
 | Package renames, a new npm scope, API widening | [0022](0022-capture-ranges.md) was the last widening and was argued on its own merits. A repositioning is not a licence to reopen the surface |
 | A CORS proxy for the demo | A third-party runtime dependency on the one page whose entire value is that it is accurate |
 | Live-fetching Zenodo, or any third-party corpus host | No CORS, zip containers, and a research host's bandwidth is not ours to spend |
+
+---
+
+## Amendment (2026-08-02) — the timing half of the demo's gap is closed
+
+*The demo now claims something it cannot yet demonstrate* said PR 4 would close the gap for the timing half
+and that this record would be amended when it landed. It has, in
+[0026](0026-demo-as-log-dashboard.md): the 56-file, 2.6 MB story corpus is replaced by four generated logs of
+8.3, 40.0, 120.1 and 240.2 MB, and the page reports elapsed-at-answer per source. A match near the head of a
+file answers at ~16 ms while the 240 MB source is still streaming; all four settle at ~1.8 s; a marker planted
+a quarter of the way into that same source answers at ~467 ms against ~1.8 s for a full read of it. Property 2
+is now visible rather than taken on trust, and the corpus has stopped being a counterexample to the hero.
+
+**The memory half is not closed and is not scheduled.** Constant memory remains a documented property a
+visitor can check in devtools, for the reason stated above: netgrep exposes no progress and peak memory is not
+reliably measurable in-page. **Do not invent a number to fix this** stands unchanged, and 0026 restates it,
+because a dashboard is precisely the shape of page that invites one.
+
+One line above is now out of date in a way worth naming rather than editing: *Live-fetching Zenodo, or any
+third-party corpus host* stays refused, and 0026 refuses it again — but the corpus is loghub, from Zenodo,
+committed as four ~512 KB CC BY 4.0 seed prefixes and tiled at build time. Refusing the runtime dependency and
+taking the data are the same decision, not opposite ones.

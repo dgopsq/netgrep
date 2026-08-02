@@ -52,8 +52,13 @@ pnpm typecheck     # tsc --noEmit
 pnpm lint          # Biome (JS/TS) and clippy (-D warnings); lint:js / lint:rust run one each
 pnpm format        # Biome, writes in place
 pnpm build:wasm    # rebuild after any change to packages/search
-pnpm dev           # the Sherlock Holmes demo — a manual smoke test, not a test
+pnpm dev           # the log-dashboard demo — a manual smoke test, not a test
 ```
+
+**`pnpm dev` generates 408.6 MB into `packages/example/public/logs/` the first time you run it**, in under a
+second, by tiling four committed ~512 KB log seeds. That directory is gitignored and the step is skipped once
+the files are at size, but it is a surprising amount of disk to appear in a checkout without warning — and
+each worktree gets its own copy.
 
 The integration half of `pnpm test` drives the real WASM engine in a real browser, so it needs Playwright's
 Chromium. `pnpm bootstrap` installs it; on its own it is:
@@ -150,9 +155,10 @@ Then, in rough order of how likely each is to bite:
   that no longer exists. Every limitation lives once, in `docs/guide/caveats.data.json`: delete the entry and
   run `pnpm docs:sync`, in the same PR. **CI catches this now** — `pnpm docs:sync --check` fails if the guide
   or the README has drifted from that file. What it cannot catch is a defect nobody entered into it
-  in the first place, so adding one is still yours to judge. (Note the demo's cache stays off even though the
-  defects that justified it are fixed — it is off so the page's timings keep measuring the network, and no
-  library fix changes that.)
+  in the first place, so adding one is still yours to judge. (The demo's timings measure the network, and
+  since [decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) removed the in-memory cache that is
+  true by construction — there is no flag to set and nothing retained that could be timed instead of a fetch.
+  Do not add a layer in the demo that answers a repeat query from memory.)
   [AGENTS.md §2.3](AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
 - **Do not bump dependencies as a side effect.** A version change is its own deliberate, tested change. If a
   tool suggests one while you are doing something else, add it to `docs/BACKLOG.md`.
