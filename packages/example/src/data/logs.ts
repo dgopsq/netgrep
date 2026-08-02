@@ -36,7 +36,7 @@ export const sources: LogSource[] = config.sources;
  *
  * The site now serves from the root of `https://netgrep.diegopasquali.com`, so
  * that value is `/` and this function currently does nothing a hard-coded
- * `/logs/x.log` would not. It stays anyway: under the old project page at
+ * `/logs/x.txt` would not. It stays anyway: under the old project page at
  * `dgopsq.github.io/netgrep/` the base was `/netgrep/`, and the original example
  * hard-coded root-relative paths in a checked-in list, which fails in a
  * particularly quiet way — every fetch 404s, every search returns `false`, and

@@ -100,9 +100,17 @@ then suppressing it are not.
 
 ## Consequences
 
-**The Pages artifact is 438 MB, and the upload path is the risk this PR carries.** `actions/upload-pages-artifact`
+**The Pages artifact is 410 MB, and the upload path is the risk this PR carries.** `actions/upload-pages-artifact`
 tars and gzips, so the upload itself should be tens of megabytes, but the tar step walks the whole directory.
 Nothing about that was verifiable before merging, and CI is where it will show if it shows at all.
+
+**The other quota is the host's, and it is the one this record nearly missed.** GitHub Pages publishes a soft
+limit of roughly 100 GB of bandwidth a month. A query matching nothing reads all four files, which is ~26 MB
+compressed — so on the order of 3,800 such queries would exhaust it, and GitHub's remedy is to throttle or
+disable the site. Two things already blunt it: serving `.txt` buys the 16× that turns 408 MB into 26 MB, and
+Pages' own `max-age=600` means a visitor trying several patterns pays once. It is recorded here because the
+reasoning above is careful about the *visitor's* bandwidth and was silent about the host's, and a record that
+argues one and not the other looks complete when it is not.
 
 **`pnpm dev` and `pnpm build:example` now depend on a generation step.** `prebuild` and `predev` run
 `build-logs.mjs`, which skips any file already at its target — so the cost is paid once per checkout, at
