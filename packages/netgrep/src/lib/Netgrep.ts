@@ -5,19 +5,11 @@ import init, {
 } from '@netgrep/search';
 import type { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
 import type { NetgrepCapture } from './data/NetgrepCapture.js';
-import type { NetgrepConfig } from './data/NetgrepConfig.js';
 import type { NetgrepInput } from './data/NetgrepInput.js';
 import type { NetgrepMatchRange } from './data/NetgrepMatchRange.js';
 import type { NetgrepResult } from './data/NetgrepResult.js';
 import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
 import { splitAtLastLine } from './splitAtLastLine.js';
-
-/**
- * The default configuration used by `netgrep`.
- */
-const defaultConfig: NetgrepConfig = {
-  enableMemoryCache: true,
-};
 
 /**
  * Ceiling on the bytes retained between two `fetch` chunks.
@@ -223,25 +215,6 @@ const wasmReady = init();
  * over HTTP.
  */
 export class Netgrep {
-  private readonly config: NetgrepConfig;
-  private readonly memoryCache: Record<string, Uint8Array> = {};
-
-  /**
-   * Downloads currently in flight, keyed by url — BACKLOG 18.
-   *
-   * Populated only when the memory cache is on, because the cache entry is what
-   * a second caller is handed. With the cache off there is nothing to hand over
-   * and waiting would save no request.
-   */
-  private readonly inFlight: Record<string, Promise<unknown>> = {};
-
-  constructor(config?: Partial<NetgrepConfig>) {
-    this.config = {
-      ...defaultConfig,
-      ...config,
-    };
-  }
-
   /**
    * Search a remote file for a specific pattern.
    * This method uses `ripgrep` under the hood in order to
@@ -284,35 +257,7 @@ export class Netgrep {
       config?.maxLineBytes as number | undefined,
     );
 
-    if (this.config.enableMemoryCache) {
-      // Waited on ONCE, not until the url is quiet. Looping until no download
-      // is in flight would serialise callers that used to fetch in parallel,
-      // and buy no fewer requests. The rejection is swallowed because the
-      // recourse to a failed download is the recourse to a miss: fetch below,
-      // with this caller's own signal.
-      const ahead = this.inFlight[url];
-
-      if (ahead) await ahead.catch(() => undefined);
-
-      // Search the content in the memory cache if it's enabled. No tail buffer
-      // needed: entries are only written from a drained stream, so an entry is
-      // the whole file in one buffer with no boundaries to lose a match across.
-      const cached = this.memoryCache[url];
-
-      if (cached) {
-        // The whole file in one buffer, so the first matching line here is the
-        // file's first matching line — the same one a cold fetch reports.
-        return toResult<T, C>(
-          url,
-          pattern,
-          metadata,
-          runEngine(cached, pattern, capture, maxLineBytes),
-          capture,
-        );
-      }
-    }
-
-    const running = this.executeSearch<T, C>(
+    return this.executeSearch<T, C>(
       url,
       pattern,
       metadata,
@@ -320,29 +265,14 @@ export class Netgrep {
       capture,
       maxLineBytes,
     );
-
-    if (this.config.enableMemoryCache) {
-      this.inFlight[url] = running;
-
-      // Two waiters can wake together and both register, so the identity check
-      // matters: an overwritten search must not delete its successor's entry.
-      // Both handlers, so this never becomes a rejection of its own — the
-      // caller holds `running` and answers for that one.
-      const settle = () => {
-        if (this.inFlight[url] === running) delete this.inFlight[url];
-      };
-
-      running.then(settle, settle);
-    }
-
-    return running;
   }
 
   /**
    * One fetch-and-stream pass over a url, searching each chunk as it arrives.
    *
-   * Knows nothing about the cache read or the in-flight registry: `search`
-   * decides whether this needs to run at all.
+   * Separate from `search` so the public method stays what it reads as — the
+   * engine gate and the argument resolution — with the loop below it. The
+   * split arrived with the cache and outlived it.
    */
   private executeSearch<T extends object, C extends NetgrepCapture>(
     url: string,
@@ -361,14 +291,6 @@ export class Netgrep {
       // Whether `tail` still needs searching when the stream ends. False in the
       // windowed case, where it was already searched as part of the whole buffer.
       let tailPending = false;
-
-      const caching = this.config.enableMemoryCache;
-
-      // Joined ONCE at the end rather than reallocated per chunk, which used to
-      // make this O(n²) — BACKLOG 11. Left empty when the cache is off: the
-      // search never needs more than the tail, so collecting anyway would retain
-      // all 500 MB of a 500 MB file for nothing.
-      const chunks: Array<Uint8Array> = [];
 
       const handleReader = (
         reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -390,13 +312,9 @@ export class Netgrep {
                 ? runEngine(tail, pattern, capture, maxLineBytes)
                 : NO_HIT;
 
-            this.commitMemoryCache(url, chunks, caching);
-
             resolve(toResult<T, C>(url, pattern, metadata, hit, capture));
             return;
           }
-
-          if (caching) chunks.push(value);
 
           // Prepend the held-back tail, then hand the engine only whole lines.
           const {
@@ -546,26 +464,5 @@ export class Netgrep {
     } else {
       return JSON.stringify(err);
     }
-  }
-
-  /**
-   * Store a fully downloaded file in the in-memory cache.
-   *
-   * ONLY EVER CALLED ON A DRAINED STREAM — BACKLOG 3b. Writing per chunk left a
-   * prefix behind with nothing marking it incomplete, so a later search for a
-   * term further down answered `false` about text never downloaded.
-   *
-   * Assigns rather than appends. Two concurrent searches of one url no longer
-   * reach here together — the second waits on the first — but an assignment is
-   * what makes that safe to rely on rather than something to reason about.
-   */
-  private commitMemoryCache(
-    url: string,
-    chunks: Array<Uint8Array>,
-    caching: boolean,
-  ) {
-    if (!caching) return;
-
-    this.memoryCache[url] = concatBytes(chunks);
   }
 }

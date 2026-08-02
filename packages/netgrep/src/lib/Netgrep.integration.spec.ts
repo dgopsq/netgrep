@@ -213,10 +213,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('finds a pattern contained in a single chunk', async () => {
       serve([encoder.encode(POEM)]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'set aside',
-      );
+      const result = await new Netgrep().search('url', 'set aside');
 
       expect(result).toMatchObject({ result: true, pattern: 'set aside' });
     });
@@ -225,10 +222,7 @@ describe('Netgrep integration (real WASM)', () => {
       const chunks = chunked(POEM, 16);
       const state = serve(chunks);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'dragon',
-      );
+      const result = await new Netgrep().search('url', 'dragon');
 
       expect(result).toMatchObject({ result: false });
       // Every chunk, plus the final read that reports `done`.
@@ -238,10 +232,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('finds a pattern that only appears in a later chunk', async () => {
       serve(chunked(POEM, 16));
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'stones',
-      );
+      const result = await new Netgrep().search('url', 'stones');
 
       expect(result).toMatchObject({ result: true });
     });
@@ -255,7 +246,7 @@ describe('Netgrep integration (real WASM)', () => {
       const chunks = chunked(POEM, 16);
       const state = serve(chunks);
 
-      await new Netgrep({ enableMemoryCache: false }).search('url', 'Wiseman');
+      await new Netgrep().search('url', 'Wiseman');
 
       expect(state.reads).toBe(3);
 
@@ -267,10 +258,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('cancels the response stream on a match, ending the transfer', async () => {
       const state = serve(chunked(POEM.repeat(200), 64));
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'Jhaampe',
-      );
+      const result = await new Netgrep().search('url', 'Jhaampe');
 
       expect(result.result).toBe(true);
       expect(state.cancelled).toBe(true);
@@ -281,10 +269,7 @@ describe('Netgrep integration (real WASM)', () => {
       const chunks = chunked(POEM, 64);
       const state = serve(chunks);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'Nothingmatchesthis',
-      );
+      const result = await new Netgrep().search('url', 'Nothingmatchesthis');
 
       expect(result.result).toBe(false);
       expect(state.cancelled).toBe(false);
@@ -304,7 +289,7 @@ describe('Netgrep integration (real WASM)', () => {
       serve([encoder.encode('hello won'), encoder.encode('derful world')]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
+        new Netgrep().search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: true });
     });
 
@@ -313,7 +298,7 @@ describe('Netgrep integration (real WASM)', () => {
       // though it were a whole document made the seam look like a line start to
       // `^` and a line end to `$`, so both invented matches wherever the network
       // happened to split. Whole lines fix both directions at once.
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       serve([encoder.encode('hello won'), encoder.encode('derful world\n')]);
       await expect(NG.search('a', 'won$')).resolves.toMatchObject({
@@ -340,7 +325,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('matches a pattern spanning multiple lines of one chunk', async () => {
       serve([encoder.encode(POEM)]);
 
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       // Every line is reachable; only the `^` anchor misbehaves (see
       // `documented defects` below).
@@ -355,7 +340,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('supports regex syntax, not just literals', async () => {
       serve([encoder.encode(POEM)]);
 
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       await expect(
         NG.search('url', 'Queen (and|or) Crown'),
@@ -367,10 +352,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('applies smart case: a lowercase pattern is case-insensitive', async () => {
       serve([encoder.encode(POEM)]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'both queen and crown',
-      );
+      const result = await new Netgrep().search('url', 'both queen and crown');
 
       expect(result).toMatchObject({ result: true });
     });
@@ -378,10 +360,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('applies smart case: an uppercased pattern is case-sensitive', async () => {
       serve([encoder.encode('one wiseman came to jhaampe-town.')]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'Wiseman',
-      );
+      const result = await new Netgrep().search('url', 'Wiseman');
 
       expect(result).toMatchObject({ result: false });
     });
@@ -389,11 +368,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('returns the metadata it was given', async () => {
       serve([encoder.encode(POEM)]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'Wiseman',
-        { id: 42 },
-      );
+      const result = await new Netgrep().search('url', 'Wiseman', { id: 42 });
 
       expect(result).toMatchObject({ result: true, metadata: { id: 42 } });
     });
@@ -401,7 +376,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('rejects when the response carries no body', async () => {
       mockFetch.mockImplementation(() => Promise.resolve({ body: null }));
 
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       await expect(NG.search('url', 'Wiseman')).rejects.toThrow(
         "The response doesn't contain a body",
@@ -413,10 +388,7 @@ describe('Netgrep integration (real WASM)', () => {
     it('reports false for a body that closes without emitting anything', async () => {
       const state = serve([]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'Wiseman',
-      );
+      const result = await new Netgrep().search('url', 'Wiseman');
 
       expect(result).toMatchObject({ result: false });
       // The single read that reports `done`.
@@ -434,7 +406,7 @@ describe('Netgrep integration (real WASM)', () => {
       ]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'Wiseman'),
+        new Netgrep().search('url', 'Wiseman'),
       ).resolves.toMatchObject({ result: true });
     });
 
@@ -444,7 +416,7 @@ describe('Netgrep integration (real WASM)', () => {
       serve([encoder.encode('first line\n'), encoder.encode('Wiseman')]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'Wiseman$'),
+        new Netgrep().search('url', 'Wiseman$'),
       ).resolves.toMatchObject({ result: true });
     });
 
@@ -454,9 +426,9 @@ describe('Netgrep integration (real WASM)', () => {
       // sides at once.
       serve(chunked('il a bu un café noir\n', 8));
 
-      await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'café'),
-      ).resolves.toMatchObject({ result: true });
+      await expect(new Netgrep().search('url', 'café')).resolves.toMatchObject({
+        result: true,
+      });
     });
   });
 
@@ -464,9 +436,10 @@ describe('Netgrep integration (real WASM)', () => {
     it('resolves a result per input against the real engine', async () => {
       serve([encoder.encode(POEM)]);
 
-      const results = await new Netgrep({
-        enableMemoryCache: false,
-      }).searchBatch([{ url: 'a' }, { url: 'b' }, { url: 'c' }], 'fell asleep');
+      const results = await new Netgrep().searchBatch(
+        [{ url: 'a' }, { url: 'b' }, { url: 'c' }],
+        'fell asleep',
+      );
 
       expect(results).toMatchObject([
         { url: 'a', result: true, error: null },
@@ -487,9 +460,7 @@ describe('Netgrep integration (real WASM)', () => {
         });
       });
 
-      const results = await new Netgrep({
-        enableMemoryCache: false,
-      }).searchBatch(
+      const results = await new Netgrep().searchBatch(
         [{ url: 'hit' }, { url: 'miss' }, { url: 'broken' }],
         'Wiseman',
       );
@@ -509,7 +480,7 @@ describe('Netgrep integration (real WASM)', () => {
       const results: Array<{ url: string; result: boolean }> = [];
 
       await new Promise<void>((resolve) => {
-        new Netgrep({ enableMemoryCache: false }).searchBatchWithCallback(
+        new Netgrep().searchBatchWithCallback(
           [{ url: 'a' }, { url: 'b' }],
           'Jhaampe',
           (result) => {
@@ -534,14 +505,9 @@ describe('Netgrep integration (real WASM)', () => {
       controller.abort();
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          'Wiseman',
-          undefined,
-          {
-            signal: controller.signal,
-          },
-        ),
+        new Netgrep().search('url', 'Wiseman', undefined, {
+          signal: controller.signal,
+        }),
       ).rejects.toThrow('Aborted');
     });
 
@@ -549,11 +515,11 @@ describe('Netgrep integration (real WASM)', () => {
       const controller = serveUnlessAborted([encoder.encode(POEM)]);
       controller.abort();
 
-      const results = await new Netgrep({
-        enableMemoryCache: false,
-      }).searchBatch([{ url: 'a' }, { url: 'b' }], 'Wiseman', {
-        signal: controller.signal,
-      });
+      const results = await new Netgrep().searchBatch(
+        [{ url: 'a' }, { url: 'b' }],
+        'Wiseman',
+        { signal: controller.signal },
+      );
 
       expect(results).toMatchObject([
         { url: 'a', result: false, error: 'Aborted' },
@@ -562,29 +528,11 @@ describe('Netgrep integration (real WASM)', () => {
     });
   });
 
-  describe('in-memory cache', () => {
-    it('answers a repeated search from cache without re-fetching', async () => {
+  describe('retaining nothing', () => {
+    it('re-fetches on every search', async () => {
       serve([encoder.encode(POEM)]);
 
-      const NG = new Netgrep({ enableMemoryCache: true });
-
-      await expect(NG.search('url', 'dragon')).resolves.toMatchObject({
-        result: false,
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      // Whole file cached (the miss drained the stream), so a different
-      // pattern is answered from memory.
-      await expect(NG.search('url', 'Wiseman')).resolves.toMatchObject({
-        result: true,
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('re-fetches every time when the cache is disabled', async () => {
-      serve([encoder.encode(POEM)]);
-
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       await NG.search('url', 'dragon');
       await NG.search('url', 'dragon');
@@ -592,54 +540,27 @@ describe('Netgrep integration (real WASM)', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('answers a concurrent search of the same url from the one download', async () => {
+    it('fetches once per concurrent search of one url, by design', async () => {
+      // The cost of retaining nothing, and the reason the caveat calls this
+      // by design rather than a defect. This used to be BACKLOG 18: a per-url
+      // registry made a second caller wait for the first and answer from the
+      // entry it wrote. That entry WAS the handover, and it is gone — so
+      // sharing would now mean either keeping every chunk of a
+      // file nobody asked to keep, or teeing the response stream and with it
+      // the first caller's abort signal. Both callers fetch instead. The
+      // answers are correct; the second request is wasted.
+      //
+      // One chunk, so this does not depend on how the two reads interleave.
       serve([encoder.encode(POEM)]);
 
-      const NG = new Netgrep({ enableMemoryCache: true });
+      const NG = new Netgrep();
 
-      // Order matters: the miss goes first, so the caller that fetches is the
-      // one that drains the stream and writes the entry. The second waits on it
-      // and is answered from that entry — a different pattern, same bytes.
       const results = await Promise.all([
         NG.search('url', 'dragon'),
         NG.search('url', 'Wiseman'),
       ]);
 
       expect(results.map((r) => r.result)).toEqual([false, true]);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('lets a waiter fetch for itself when the download ahead cached nothing', async () => {
-      // The honest residual of sharing one download: completeness is not known
-      // until `done`, so a caller that matches early resolves without writing
-      // an entry. The waiter wakes to a cold cache and has to fetch after all —
-      // one request saved is not a guarantee, only the common case.
-      serve([encoder.encode('needle\n'), encoder.encode('omega\n')]);
-
-      const NG = new Netgrep({ enableMemoryCache: true });
-
-      const results = await Promise.all([
-        NG.search('url', 'needle'),
-        NG.search('url', 'omega'),
-      ]);
-
-      expect(results.map((r) => r.result)).toEqual([true, true]);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('still fetches twice for concurrent searches when the cache is disabled', async () => {
-      // Deliberate, and the boundary of the in-flight registry. With no cache
-      // there is no entry to hand a waiter, so waiting would buy it nothing but
-      // the first download's latency. Both go to the network instead.
-      serve([encoder.encode(POEM)]);
-
-      const NG = new Netgrep({ enableMemoryCache: false });
-
-      await Promise.all([
-        NG.search('url', 'dragon'),
-        NG.search('url', 'dragon'),
-      ]);
-
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
@@ -651,9 +572,9 @@ describe('Netgrep integration (real WASM)', () => {
    * `packages/search/tests/search.rs`, and the wiring is pinned with the engine
    * mocked in `Netgrep.spec.ts`. What only this suite can establish is the
    * property the feature actually rests on: that the line survives the trip
-   * through `fetch`, the tail buffer, the cache and the WASM boundary — and
-   * that it is the FILE's first matching line rather than the first one in
-   * whichever chunk happened to match.
+   * through `fetch`, the tail buffer and the WASM boundary — and that it is
+   * the FILE's first matching line rather than the first one in whichever
+   * chunk happened to match.
    *
    * That property is owed entirely to the tail buffer — BACKLOG 3a. Before it,
    * each chunk was searched in isolation, so a first occurrence straddling a seam
@@ -671,12 +592,7 @@ describe('Netgrep integration (real WASM)', () => {
       serve([encoder.encode(POEM)]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          'aside',
-          undefined,
-          CAPTURE,
-        ),
+        new Netgrep().search('url', 'aside', undefined, CAPTURE),
       ).resolves.toMatchObject({
         result: true,
         line: 'He set aside both Queen and Crown',
@@ -692,7 +608,7 @@ describe('Netgrep integration (real WASM)', () => {
         'He set aside both Queen and Crown\n' +
         'A second Wiseman followed after.\n';
 
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
       const lines: Array<string | null> = [];
 
       for (const size of [1, 3, 7, 16, 40, 1024]) {
@@ -722,41 +638,10 @@ describe('Netgrep integration (real WASM)', () => {
       ]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          'aside',
-          undefined,
-          CAPTURE,
-        ),
+        new Netgrep().search('url', 'aside', undefined, CAPTURE),
       ).resolves.toMatchObject({
         line: 'He set aside both Queen and Crown',
       });
-    });
-
-    it('gives the same line from the cache as from the network', async () => {
-      // The cache path searches one whole buffer while the streaming path
-      // searches a sequence of line-aligned blocks. Different code, and the
-      // answer has to agree — otherwise a warm page would show a different
-      // snippet than a cold one, which reads as a bug rather than as a cache.
-      serve(chunked(POEM, 7));
-
-      const NG = new Netgrep({ enableMemoryCache: true });
-
-      // A miss first, so the stream drains and the entry is written.
-      await NG.search('url', 'dragon');
-
-      const cold = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'bones',
-        undefined,
-        CAPTURE,
-      );
-      const warm = await NG.search('url', 'bones', undefined, CAPTURE);
-
-      expect(warm.result && warm.line).toBe(
-        'Gave his bones to the stones to keep.',
-      );
-      expect(cold.result && cold.line).toBe(warm.result && warm.line);
     });
 
     it('returns the final line of a file that does not end in a newline', async () => {
@@ -768,12 +653,7 @@ describe('Netgrep integration (real WASM)', () => {
       ]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          'Wiseman',
-          undefined,
-          CAPTURE,
-        ),
+        new Netgrep().search('url', 'Wiseman', undefined, CAPTURE),
       ).resolves.toMatchObject({ line: 'Wiseman at the end' });
     });
 
@@ -784,18 +664,13 @@ describe('Netgrep integration (real WASM)', () => {
       serve(chunked('nothing\nil a bu un café noir\n', 8));
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          'café',
-          undefined,
-          CAPTURE,
-        ),
+        new Netgrep().search('url', 'café', undefined, CAPTURE),
       ).resolves.toMatchObject({ line: 'il a bu un café noir' });
     });
 
     it('reports a miss as `line: null`, and omits the key entirely when not asked', async () => {
       serve([encoder.encode(POEM)]);
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       await expect(
         NG.search('a', 'dragon', undefined, CAPTURE),
@@ -810,12 +685,10 @@ describe('Netgrep integration (real WASM)', () => {
     it('truncates at maxLineBytes, on a character boundary', async () => {
       serve([encoder.encode(`needle ${'é'.repeat(50)}\n`)]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'needle',
-        undefined,
-        { capture: 'line', maxLineBytes: 12 },
-      );
+      const result = await new Netgrep().search('url', 'needle', undefined, {
+        capture: 'line',
+        maxLineBytes: 12,
+      });
 
       // 'needle ' is 7 bytes, leaving 5 for two-byte characters — so two of
       // them, not two and a half. A split would have shown as U+FFFD.
@@ -832,9 +705,11 @@ describe('Netgrep integration (real WASM)', () => {
             }),
       );
 
-      const results = await new Netgrep({
-        enableMemoryCache: false,
-      }).searchBatch([{ url: 'hit' }, { url: 'broken' }], 'asleep', CAPTURE);
+      const results = await new Netgrep().searchBatch(
+        [{ url: 'hit' }, { url: 'broken' }],
+        'asleep',
+        CAPTURE,
+      );
 
       expect(results).toMatchObject([
         {
@@ -851,12 +726,7 @@ describe('Netgrep integration (real WASM)', () => {
       serve([encoder.encode(POEM)]);
 
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          '(',
-          undefined,
-          CAPTURE,
-        ),
+        new Netgrep().search('url', '(', undefined, CAPTURE),
       ).rejects.toThrow('unclosed group');
     });
   });
@@ -867,12 +737,9 @@ describe('Netgrep integration (real WASM)', () => {
       // marshalling — the one thing the mocked unit suite cannot check.
       serve([encoder.encode('café needle café\n')]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'needle',
-        undefined,
-        { capture: 'line-ranges' },
-      );
+      const result = await new Netgrep().search('url', 'needle', undefined, {
+        capture: 'line-ranges',
+      });
 
       expect(result.result).toBe(true);
       if (result.result) {
@@ -889,12 +756,9 @@ describe('Netgrep integration (real WASM)', () => {
       for (const size of [1, 3, 7, 16, 64]) {
         serve(chunked('nothing\ncat and cat\ncat again\n', size));
 
-        const result = await new Netgrep({ enableMemoryCache: false }).search(
-          'url',
-          'cat',
-          undefined,
-          { capture: 'line-ranges' },
-        );
+        const result = await new Netgrep().search('url', 'cat', undefined, {
+          capture: 'line-ranges',
+        });
 
         expect(result.result).toBe(true);
         if (result.result) {
@@ -910,12 +774,9 @@ describe('Netgrep integration (real WASM)', () => {
     it('applies smart case to the ranges, not just the verdict', async () => {
       serve([encoder.encode('Needle\n')]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'needle',
-        undefined,
-        { capture: 'line-ranges' },
-      );
+      const result = await new Netgrep().search('url', 'needle', undefined, {
+        capture: 'line-ranges',
+      });
 
       expect(result.result).toBe(true);
       if (result.result) {
@@ -926,37 +787,15 @@ describe('Netgrep integration (real WASM)', () => {
     it('drops ranges past the maxLineBytes cut, keeping result true', async () => {
       serve([encoder.encode('aaaa needle\n')]);
 
-      const result = await new Netgrep({ enableMemoryCache: false }).search(
-        'url',
-        'needle',
-        undefined,
-        { capture: 'line-ranges', maxLineBytes: 4 },
-      );
+      const result = await new Netgrep().search('url', 'needle', undefined, {
+        capture: 'line-ranges',
+        maxLineBytes: 4,
+      });
 
       expect(result.result).toBe(true);
       if (result.result) {
         expect(result.line).toBe('aaaa');
         expect(result.ranges).toEqual([]);
-      }
-    });
-
-    it('agrees between a cold fetch and a warm cache hit', async () => {
-      serve([encoder.encode('one cat two cat\n')]);
-      const ng = new Netgrep({ enableMemoryCache: true });
-
-      const cold = await ng.search('url', 'zzz-absent'); // drains, caches
-      expect(cold.result).toBe(false);
-
-      const warm = await ng.search('url', 'cat', undefined, {
-        capture: 'line-ranges',
-      });
-
-      expect(warm.result).toBe(true);
-      if (warm.result) {
-        expect(warm.ranges).toEqual([
-          { start: 4, end: 7 },
-          { start: 12, end: 15 },
-        ]);
       }
     });
   });
@@ -976,6 +815,13 @@ describe('Netgrep integration (real WASM)', () => {
    *
    * When one of these is genuinely fixed, the corresponding assertion must be
    * inverted IN THE SAME PR. That is the point: the fix cannot land quietly.
+   *
+   * An entry stays while the behaviour it names could still change silently —
+   * inverted in place once fixed. It leaves only when there is no defect left
+   * to track: the subject was deleted, so there is nothing to assert, or the
+   * behaviour is now deliberate and its assertion belongs above as a design
+   * boundary. Removing the in-memory cache took BACKLOG 3b and BACKLOG 18 out
+   * on one of those grounds each.
    *
    * Tracked in `docs/BACKLOG.md`.
    *
@@ -1004,27 +850,29 @@ describe('Netgrep integration (real WASM)', () => {
       // Control: the same bytes in one chunk match.
       serve([encoder.encode(text)]);
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
+        new Netgrep().search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: true });
 
       // Previously false. This is the case that was broken.
       serve([encoder.encode('hello won'), encoder.encode('derful world')]);
       await expect(
-        new Netgrep({ enableMemoryCache: false }).search('url', 'wonderful'),
+        new Netgrep().search('url', 'wonderful'),
       ).resolves.toMatchObject({ result: true });
     });
 
-    it('BACKLOG 3a (FIXED): the answer no longer depends on whether the cache is warm', async () => {
-      // The sharpest way to see 3a: the cache reassembled the chunks, so the
-      // second search saw one buffer where the first saw fragments — same url,
-      // same pattern, two answers, decided by whether anyone had asked before.
+    it('BACKLOG 3a (FIXED): two searches of one url agree', async () => {
+      // The sharpest way to see 3a used to be the cache: it reassembled the
+      // chunks, so the second search saw one buffer where the first saw
+      // fragments — same url, same pattern, two answers, decided by whether
+      // anyone had asked before.
       //
-      // Both are `true` now, for two different reasons: the tail buffer finds it
-      // first time, and an early resolution no longer leaves an entry to
-      // disagree (BACKLOG 3b, below) — hence two fetches.
+      // Nothing is retained between searches now, so both of these stream.
+      // What this still pins is the tail buffer: it finds the match on the
+      // first pass, under a chunking that splits it, so repeating a search
+      // cannot change its answer.
       serve(chunked(POEM, 7));
 
-      const NG = new Netgrep({ enableMemoryCache: true });
+      const NG = new Netgrep();
 
       await expect(NG.search('url', 'Jhaampe-town')).resolves.toMatchObject({
         result: true,
@@ -1034,94 +882,6 @@ describe('Netgrep integration (real WASM)', () => {
         result: true,
       });
       expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('BACKLOG 3b (FIXED): an early resolution leaves no cache entry to poison', async () => {
-      // This assertion used to sit here inverted, pinning a real bug: the cache
-      // was written per chunk, so resolving on the first match left an entry
-      // holding only the PREFIX read so far, unmarked as incomplete — and a later
-      // search for a term further down answered `false` about text never
-      // downloaded.
-      //
-      // The entry is now written only on `done`, so a partial one is never
-      // created. Per the block comment above, inverted in the same PR.
-      //
-      // The newlines matter: without them the match would only be found by the
-      // end-of-stream flush, which is a drained stream, exercising nothing.
-      serve([
-        encoder.encode('alpha\n'),
-        encoder.encode('needle\n'),
-        encoder.encode('omega\n'),
-      ]);
-
-      const NG = new Netgrep({ enableMemoryCache: true });
-
-      await expect(NG.search('url', 'needle')).resolves.toMatchObject({
-        result: true,
-      });
-
-      // 'omega' IS in the file, and the answer now says so. It costs a second
-      // fetch, which is the correct trade against a confident wrong answer.
-      await expect(NG.search('url', 'omega')).resolves.toMatchObject({
-        result: true,
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-
-      // Finding 'omega' in the LAST chunk still caches nothing: completeness is
-      // not known until `done`, one read later. Only a search reaching `done`
-      // caches — a miss, or a match found in the flush.
-      await expect(NG.search('url', 'dragon')).resolves.toMatchObject({
-        result: false,
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(3);
-
-      // That miss drained the stream, so this is answered from memory. The cache
-      // still works; it just no longer lies.
-      await expect(NG.search('url', 'omega')).resolves.toMatchObject({
-        result: true,
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(3);
-    });
-
-    it('BACKLOG 18 (FIXED): concurrent searches of one url share a single fetch', async () => {
-      // This assertion used to sit here inverted, pinning a real bug: nothing
-      // tracked a download already in flight, so two searches of one url
-      // started before either resolved both fetched it. A per-url registry now
-      // makes the second wait for the first and answer from the entry it
-      // writes. Per the block comment above, inverted in the same PR.
-      //
-      // It works only with the cache ON, because the entry IS the handover.
-      // With it off both still fetch, deliberately — pinned in the cache suite
-      // above rather than here, since that is a design boundary and not a bug.
-      //
-      // One chunk, so this does not depend on how the two reads interleave.
-      serve([encoder.encode('needle')]);
-
-      const NG = new Netgrep({ enableMemoryCache: true });
-
-      const results = await Promise.all([
-        NG.search('url', 'zzz'),
-        NG.search('url', 'zzz'),
-      ]);
-
-      expect(results.map((r) => r.result)).toEqual([false, false]);
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-
-      // The other half of this entry, fixed earlier and still true: the shared
-      // record holds the file once. It used to be APPENDED to per chunk,
-      // joining the file to itself with no separator and forming a line that
-      // existed in no file.
-      await expect(NG.search('url', '^needleneedle$')).resolves.toMatchObject({
-        result: false,
-      });
-
-      // The file is 'needle', and that is what the cache holds.
-      await expect(NG.search('url', '^needle$')).resolves.toMatchObject({
-        result: true,
-      });
-
-      // All four searches, one request.
-      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('BACKLOG 3g: a match longer than the 64 KB tail ceiling is still missed', async () => {
@@ -1130,7 +890,7 @@ describe('Netgrep integration (real WASM)', () => {
       // last 64 KB — and a match starting before that window and ending after the
       // buffer is lost. Needs a line over 64 KB AND a match spanning most of it,
       // so it is unreachable in prose: this corpus's longest line is 76 bytes.
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
       const filler = 'x'.repeat(70_000);
 
       // Control: found in ONE chunk, because the whole buffer is searched before
@@ -1171,7 +931,7 @@ describe('Netgrep integration (real WASM)', () => {
       // the engine has no way to be told that. `^` therefore anchors to the
       // window's first byte. Same precondition as the misses above: a line longer
       // than 64 KB, so unreachable in prose.
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       // Control: one line beginning with 'b', so nothing should match `^a`.
       serve([encoder.encode(`b${'a'.repeat(70_000)}`)]);
@@ -1203,7 +963,7 @@ describe('Netgrep integration (real WASM)', () => {
       // prose: this corpus's longest line is 76 bytes. Not fixable without
       // either buffering without bound or teaching the engine that a block
       // starts mid-line, which is offset bookkeeping and out of scope.
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
       const filler = 'x'.repeat(70_000);
 
       // Control: one chunk, so the whole line is present and the line comes
@@ -1245,7 +1005,7 @@ describe('Netgrep integration (real WASM)', () => {
       // the assertion is inverted in the same PR that changed it.
       serve([encoder.encode(POEM)]);
 
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       await expect(NG.search('url', '(')).rejects.toThrow('unclosed group');
 
@@ -1266,9 +1026,10 @@ describe('Netgrep integration (real WASM)', () => {
       // README's deleted CAUTION block was standing in for.
       serve([encoder.encode(POEM)]);
 
-      const results = await new Netgrep({
-        enableMemoryCache: false,
-      }).searchBatch([{ url: 'a' }, { url: 'b' }], '(');
+      const results = await new Netgrep().searchBatch(
+        [{ url: 'a' }, { url: 'b' }],
+        '(',
+      );
 
       expect(results).toHaveLength(2);
 
@@ -1288,7 +1049,7 @@ describe('Netgrep integration (real WASM)', () => {
       // fixed it upstream — no change to lib.rs was needed. The baseline
       // caught the behaviour change, and per the block comment above the
       // assertion is inverted in the same PR that changed it.
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       serve([encoder.encode('Needle x\nother\n')]);
       await expect(NG.search('a', '^Needle')).resolves.toMatchObject({
@@ -1326,7 +1087,7 @@ describe('Netgrep integration (real WASM)', () => {
       // chunk's block of COMPLETE LINES, so a NUL's reach depends on where the
       // last `\n` falls. Case (c) needed a terminator added, or the NUL lands in
       // the held-back partial line and never shares a block with the match.
-      const NG = new Netgrep({ enableMemoryCache: false });
+      const NG = new Netgrep();
 
       serve([bytes('needle here')]);
       await expect(NG.search('a', 'needle')).resolves.toMatchObject({

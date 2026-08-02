@@ -175,3 +175,19 @@ restating a subset in different words, and a subset written for one corpus is th
 keep true. Both claims were made when the section still existed and this record argued the other way; the
 argument above is not rewritten, because a record that quietly agrees with whatever was done last is worth
 nothing.
+
+---
+
+## Note (2026-08-01) — the `cache-off` card's subject no longer exists
+
+See [0024](0024-remove-the-in-memory-cache.md). Two passages above refer to the demo's cache in the present
+tense: the argument that "This demo runs with the cache off" was never library data and had to stay
+hand-written, and the later line saying the reason it runs that way "is still in the comment in
+`use-corpus-search.ts`, which is where it was always argued".
+
+The card and `visible-caveats.ts` were both already gone when the demo's caveat section was removed, so
+nothing here needs undoing. The comment is still in `use-corpus-search.ts` and is still where that reasoning
+belongs — but it now argues the property rather than the flag, because there is no flag: the library retains
+nothing, so the page's timings are network timings by construction. Both passages are left as written; this
+record's decision — one source for the caveat list, `kind` as the only judgement in the data file — is
+unaffected.

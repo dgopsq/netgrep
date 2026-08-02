@@ -85,3 +85,16 @@ teeing the response stream and with it the first caller's abort signal.
 
 So the trade this record describes has grown a third term: `enableMemoryCache: false` costs a repeat download,
 retains nothing — and no longer collapses concurrent downloads of the same url either.
+
+## Outcome (2026-08-01) — the cache is removed, and with it this record's decision
+
+See [0024](0024-remove-the-in-memory-cache.md). Nothing survives of the decision above: there is no
+`memoryCache`, no `enableMemoryCache`, and no `NetgrepConfig`.
+
+What this record got right is the trade it described. What it got wrong is that the trade was available to
+make: the platform's own HTTP cache does the same job with eviction, across page loads, and — the part that
+matters most here — it serves a warm hit as a *stream*, so early resolution survives it. The memory path
+never did: a hit re-ran the engine over the whole buffer. The cache bought back the download and paid full
+price for the search.
+
+Defect 2 above, the missing eviction, was never fixed. It was deleted along with the thing that had it.

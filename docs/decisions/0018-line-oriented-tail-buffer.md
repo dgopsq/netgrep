@@ -212,3 +212,18 @@ at all.
 [0006](0006-in-memory-cache.md) and the note in `use-corpus-search.ts`. The reason it stays off changed
 though: not because the cache is unsafe, which it no longer is, but because a warm cache stops the page's
 timings measuring the network, which is the one thing that page exists to show.
+
+---
+
+## Outcome (2026-08-01) — the cache this record narrowed is gone
+
+See [0024](0024-remove-the-in-memory-cache.md). Item 18's duplicate fetch was closed the same day this record
+shipped, by [0019](0019-in-flight-fetch-registry.md), and has since been reopened and accepted: with no
+entry there is nothing to hand a second caller, so both fetch, by design.
+
+The paragraph above about "the demo's cache, which stays off" describes a flag that no longer exists. Its
+point survives without it — the page's timings are network timings — and is now true by construction rather
+than by configuration, since the library retains nothing a repeat query could be answered from.
+
+This record's own decision is untouched. The tail buffer is what it was; only the second half of its title,
+*and cache only a drained stream*, has stopped describing anything.

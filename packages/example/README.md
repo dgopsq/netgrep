@@ -44,9 +44,15 @@ The DNS record itself is a CNAME in Cloudflare pointing at `dgopsq.github.io`.
 
 ## Things worth knowing before editing
 
-**The memory cache is switched off**, in `src/hooks/use-corpus-search.ts`. That is deliberate and
-load-bearing: two of the library's documented P1 defects exist only when it is on, and both make this page
-return confidently wrong answers. The comment there explains it — do not "optimise" it back on.
+**The numbers this page shows are network numbers.** Every timing in the `StatsBar` is the cost of actually
+fetching a file, and that is the page's only evidence for the claim it makes. netgrep used to keep downloaded
+bytes in memory and this app switched that off, precisely so a repeat query could not be timed as a download;
+[decision 0024](../../docs/decisions/0024-remove-the-in-memory-cache.md) removed the cache from the library
+altogether, so there is no flag to set either way and nothing retained that could be timed instead of a
+fetch. **What remains yours to protect is the property, not the flag** — do not add a layer here that answers
+a repeat query from memory. What a repeat actually costs is the host's business now, and visible in devtools.
+Read the comment in `src/hooks/use-corpus-search.ts` first; it also explains why overlapping runs still
+double-fetch, and why that is accepted.
 
 **`src/lib/story-url.ts` is the only module allowed to know the base path.** It is `/` today, so the
 indirection buys nothing visible — but under the old `dgopsq.github.io/netgrep/` project page a root-relative

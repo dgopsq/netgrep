@@ -233,3 +233,18 @@ The cost is a lag that did not exist before. A demo-only change ships when it re
 be typed `fix(example):` or `feat(example):` — `docs:` neither releases nor deploys, and a site fix typed that
 way waits for some other component to release. Nothing enforces that. See
 [0021](0021-release-please.md).
+
+---
+
+## Amendment: there is no cache to disable (2026-08-01)
+
+The `Cache` row in the table above, and the *The memory cache is disabled in the demo* section under it,
+both describe a flag that no longer exists. [0024](0024-remove-the-in-memory-cache.md) removed the in-memory
+cache from the library, so `new Netgrep()` takes no argument, and 3b and 18 — the two defects that section
+says the demo had to steer around — are closed in the library rather than sidestepped in the app.
+
+What survives is the reason that section's own 2026-07-30 amendment fell back on, once the defect argument
+had already been overtaken by [0018](0018-line-oriented-tail-buffer.md) and
+[0019](0019-in-flight-fetch-registry.md): **the page measures the network.** That is now true by construction
+rather than by configuration. Both passages are left as written, because they are why the site said what it
+said — and because the property they were protecting is still the one to protect.

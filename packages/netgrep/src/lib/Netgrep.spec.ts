@@ -6,7 +6,7 @@ import { Netgrep } from './Netgrep.js';
 /**
  * Unit tests: `fetch` and the engine are BOTH mocked, so not a line of Rust
  * runs here and no DOM is needed. What is left is exactly the wiring —
- * streaming, batching, caching, error handling, config merging — which is what
+ * streaming, batching, error handling and the result shape — which is what
  * this suite is for.
  *
  * The counterpart is `Netgrep.integration.spec.ts`, which drives the real
@@ -29,10 +29,10 @@ export function genReadableStreamFromString(str: string): ReadableStream {
  * Build a `ReadableStream` that emits the given chunks one at a time, the way
  * a real response body arrives.
  *
- * The chunks are `Uint8Array`s rather than strings because `Netgrep.search`
- * wraps whatever it reads in `new Uint8Array(value)` before caching it, and
- * `new Uint8Array('some string')` is a zero-length array — so a string-valued
- * chunk would make every cache assertion below vacuously true.
+ * The chunks are `Uint8Array`s rather than strings because the streaming loop
+ * hands the buffer to `splitAtLastLine`, which calls `buffer.subarray` on it —
+ * a string-valued chunk throws `TypeError: buffer.subarray is not a
+ * function`, a loud failure rather than a silently wrong one.
  */
 function genReadableStreamFromChunks(
   chunks: Array<Uint8Array>,
@@ -108,9 +108,8 @@ const mockFetch = vi.fn();
 // module's `init()`, which Netgrep awaits before every search.
 //
 // The arguments are forwarded rather than dropped so that tests can assert
-// WHICH bytes reached the engine — the only way to tell a cache hit from a
-// re-fetch that happened to return the same thing — and, for the line
-// entry points, which cap did.
+// WHICH bytes reached the engine and, for the line entry points, which cap
+// did.
 //
 // All three are mocked even though most tests touch only one, because WHICH
 // of them a search calls is itself behaviour: `capture` is meant to leave the
@@ -136,8 +135,7 @@ global.fetch = mockFetch;
 
 describe('Netgrep', () => {
   describe('Netgrep::search', () => {
-    const NG = new Netgrep({ enableMemoryCache: false });
-    const NGWithCache = new Netgrep({ enableMemoryCache: true });
+    const NG = new Netgrep();
 
     const url = 'url';
     const pattern = 'pattern';
@@ -165,20 +163,6 @@ describe('Netgrep', () => {
       const result = await NG.search(url, pattern);
 
       expect(result).toMatchObject({ url, result: false });
-    });
-
-    it('should work with the in-memory cache active', async () => {
-      mockSearch.mockReturnValue(true);
-
-      const result = await NGWithCache.search(url, pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(result).toMatchObject({ url, result: true });
-
-      const result2 = await NGWithCache.search(url, pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(result2).toMatchObject({ url, result: true });
     });
 
     it('echoes the url, the pattern and the metadata back', async () => {
@@ -241,166 +225,13 @@ describe('Netgrep', () => {
       expect(mockFetch).toHaveBeenCalledWith(url, { signal: undefined });
     });
 
-    it('enables the in-memory cache by default', async () => {
-      mockSearch.mockReturnValue(true);
-
-      // The default matters: it is what every consumer who passes no config
-      // gets, and it is the setting that makes BACKLOG 3b reachable.
-      const defaulted = new Netgrep();
-
-      await defaulted.search('defaulted', pattern);
-      await defaulted.search('defaulted', pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('re-fetches every time when the cache is disabled', async () => {
+    it('re-fetches on every search, retaining nothing between them', async () => {
       mockSearch.mockReturnValue(true);
 
       await NG.search('uncached', pattern);
       await NG.search('uncached', pattern);
 
       expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('accumulates consecutive chunks into one cached buffer', async () => {
-      // A miss drains the stream, so all three chunks land in the cache and
-      // the next search is answered from the joined buffer.
-      mockSearch.mockReturnValue(false);
-      mockFetch.mockImplementation(() =>
-        Promise.resolve({
-          body: genReadableStreamFromChunks([
-            encoder.encode('alpha '),
-            encoder.encode('beta '),
-            encoder.encode('gamma'),
-          ]),
-        }),
-      );
-
-      const instance = new Netgrep({ enableMemoryCache: true });
-      await instance.search('joined', pattern);
-
-      mockSearch.mockClear();
-      await instance.search('joined', pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockSearch).toHaveBeenCalledTimes(1);
-      expect(mockSearch).toHaveBeenCalledWith(
-        encoder.encode('alpha beta gamma'),
-        pattern,
-      );
-    });
-
-    it('caches nothing when the search resolved before the stream ended', async () => {
-      // BACKLOG 3b. Writing per chunk left an entry holding only the chunks read
-      // before the match, unmarked as a prefix, so a later search for anything
-      // further down answered `false` from text never downloaded. The entry is
-      // now written on `done` only: an early resolution leaves none and the next
-      // search re-fetches, which is the right trade against a wrong answer.
-      mockSearch.mockReturnValue(true);
-      mockFetch.mockImplementation(() =>
-        Promise.resolve({
-          body: genReadableStreamFromChunks([
-            encoder.encode('needle\n'),
-            encoder.encode('omega\n'),
-          ]),
-        }),
-      );
-
-      const instance = new Netgrep({ enableMemoryCache: true });
-
-      await instance.search('partial', pattern);
-      await instance.search('partial', pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('does not share its cache with another instance', async () => {
-      mockSearch.mockReturnValue(true);
-
-      await new Netgrep({ enableMemoryCache: true }).search('shared', pattern);
-      await new Netgrep({ enableMemoryCache: true }).search('shared', pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('keys the cache by url', async () => {
-      mockSearch.mockReturnValue(true);
-
-      const instance = new Netgrep({ enableMemoryCache: true });
-
-      await instance.search('first', pattern);
-      await instance.search('second', pattern);
-      await instance.search('first', pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('frees a waiting search when the download it waited on fails', async () => {
-      // A waiter parked on an in-flight download must not inherit its failure —
-      // it never asked for that request, and its own signal may be perfectly
-      // live. It also must not park forever. So: fetch for itself, and let the
-      // failure belong to the caller that owns it.
-      mockSearch.mockReturnValue(true);
-      mockFetch
-        .mockImplementationOnce(() => Promise.reject(new Error('offline')))
-        .mockImplementation(() =>
-          Promise.resolve({ body: genReadableStreamFromString('test') }),
-        );
-
-      const instance = new Netgrep({ enableMemoryCache: true });
-
-      const settled = await Promise.allSettled([
-        instance.search('doomed', pattern),
-        instance.search('doomed', pattern),
-      ]);
-
-      expect(settled[0]).toMatchObject({ status: 'rejected' });
-      expect(settled[1]).toMatchObject({
-        status: 'fulfilled',
-        value: { url: 'doomed', result: true },
-      });
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('does not serialise waiters that all have to fetch anyway', async () => {
-      // A caller waits ONCE. Waiting until no download is in flight instead
-      // would make each waiter queue behind the last, so callers that used to
-      // fetch in parallel would fetch one after another — for the same number
-      // of requests, since an early match caches nothing for anyone to share.
-      //
-      // Overlap rather than elapsed time, so this pins the shape and not the
-      // machine it runs on.
-      let open = 0;
-      let peak = 0;
-
-      mockSearch.mockReturnValue(true);
-      mockFetch.mockImplementation(() => {
-        open += 1;
-        peak = Math.max(peak, open);
-
-        return Promise.resolve({
-          body: new ReadableStream({
-            pull(controller) {
-              controller.enqueue(encoder.encode('needle\n'));
-              controller.close();
-              open -= 1;
-            },
-          }),
-        });
-      });
-
-      const instance = new Netgrep({ enableMemoryCache: true });
-
-      await Promise.all([
-        instance.search('herd', pattern),
-        instance.search('herd', pattern),
-        instance.search('herd', pattern),
-      ]);
-
-      // The first goes alone; the two that wake behind it go together.
-      expect(mockFetch).toHaveBeenCalledTimes(3);
-      expect(peak).toBeGreaterThan(1);
     });
 
     it('stops reading as soon as a chunk matches', async () => {
@@ -478,10 +309,11 @@ describe('Netgrep', () => {
       );
     });
 
-    it('does not retain the file when the cache is off', async () => {
-      // Chunks are collected for the cache only. Holding them with the cache off
-      // would keep all 500 MB of a 500 MB file — worse than the O(n²) append it
-      // replaced. Observable as the engine never seeing a joined buffer.
+    it('never holds the file, only a chunk and the tail', async () => {
+      // The engine is handed one line-aligned block per chunk and never a
+      // joined buffer, so a 500 MB file costs one chunk plus a bounded tail
+      // however long it runs. Observable as the call count: one per line,
+      // never one over the whole file.
       mockSearch.mockReturnValue(false);
       mockFetch.mockImplementation(() =>
         Promise.resolve({
@@ -492,18 +324,16 @@ describe('Netgrep', () => {
         }),
       );
 
-      await NG.search('uncached-retain', pattern);
+      await NG.search('unretained', pattern);
 
-      // One call per line, never a joined buffer, and no cache entry after.
       expect(mockSearch).toHaveBeenCalledTimes(2);
-      await NG.search('uncached-retain', pattern);
+      await NG.search('unretained', pattern);
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
   });
 
   describe('Netgrep::searchBatch', () => {
-    const NG = new Netgrep({ enableMemoryCache: false });
-    const NGWithCache = new Netgrep({ enableMemoryCache: true });
+    const NG = new Netgrep();
 
     const urls = [{ url: 'url1' }, { url: 'url2' }, { url: 'url3' }];
 
@@ -575,29 +405,6 @@ describe('Netgrep', () => {
       expect(results).toMatchObject(expectedResults);
     });
 
-    it('should work with the in-memory cache active', async () => {
-      mockSearch.mockReturnValue(true);
-
-      const results = await NGWithCache.searchBatch(urls, pattern);
-
-      const expectedResults: Array<BatchNetgrepResult> = urls.map(
-        ({ url }) => ({
-          url,
-          pattern,
-          result: true,
-          error: null,
-        }),
-      );
-
-      expect(mockFetch).toHaveBeenCalledTimes(urls.length);
-      expect(results).toMatchObject(expectedResults);
-
-      const results2 = await NGWithCache.searchBatch(urls, pattern);
-
-      expect(mockFetch).toHaveBeenCalledTimes(urls.length);
-      expect(results2).toMatchObject(expectedResults);
-    });
-
     it('resolves to an empty array for no inputs', async () => {
       await expect(NG.searchBatch([], pattern)).resolves.toEqual([]);
       expect(mockFetch).not.toHaveBeenCalled();
@@ -658,7 +465,7 @@ describe('Netgrep', () => {
   });
 
   describe('Netgrep::searchBatchWithCallback', () => {
-    const NG = new Netgrep({ enableMemoryCache: false });
+    const NG = new Netgrep();
 
     const urls = [{ url: 'url1' }, { url: 'url2' }, { url: 'url3' }];
 
@@ -793,7 +600,7 @@ describe('Netgrep', () => {
    * leaking the wasm carrier, or handing Rust a `usize` it cannot hold.
    */
   describe('Netgrep::capture', () => {
-    const NG = new Netgrep({ enableMemoryCache: false });
+    const NG = new Netgrep();
     const url = 'url';
     const pattern = 'pattern';
 
@@ -858,28 +665,6 @@ describe('Netgrep', () => {
       await expect(
         NG.search(url, pattern, undefined, { capture: 'line' }),
       ).resolves.toMatchObject({ result: true, line: '' });
-    });
-
-    it('answers from the memory cache with a line too', async () => {
-      const cached = new Netgrep({ enableMemoryCache: true });
-
-      // The first search must MISS. Since decision 0018 the cache is only ever
-      // written from a drained stream, so a search that resolves early leaves
-      // nothing behind — a match would re-fetch here and the assertion below
-      // would be about the wrong thing.
-      mockSearchLine.mockReturnValueOnce(undefined);
-      mockSearchLine.mockReturnValue('from the cached buffer');
-
-      await cached.search(url, pattern, undefined, { capture: 'line' });
-      const second = await cached.search(url, pattern, undefined, {
-        capture: 'line',
-      });
-
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(second).toMatchObject({
-        result: true,
-        line: 'from the cached buffer',
-      });
     });
 
     it('routes `capture: "line-ranges"` to the ranges entry point and unflattens pairs', async () => {

@@ -75,6 +75,15 @@ what, decide whether the new behaviour is right, and if it is, **invert the asse
 note saying why. Do not "fix" a defect test to make CI green, and do not fix the underlying bug without
 inverting its test in the same change.
 
+**An entry stays while the behaviour it names could still change silently — inverted in place once fixed. It
+leaves only when there is no defect left to track: the subject was deleted, so there is nothing to assert; or
+the behaviour is now deliberate, and its assertion belongs in the ordinary suite as a design boundary.**
+Removing the in-memory cache took the `BACKLOG 3b` and `BACKLOG 18` entries out on one of those grounds each —
+3b pinned a cache entry answering a later query, and there is no entry, while 18's double fetch came back and
+is now intended, so its assertion moved into the ordinary suite beside the boundary it describes. That is not
+the tidying this section forbids: the entries left because the code they described did, and
+[decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) argues each one.
+
 This has already paid for itself once: upgrading off the ripgrep fork silently fixed the `^`-anchoring bug,
 and only this block noticed.
 
@@ -137,15 +146,19 @@ decision, not an omission.
 the scope of a result and the 1.17 MB WebAssembly download.
 
 > [!WARNING]
-> **The demo's cache stays off, and no library fix changes that.** This section used to say that fixing 3b and
-> 18 meant re-enabling it and deleting the caveat. Both are now fixed and neither instruction survived: the
-> cache is off for a reason that has nothing to do with defects — **the page measures the network.** A miss
-> drains the stream, which is exactly the condition for caching, so with the cache on every missing file would
-> be answered from memory from the second query onward and the `StatsBar` would report a `Record` lookup as a
-> download. Read the comment in `packages/example/src/hooks/use-corpus-search.ts` before changing it, and treat
-> it as a decision about the demo rather than a consequence of a library fix. See
+> **The page measures the network, and that is now true by construction.** This section spent two revisions on
+> the demo's cache flag: first that fixing 3b and 18 would mean switching the cache back on, then that it had
+> to stay off regardless because a warm `Record` lookup timed as a download makes the `StatsBar` lie. Neither
+> instruction survives — [decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) deleted the cache,
+> so there is no flag to set either way and nothing the library retains that could be timed instead of a
+> fetch. What survives is the property those revisions were protecting: **the demo's numbers are network
+> numbers, and anything that would answer a repeat query from memory breaks them.** The browser's own HTTP
+> cache is the one thing that still can, and it is not the library's to switch off — GitHub Pages serves the
+> corpus with `cache-control: max-age=600` (measured 2026-08-01), so what a repeat costs is the host's answer
+> rather than netgrep's. Read the comment in `packages/example/src/hooks/use-corpus-search.ts` before changing
+> anything about it. See also
 > [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
-> [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md).
+> [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md), which record the shape this used to have.
 
 **Do not delete a caveat to tidy the guide or the README.** The list is short because the defects are few, not
 because a page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
@@ -195,7 +208,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **195 tests**: 70 unit in Node, 54 integration in headless Chromium, 71 tooling in Node |
+| Test TS | `pnpm test` | Vitest — **178 tests**: 60 unit in Node, 47 integration in headless Chromium, 71 tooling in Node |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
 | Test the tooling | `pnpm test:tools` | **71 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **57 tests** |
@@ -360,12 +373,12 @@ packages/
     pkg/               BUILD OUTPUT, gitignored
     → published as @netgrep/search
 
-  netgrep/           TypeScript wrapper. Streaming + batching + caching.
-    src/lib/Netgrep.ts               the whole public API (~560 lines)
+  netgrep/           TypeScript wrapper. Streaming + batching.
+    src/lib/Netgrep.ts               the whole public API (~470 lines)
     src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
                                      unit-tested on its own. NOT re-exported by
                                      index.ts — see decision 0018
-    src/lib/data/*.ts                7 type definitions, one per file
+    src/lib/data/*.ts                6 type definitions, one per file
     src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
     src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop,
                                           in headless Chromium (§4.2)
@@ -375,8 +388,9 @@ packages/
   example/           THE PUBLIC DEMO — https://netgrep.diegopasquali.com/
                      Vite + React + Tailwind v4 + shadcn, searching 56 Sherlock Holmes
                      .txt files. Not published to npm; deployed to Pages on release.
-    src/hooks/use-corpus-search.ts   the whole netgrep integration. Runs with the
-                                     memory cache OFF on purpose — read the comment
+    src/hooks/use-corpus-search.ts   the whole netgrep integration. Its timings are
+                                     network timings — read the comment before
+                                     changing what a repeat query costs
     src/lib/story-url.ts             the ONLY module that knows the base path
     src/App.tsx                      the demo page. It states no limitation of its
                                      own: the footer links to the guide's, which
@@ -441,8 +455,8 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 |---|---|
 | Matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
 | What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md) and [0022](docs/decisions/0022-capture-ranges.md) first — 0022's table is the current list of what has been refused |
-| Streaming, batching, caching, abort behaviour | `packages/netgrep/src/lib/Netgrep.ts` |
-| A config option | `packages/netgrep/src/lib/data/NetgrepConfig.ts` or `NetgrepSearchConfig.ts` |
+| Streaming, batching, abort behaviour | `packages/netgrep/src/lib/Netgrep.ts` |
+| A config option | `packages/netgrep/src/lib/data/NetgrepSearchConfig.ts` — per-call, and the only configuration there is |
 | Build or release steps | root `package.json` scripts, `packages/*/package.json` scripts, `.github/workflows/` |
 | Binary size / release profile | root `Cargo.toml` — **not** `packages/search/Cargo.toml` |
 
@@ -541,8 +555,12 @@ cache defect fire more often, in the default configuration.
 
 The third was the duplicate fetch of item **18**, closed by
 [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md) with a per-url in-flight registry — and only
-for instances running with the cache **on**, since the cache entry is what the second caller is handed. With
-the cache off both callers still fetch, which is deliberate and pinned by a test.
+for instances running with the cache on, since the cache entry was what the second caller was handed. **It
+came back on 2026-08-01 and stayed out of this table**:
+[decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) removed the cache, so there is no entry to
+hand over and two concurrent searches of one url each download it. That is now a design consequence rather
+than a defect — pinned by an ordinary assertion, and published under *By design* rather than in the README's
+defect list.
 
 Decision 0018 also narrowed the row that remains: what the engine is handed is now a block of complete lines
 rather than a network chunk, which changed the shape of the NUL defect's blast radius. See

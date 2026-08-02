@@ -55,24 +55,24 @@ export type SearchState = {
 };
 
 /**
- * THE MEMORY CACHE IS OFF, DELIBERATELY — AND NO LONGER BECAUSE IT IS UNSAFE.
+ * THE PAGE MEASURES THE NETWORK, AND IT NOW DOES SO BY CONSTRUCTION.
  *
- * The poisoned partial cache (backlog 3b) is FIXED: entries are written only once
- * the whole file has been read. So is the duplicate download of backlog 18, for
- * instances running with the cache ON — though not for this page's overlapping
- * runs even so, because a keystroke ABORTS the previous search, and an aborted
- * download leaves no entry for the next one to share. That is accepted.
+ * netgrep used to keep downloaded bytes in memory, on by default, and this
+ * page switched it off: a miss drains the stream, which is exactly the
+ * condition for caching, so with the cache on the StatsBar would have timed a
+ * `Record` lookup and presented it as a download from the second query onward
+ * — and those numbers are the page's only evidence for its claim.
  *
- * It stays off because THIS PAGE MEASURES THE NETWORK. A miss drains the stream,
- * which is exactly the condition for caching, so with the cache on the StatsBar
- * would time a `Record` lookup and present it as a download from the second query
- * onward — and those numbers are the page's only evidence for its claim.
+ * The library no longer keeps a cache, so there is no longer a flag to set.
+ * What repeats now cost is whatever the host's response headers say, which is
+ * the browser's business and visible in devtools — a warm HTTP hit is still
+ * served as a stream, so early resolution keeps working.
  *
- * A decision about what the demo measures, then, not about whether the cache
- * works. Leaving it off is cheap — 2.6 MB, and the browser's own HTTP cache
- * serves repeats.
+ * Note that overlapping runs still double-fetch, and always did: a keystroke
+ * ABORTS the previous search, and an aborted download was never something a
+ * later one could share. That is accepted.
  */
-const netgrep = new Netgrep({ enableMemoryCache: false });
+const netgrep = new Netgrep();
 
 /**
  * Built once. The metadata generic carries each story's id back into the
