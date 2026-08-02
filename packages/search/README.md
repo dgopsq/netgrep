@@ -26,8 +26,6 @@ the pattern is not valid regex, so a stray `(` from a search box is an ordinary 
 Each is a separate entry point so a caller pays only for what it asks for, and all three share one compiled
 matcher and one searcher, so their matching semantics cannot differ.
 
-This is the engine only. `@netgrep/netgrep` is what makes it useful over HTTP; used directly, this
-package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) exposing the three functions above.
-
-Its [known limitations](https://github.com/dgopsq/netgrep#known-limitations) are worth reading first
-— a single NUL byte discards the block of lines being searched, and `$` does not match on CRLF input.
+On its own this package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) and nothing else. Its
+[known limitations](https://github.com/dgopsq/netgrep#known-limitations) are worth reading first — a
+single NUL byte discards the block of lines being searched, and `$` does not match on CRLF input.

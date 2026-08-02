@@ -13,6 +13,10 @@ memory. There is no index to build and no backend to run.
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
   the regex engine's Unicode tables. It is the main cost of the approach.
+- **A URL the browser will let you read.** A cross-origin file needs `Access-Control-Allow-Origin`
+  from the host serving it; without that header the fetch fails before the search starts, and the
+  failure arrives as an opaque network error rather than as anything netgrep can explain. This is
+  the constraint that decides whether a given file is reachable at all, so check it first.
 
 ## Install
 

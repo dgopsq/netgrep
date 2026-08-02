@@ -5,9 +5,13 @@
 
 The main `netgrep` package. See the [main README](https://github.com/dgopsq/netgrep) for more information.
 
-netgrep streams a URL's response through ripgrep's real regex engine and answers the moment a
-matching line arrives — without waiting for the last byte, and without holding the file in memory.
-No index to build, no backend to run.
+netgrep streams a URL's response through [ripgrep](https://github.com/BurntSushi/ripgrep)'s real
+regex engine and answers the moment a matching line arrives — without waiting for the last byte, and
+without holding the file in memory. No index to build, no backend to run.
+
+It runs in a browser and nowhere else: it needs `fetch` with a streaming response body, it is ESM
+only, and a cross-origin URL has to send `Access-Control-Allow-Origin` or the request fails before
+the search starts.
 
 It answers one question per URL — *does this pattern occur?* — as a boolean, plus the first matching
 line if you pass `capture: 'line'`, or that line with each match's position within it under

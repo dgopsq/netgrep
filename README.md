@@ -3,7 +3,8 @@
 # netgrep
 
 **netgrep is grep over HTTP, running in the browser.** Point it at a URL and a pattern: it streams
-the response through ripgrep's real regex engine — `[[:alpha:]]`, `(?x)`, smart case, arbitrary
+the response through [ripgrep](https://github.com/BurntSushi/ripgrep)'s real regex engine —
+`[[:alpha:]]`, `(?x)`, smart case, arbitrary
 mid-word substrings — and answers the moment a matching line arrives, without waiting for the last
 byte and without holding the file in memory. There is no index to build and no backend to run, so it
 works on files you don't control and can't preprocess, and the query never leaves the tab.
@@ -17,6 +18,9 @@ works on files you don't control and can't preprocess, and the query never leave
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
   the regex engine's Unicode tables, and it is the main cost of the approach.
+- **A URL the browser will let you read.** A cross-origin file needs `Access-Control-Allow-Origin`
+  from the host serving it; without that header the fetch fails before the search starts. Files you
+  do not control often do not send it.
 
 ## Install
 
