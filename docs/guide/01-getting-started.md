@@ -1,9 +1,10 @@
 # Getting started
 
-netgrep searches remote text files from the browser while they are still downloading. It is
-[ripgrep](https://github.com/BurntSushi/ripgrep)'s search engine compiled to WebAssembly and pointed
-at plain static files: the `grep-matcher`, `grep-regex` and `grep-searcher` crates, unmodified from
-crates.io. There is no index to build and no backend to run.
+netgrep is grep over HTTP, running in the browser. Point it at a URL and a pattern: it streams the
+response through [ripgrep](https://github.com/BurntSushi/ripgrep)'s real regex engine — the
+`grep-matcher`, `grep-regex` and `grep-searcher` crates, unmodified from crates.io — and answers the
+moment a matching line arrives, without waiting for the last byte and without holding the file in
+memory. There is no index to build and no backend to run.
 
 ## Requirements
 
@@ -11,8 +12,7 @@ crates.io. There is no index to build and no backend to run.
   support.
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
-  the regex engine's Unicode tables. It is the main cost of the approach, so weigh it against your
-  corpus size before adopting it.
+  the regex engine's Unicode tables. It is the main cost of the approach.
 
 ## Install
 
@@ -46,13 +46,17 @@ batches, and [The matching line](03-the-matching-line.md) covers getting the lin
 
 ## What this is for
 
-Searching posts on a blog built by a static site generator is the use case this was built around:
-the raw post files are already served, so a real-time search over them needs nothing new deployed. A
-live example runs on [my blog](https://diegopasquali.com/search), and the
-[source](https://github.com/dgopsq/writings) is public.
+The case netgrep is built for is being handed a URL with no shell on the machine that holds the file:
+a log or an artefact on a CI platform you are a customer of, a published corpus, a file a support
+agent can open but not download. An index cannot help there — building one means owning the build,
+and it cannot find a file that appeared thirty seconds ago. netgrep searches the file itself, as it
+arrives.
 
-> [!IMPORTANT]
-> **This is an experiment, not a recommendation.** A prebuilt index ([Pagefind](https://pagefind.app/),
-> [Lunr](https://lunrjs.com/), [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted
-> service) will usually be smaller and faster, and it can rank results, which netgrep cannot. Read
-> the [limitations](07-limitations.md) before building on this.
+The same property makes it work for a small static corpus you *do* own: a real-time search over a
+blog's raw post files needs nothing new deployed. One runs on
+[my blog](https://diegopasquali.com/search), and its [source](https://github.com/dgopsq/writings) is
+public.
+
+What netgrep is not is a search *system*. It does not rank, and it reads every byte of a file it
+does not match — so against a large corpus, or one you can preprocess, a prebuilt index wins on both
+counts. The [limitations](07-limitations.md) page is specific about where that line falls.

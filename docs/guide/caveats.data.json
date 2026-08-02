@@ -33,9 +33,9 @@
   },
   {
     "id": "no-ranking",
-    "title": "No ranking",
-    "short": "No match counts, line numbers or relevance ordering, so netgrep cannot sort files by how well they match.",
-    "body": "netgrep answers whether a pattern occurs in a file and, if you ask, the first line it occurs on, with each match highlighted within it. It does not rank: no match counts, no line numbers, no relevance ordering, so it cannot sort files by how well they match. If you need that, use a prebuilt index such as [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) or [FlexSearch](https://github.com/nextapps-de/flexsearch).",
+    "title": "Matches are reported per file, not ranked",
+    "short": "netgrep answers whether a pattern occurs in each file, so there is nothing to sort by — no counts, no line numbers, no relevance.",
+    "body": "netgrep answers whether a pattern occurs in a file and, if you ask, the first line it occurs on with each match highlighted within it. That is the whole result, and it is the reason the answer can arrive before the download does: counting matches or scoring a file means reading all of it, so ranking and early exit cannot both exist. Files therefore come back in the order you asked for them, with no match counts, no line numbers and no relevance ordering. If you need results sorted by how well they match, that is what a prebuilt index is for — [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and [FlexSearch](https://github.com/nextapps-de/flexsearch) all do it, and netgrep is not trying to.",
     "kind": "by-design",
     "backlog": null
   }
