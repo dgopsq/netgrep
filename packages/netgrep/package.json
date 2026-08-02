@@ -1,7 +1,7 @@
 {
   "name": "@netgrep/netgrep",
   "version": "0.3.0",
-  "description": "The power of ripgrep over HTTP",
+  "description": "grep over HTTP — search a remote file with ripgrep's regex engine while it downloads",
   "license": "MIT",
   "repository": {
     "type": "git",

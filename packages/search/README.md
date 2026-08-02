@@ -26,14 +26,8 @@ the pattern is not valid regex, so a stray `(` from a search box is an ordinary 
 Each is a separate entry point so a caller pays only for what it asks for, and all three share one compiled
 matcher and one searcher, so their matching semantics cannot differ.
 
-> [!IMPORTANT]
-> **This is an experiment, not a recommendation.** netgrep is almost certainly not the best way to add
-> search to your site — a prebuilt index ([Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
-> [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service) will usually be smaller,
-> faster and far more capable. What this explores is a narrower question: what happens if you compile
-> ripgrep's actual search engine to WebAssembly and run it over HTTP against files *while they are still
-> downloading*.
->
-> Note also that this package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) and has
-> [known limitations](https://github.com/dgopsq/netgrep#known-limitations) — a single NUL byte discards the
-> chunk being searched, and `$` does not match on CRLF input.
+This is the engine only. `@netgrep/netgrep` is what makes it useful over HTTP; used directly, this
+package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) exposing the three functions above.
+
+Its [known limitations](https://github.com/dgopsq/netgrep#known-limitations) are worth reading first
+— a single NUL byte discards the block of lines being searched, and `$` does not match on CRLF input.

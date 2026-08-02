@@ -1,7 +1,7 @@
 {
   "name": "@netgrep/search",
   "version": "0.3.0",
-  "description": "The power of ripgrep over HTTP",
+  "description": "ripgrep's search engine compiled to WebAssembly — the core of @netgrep/netgrep",
   "license": "MIT",
   "repository": {
     "type": "git",
