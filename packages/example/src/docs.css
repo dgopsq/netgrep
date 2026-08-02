@@ -112,8 +112,34 @@ html {
   color: var(--muted-foreground);
 }
 
+/*
+ * Markers and indent, restored. Tailwind's preflight sets `list-style: none`
+ * on every `ul` and `ol` and zeroes their padding, which is right for the
+ * app's own markup — every list there is a layout container — and wrong for
+ * prose rendered from markdown, where the bullet is the only thing telling a
+ * list apart from a stack of short paragraphs. Scoped to `.guide` rather than
+ * fixed by turning preflight off, because the TOC beside it wants the reset.
+ */
+.guide ul,
+.guide ol {
+  padding-left: 1.25rem;
+}
+
+.guide ul {
+  list-style: disc;
+}
+
+.guide ol {
+  list-style: decimal;
+}
+
 .guide li {
   margin: 0.375rem 0;
+}
+
+/* A nested list is a sub-point, and repeating the parent's marker hides that. */
+.guide li ul {
+  list-style: circle;
 }
 
 .guide a {
