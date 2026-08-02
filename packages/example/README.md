@@ -2,10 +2,12 @@
 
 The public demo for `@netgrep/netgrep`, live at **<https://netgrep.diegopasquali.com/>**.
 
-Vite + React + Tailwind v4 + shadcn/ui. It searches 56 Sherlock Holmes short stories (2.6 MB) and shows each
-file resolving individually, as it downloads. See the [main README](https://github.com/dgopsq/netgrep) for
-what netgrep is, and [decision 0017](../../docs/decisions/0017-example-as-hosted-demo.md) for why this app
-looks the way it does.
+Vite + React + Tailwind v4 + shadcn/ui. It is a dashboard over four generated log files — Apache httpd
+8.3 MB, ZooKeeper 40.0 MB, Hadoop YARN 120.1 MB and OpenSSH 240.2 MB, 408.6 MB together — and shows each one
+resolving individually, as it downloads. See the [main README](https://github.com/dgopsq/netgrep) for what
+netgrep is, [decision 0017](../../docs/decisions/0017-example-as-hosted-demo.md) for why this app looks the
+way it does, and [decision 0026](../../docs/decisions/0026-demo-as-log-dashboard.md) for why it searches
+these files rather than something smaller.
 
 It runs against the **local workspace source**, not a published release, so changes to `packages/netgrep` or
 `packages/search` show up here after a rebuild.
@@ -24,6 +26,16 @@ pnpm dev
 **Both build steps are required**, and the second is easy to miss: this app imports `@netgrep/netgrep`, which
 resolves to the workspace package and points at the gitignored `packages/netgrep/dist/`. Without it Vite
 fails to resolve the import. `pnpm bootstrap` covers the install and the WASM, but not `pnpm build`.
+
+**`pnpm dev` writes 408.6 MB into `public/logs/` before Vite starts**, in under a second. `predev` and
+`prebuild` run `scripts/build-logs.mjs`, which tiles the four committed seeds up to the targets in
+`logs.config.json` and skips any file already at size — so it is paid once per checkout, and once per
+worktree. The directory is gitignored and must never be committed. To check a built corpus without writing
+anything:
+
+```bash
+node scripts/build-logs.mjs --check
+```
 
 The dev server runs at <http://localhost:5173/> — the same base path as production, deliberately, so a
 base-path mistake fails here rather than only after deploying.
@@ -51,13 +63,48 @@ bytes in memory and this app switched that off, precisely so a repeat query coul
 altogether, so there is no flag to set either way and nothing retained that could be timed instead of a
 fetch. **What remains yours to protect is the property, not the flag** — do not add a layer here that answers
 a repeat query from memory. What a repeat actually costs is the host's business now, and visible in devtools.
-Read the comment in `src/hooks/use-corpus-search.ts` first; it also explains why overlapping runs still
+Read the comment in `src/hooks/use-log-search.ts` first; it also explains why overlapping runs still
 double-fetch, and why that is accepted.
 
-**`src/lib/story-url.ts` is the only module allowed to know the base path.** It is `/` today, so the
-indirection buys nothing visible — but under the old `dgopsq.github.io/netgrep/` project page a root-relative
-`/stories/x.txt` silently 404d and the page then looked like a corpus that simply matched nothing. Keep story
-URLs going through it.
+**Elapsed time is the only thing this page measures, and that is a decision rather than a shortfall.** There
+is no progress bar and no bytes-read counter because netgrep reports neither, and no memory figure because a
+tab cannot honestly measure one. Do not add a number here to make the page look more instrumented; a
+fabricated figure on the one page whose entire value is that it is accurate costs more than the gap does.
+
+**`logs.config.json` is the one place that decides what the page searches.** Both `scripts/build-logs.mjs` and
+`src/data/logs.ts` read it, so a source's id, service name, seed, size target and filename are stated once.
+`targetBytes` is a **floor**: tiling stops at the first whole seed past it, so every file overshoots. The real
+sizes come from the `manifest.json` the generator writes beside the logs, fetched at startup — fetched rather
+than imported, because a static import of a gitignored generated file breaks `pnpm typecheck:example` on a
+clean clone. A missing manifest is not an error; the page falls back to the targets.
+
+**The corpus is repetitive, and the page's honesty depends on not pretending otherwise.** Each file is one
+~512 KB seed concatenated to itself until it passes its target, so every term in it recurs within the first
+megabyte. The exceptions are the four `NETGREP-MARKER-<pct>` lines the generator injects at 25%, 50%, 75% and
+99% of each file — they are the only genuinely deep needles in 408 MB, and the only honest way to demonstrate
+a match that is not near the head. The lines themselves are real output from real systems, which is what keeps
+the regex examples on the page real; the volume is manufactured.
+
+**Every suggestion chip matches something, deliberately.** A pattern that matches nothing reads all four
+sources to their last byte, and offering that as a one-click chip spends hundreds of megabytes of a visitor's
+connection to show a row of dashes. The cost is not hidden by leaving it out — the stats bar states the corpus
+total and says in as many words that a query matching nothing reads every byte, and anyone who types one gets
+exactly that, honestly timed. Keep both halves.
+
+**The seeds are committed and the attribution is a licence term.** `seeds/*.log` are ~512 KB prefixes of
+loghub-2.0 under CC BY 4.0; `seeds/NOTICE.md` carries the citation. The footer line crediting loghub and
+linking the licence is not decoration and may not be tidied away. Note `.gitignore` needs its `!/seeds/*.log`
+negation — the Vite template's blanket `*.log` would otherwise swallow the seeds themselves.
+
+**The logs are served as `.txt`, and renaming them to `.log` would cost ~380 MB per full-miss query.** GitHub
+Pages compresses `text/plain` and serves `.log` as an uncompressed `application/octet-stream`. Measured with
+local gzip, the four files compress about 16×, so the corpus is roughly 26 MB on the wire as `.txt` and the
+full 408.6 MB as anything Pages will not compress. The extension in `logs.config.json` is load-bearing.
+
+**`src/data/logs.ts` is the only module allowed to know the base path.** It is `/` today, so the indirection
+buys nothing visible — but under the old `dgopsq.github.io/netgrep/` project page a root-relative
+`/logs/x.txt` silently 404d and the page then looked like a corpus that simply matched nothing. Keep log URLs
+going through `logUrl()`.
 
 **The domain is hard-coded in three files, and nothing checks them.** `index.html` (canonical, `og:url`,
 `og:image`, and the `@id`s in the JSON-LD), `public/sitemap.xml` and `public/robots.txt` all spell out
@@ -65,9 +112,10 @@ URLs going through it.
 `base` carries no origin. If the domain moves, grep for it. A stale canonical is the worst of these to get
 wrong: it tells Google the real page is somewhere else.
 
-**`public/robots.txt` disallows `/stories/` on purpose.** They are 56 public-domain texts used as demo data,
-not pages, and indexing them would put 2.6 MB of duplicate content on the domain. It does not affect the demo
-— robots.txt binds crawlers, not the browser.
+**`public/robots.txt` disallows `/logs/` on purpose.** They are generated demo data, not pages, and indexing
+them would put a few hundred MB of synthetic log lines on the domain and bury the one page that is about
+netgrep. It does not affect the demo — robots.txt binds crawlers, not the browser, and the page fetches
+nothing until someone types a query.
 
 **The icons are generated from `public/favicon.svg`.** After editing it:
 
@@ -92,17 +140,6 @@ sips -s format jpeg -s formatOptions 88 /tmp/og.png --out packages/example/publi
 The previous version was `assets/header.jpg` padded out with pure black, which left the wordmark small in a
 letterbox whose black did not match the image's own background. If you replace the image, update
 `og:image:alt` in `index.html` too — it describes what is actually in it.
-
-**`src/data/stories.ts` is generated.** Titles are read out of each file's own header block. After adding or
-removing a file in `public/stories/`:
-
-```bash
-pnpm --filter @netgrep/example manifest
-```
-
-**The corpus is deliberately only the individual stories.** The complete-canon dumps, the omnibus collections
-and the novels were removed: they were supersets of the 56 remaining files and 84% of the bytes, so nearly
-every query matched all of them and the result list said nothing.
 
 This is a demo, not a test. Correctness is established by `pnpm test`, `pnpm test:rust` and
 `pnpm verify:pack`; CI only checks that this app typechecks and builds.
