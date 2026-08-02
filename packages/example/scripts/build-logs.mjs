@@ -8,9 +8,18 @@
 //
 //     node scripts/build-logs.mjs [--check]
 //
-// `--check` verifies each output exists and is already at its target size,
-// writing nothing, and exits 1 on the first mismatch — for CI to fail fast
-// rather than silently searching a stale or half-built corpus.
+// Alongside the files it writes `manifest.json`, mapping each source id to the
+// number of bytes that file actually ended up being. The demo reads it at
+// startup and shows those figures rather than the targets below, which are
+// floors: tiling stops at the first whole seed past the target, so every file
+// overshoots and a page quoting `targetBytes` states four sizes that are all
+// wrong. The manifest is generated output like the logs themselves, so it is
+// gitignored and the app must treat it as optional.
+//
+// `--check` verifies each output exists, is already at its target size and is
+// listed in the manifest at its true size — writing nothing, and exiting 1 on
+// the first mismatch, for CI to fail fast rather than silently searching a
+// stale or half-built corpus.
 //
 // Every seed MUST end with a newline: copies are concatenated back to back,
 // and a seed without a trailing terminator would join its last line to the
@@ -18,7 +27,7 @@
 
 import { once } from 'node:events';
 import { createWriteStream, existsSync } from 'node:fs';
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +35,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const seedsDir = join(root, 'seeds');
 const outDir = join(root, 'public', 'logs');
+const manifestPath = join(outDir, 'manifest.json');
 
 const { sources } = JSON.parse(
   await readFile(join(root, 'logs.config.json'), 'utf8'),
@@ -61,7 +71,7 @@ async function write(stream, buf) {
   if (!stream.write(buf)) await once(stream, 'drain');
 }
 
-async function checkSource(source) {
+async function checkSource(source, manifest) {
   const outPath = join(outDir, source.file);
 
   if (!existsSync(outPath)) {
@@ -77,8 +87,37 @@ async function checkSource(source) {
     return false;
   }
 
+  if (manifest[source.id] !== size) {
+    console.error(
+      `✗ ${source.file}: manifest says ${manifest[source.id]}, file is ${size}`,
+    );
+    return false;
+  }
+
   console.log(`✓ ${source.file}: ${size} bytes`);
   return true;
+}
+
+/**
+ * Record what each file actually weighs.
+ *
+ * Written after every source has been processed, INCLUDING the ones this run
+ * skipped as already built: the skip path never opens the file, so the only
+ * figure that can be trusted is the one on disk right now.
+ */
+async function writeManifest() {
+  const entries = await Promise.all(
+    sources.map(async (source) => {
+      const { size } = await stat(join(outDir, source.file));
+      return [source.id, size];
+    }),
+  );
+
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(Object.fromEntries(entries), null, 2)}\n`,
+  );
+  console.log(`manifest.json: ${entries.length} sources`);
 }
 
 async function buildSource(source) {
@@ -142,11 +181,21 @@ async function buildSource(source) {
 }
 
 if (checkOnly) {
-  const results = await Promise.all(sources.map(checkSource));
-  if (results.some((ok) => !ok)) process.exit(1);
+  const hasManifest = existsSync(manifestPath);
+  if (!hasManifest) console.error('✗ manifest.json: missing');
+
+  const manifest = hasManifest
+    ? JSON.parse(await readFile(manifestPath, 'utf8'))
+    : {};
+
+  const results = await Promise.all(
+    sources.map((source) => checkSource(source, manifest)),
+  );
+  if (!hasManifest || results.some((ok) => !ok)) process.exit(1);
 } else {
   await mkdir(outDir, { recursive: true });
   for (const source of sources) {
     await buildSource(source);
   }
+  await writeManifest();
 }

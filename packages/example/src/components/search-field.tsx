@@ -8,10 +8,16 @@ import { cn } from '@/lib/utils';
  *
  * Each one demonstrates a different thing about the search. The first two show
  * where a match sits in the file, which is what the elapsed times below make
- * visible; the middle two show that the pattern reaches ripgrep as a regex
- * rather than as a substring; the last one matches nothing anywhere, which is
- * the case that has to read all four sources to the last byte — the expensive
- * end of the argument, and worth offering rather than hiding.
+ * visible; the other two show that the pattern reaches ripgrep as a regex
+ * rather than as a substring.
+ *
+ * EVERY SUGGESTION MATCHES SOMETHING, and that is a rule rather than an
+ * accident. A pattern that matches nothing is the expensive case — it reads all
+ * four sources to their last byte — and offering it as a chip invites hundreds
+ * of megabytes of downloading on the visitor's connection for a row of dashes.
+ * The cost is not hidden by leaving it out: the stats bar states the corpus
+ * total and says in as many words that a query matching nothing reads every
+ * byte, and anyone who types one gets exactly that, honestly timed.
  *
  * The generated logs tile a fixed sample, so anything drawn from the sample
  * recurs near the head of its file. The `NETGREP-MARKER-*` lines are the
@@ -23,7 +29,6 @@ const SUGGESTIONS = [
   { pattern: 'NETGREP-MARKER-75', hint: 'one line, three quarters in' },
   { pattern: 'Exception|BREAK-IN', hint: 'alternation, across two services' },
   { pattern: 'sshd\\[[0-9]+\\]: Failed', hint: 'a real regex' },
-  { pattern: 'kernel panic', hint: 'no match — reads all four to the end' },
 ];
 
 type SearchFieldProps = {

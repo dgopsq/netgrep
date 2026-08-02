@@ -41,6 +41,20 @@ export type SearchState = {
    */
   lines: Record<string, MatchedLine>;
   /**
+   * Whether a source's `status`, `line` and `elapsedMs` are still last run's,
+   * per source id: true from the moment a run starts until that source answers
+   * it.
+   *
+   * This is the price of the stale-while-revalidate design below, and it has to
+   * be paid explicitly. `statuses` alone cannot tell the difference between a
+   * source that matched this query and one that matched the previous one — both
+   * read `matched` — so a panel drawing from it would spend the whole run
+   * claiming a verdict for a pattern that is no longer in the search box. On
+   * the old 2.6 MB story corpus that window was a flicker; over 400 MB it is
+   * nearly two seconds, which is the entire time a visitor is looking.
+   */
+  pending: Record<string, boolean>;
+  /**
    * Milliseconds from the run's first byte requested to each source's own
    * answer, per source id. With four files running from 8 MB to 240 MB, this
    * is the number the dashboard exists to show: not just whether a source
@@ -105,6 +119,7 @@ function idleState(): SearchState {
   return {
     statuses: {},
     lines: {},
+    pending: {},
     elapsedMs: {},
     matched: 0,
     answered: 0,
@@ -145,15 +160,14 @@ export function useLogSearch(pattern: string): SearchState {
     const controller = new AbortController();
     const startedAt = performance.now();
 
-    // Stale-while-revalidate: the previous run's verdicts stay on screen, and
-    // each panel changes only when its own new answer arrives.
+    // Stale-while-revalidate: the previous run's data stays in state, and each
+    // panel replaces its own only when its own new answer arrives. Clearing it
+    // all here instead makes the dashboard flash — on every debounced keystroke
+    // four panels blank and refill milliseconds later.
     //
-    // Resetting every panel to `searching` here instead makes the dashboard
-    // flash: on each debounced keystroke all four panels drop their verdict,
-    // then re-acquire it milliseconds later. Only panels that have never been
-    // searched show the searching state; the running indicator in the field
-    // and the counter in the stats bar carry the in-flight signal for
-    // everything else.
+    // What is NOT carried over is the claim that any of it is current: `pending`
+    // goes true for every source, and it is the panel's job to stop presenting
+    // a verdict, a time and a highlight it can no longer stand behind.
     setState((prev) => ({
       ...prev,
       statuses: Object.fromEntries(
@@ -162,6 +176,7 @@ export function useLogSearch(pattern: string): SearchState {
           prev.statuses[id] ?? ('searching' as const),
         ]),
       ),
+      pending: Object.fromEntries(sourceIds.map((id) => [id, true])),
       matched: 0,
       answered: 0,
       firstMatchMs: null,
@@ -206,6 +221,7 @@ export function useLogSearch(pattern: string): SearchState {
             // A miss leaves the previous line in place, exactly as it leaves
             // the previous status: the panel is repainted by its own answer.
             lines: line === null ? prev.lines : { ...prev.lines, [id]: line },
+            pending: { ...prev.pending, [id]: false },
             elapsedMs: { ...prev.elapsedMs, [id]: elapsed },
             matched,
             answered,

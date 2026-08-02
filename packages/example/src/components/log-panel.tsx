@@ -85,11 +85,18 @@ export function LogPanelHeader() {
 
 type LogPanelProps = {
   source: LogSource;
+  /** The file's real size in bytes, from the generated manifest. */
+  bytes: number;
   status: SourceStatus;
   /** The first matching line, when this source matched. */
   line?: MatchedLine;
   /** Milliseconds from the run's start to this source's own answer. */
   elapsedMs?: number;
+  /**
+   * Whether `status`, `line` and `elapsedMs` still describe the previous query.
+   * True from the start of a run until this source answers it.
+   */
+  pending?: boolean;
 };
 
 /**
@@ -105,18 +112,48 @@ type LogPanelProps = {
  * exposes no byte counter, so a bar here would be an animation pretending to be
  * a measurement. The pulsing hairline says "this source is being read right
  * now" and claims nothing further.
+ *
+ * WHILE `pending`, THIS ROW MAY NOT ASSERT ANYTHING. The state it holds belongs
+ * to the previous query, so the verdict, the elapsed time and the highlight all
+ * stand down: the row reads `streaming`, the time reads `—`, and the last
+ * matching line stays visible but dimmed and unmarked, as context for what is
+ * being replaced rather than as an answer. Blanking it instead was tried in the
+ * design this replaced and is worse — four rows emptying and refilling on every
+ * keystroke — but a lit teal row reading `MATCHED · 15ms` and quoting a
+ * highlighted phrase that is not in the search box is not a cosmetic problem.
+ * It is the page telling the visitor something untrue for two seconds, on a
+ * page whose only claim on their attention is that its numbers are real.
  */
-export function LogPanel({ source, status, line, elapsedMs }: LogPanelProps) {
-  const isMatched = status === 'matched';
-  const isMissed = status === 'missed';
-  const isSearching = status === 'searching';
-  const isFailed = status === 'failed';
+export function LogPanel({
+  source,
+  bytes,
+  status,
+  line,
+  elapsedMs,
+  pending = false,
+}: LogPanelProps) {
+  // Nothing but `streaming` can be shown for a source that has not answered the
+  // query currently in the box.
+  const shown: SourceStatus = pending ? 'searching' : status;
+
+  // The stored verdict, not the shown one: a re-searching row keeps its quote.
+  const quoting = status === 'matched' && line !== undefined;
+
+  const isMatched = shown === 'matched';
+  const isMissed = shown === 'missed';
+  const isSearching = shown === 'searching';
+  const isFailed = shown === 'failed';
 
   return (
     <Card
       className={cn(
-        // Explicitly NOT `transition-all`: it would include `transform`, and
-        // the pulse states already own everything that moves here.
+        // Enumerated rather than `transition-all`, which is a list of every
+        // property the browser could animate rather than of what this row
+        // changes: a match tints the surface and lifts it, a failure reddens
+        // it, and that is the whole set. `opacity` is the one deliberately kept
+        // out — `animate-pulse` drives it from keyframes on the hairline, the
+        // dot and the status word, and those three enumerate for the same
+        // reason.
         'relative overflow-hidden duration-300',
         'transition-[border-color,background-color,box-shadow]',
         isMatched &&
@@ -155,7 +192,7 @@ export function LogPanel({ source, status, line, elapsedMs }: LogPanelProps) {
 
         {/*
           Below `sm` the four columns do not fit on one line, and the first
-          thing to go is the file name — truncated to `apache.log · 8.0…`,
+          thing to go is the file name — truncated to `apache.txt · 8.3…`,
           which drops the size. So it wraps to its own line instead: `w-full`
           on a wrapping row takes the whole second line, and `order-last` is
           what puts it after the two figures rather than in front of them.
@@ -164,7 +201,7 @@ export function LogPanel({ source, status, line, elapsedMs }: LogPanelProps) {
         <span className="text-muted-foreground/70 order-last mt-0.5 w-full truncate pl-7 font-mono text-[11px] tabular-nums sm:order-none sm:mt-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:pl-0">
           {source.file}
           <span className="text-muted-foreground/40"> · </span>
-          {formatBytes(source.targetBytes)}
+          {formatBytes(bytes)}
         </span>
 
         <span
@@ -174,10 +211,10 @@ export function LogPanel({ source, status, line, elapsedMs }: LogPanelProps) {
             isMatched && 'text-primary',
             isFailed && 'text-destructive',
             isSearching && 'text-primary/70 animate-pulse',
-            (isMissed || status === 'idle') && 'text-muted-foreground/60',
+            (isMissed || shown === 'idle') && 'text-muted-foreground/60',
           )}
         >
-          {STATUS_LABEL[status]}
+          {STATUS_LABEL[shown]}
         </span>
 
         <span
@@ -187,28 +224,59 @@ export function LogPanel({ source, status, line, elapsedMs }: LogPanelProps) {
             isMatched ? 'text-primary' : 'text-muted-foreground',
           )}
         >
-          {elapsedMs === undefined ? '—' : formatMs(elapsedMs)}
+          {pending || elapsedMs === undefined ? '—' : formatMs(elapsedMs)}
         </span>
       </div>
 
       {/*
-        The matching line, rendered only on a match. `line` outlives a status
-        change — the hook keeps it while a new query is in flight — so this is
-        gated on `isMatched` rather than on the string existing, or a row that
-        has just become a miss would still be quoting.
+        The matching line.
+
+        Gated on the stored status rather than on `shown`, so a row that is
+        re-searching keeps quoting while it streams — but see `stale` below: it
+        quotes without the highlight, because the marks would point at a pattern
+        the visitor is no longer searching for. A row whose stored status is a
+        miss stops quoting altogether.
+
+        The row's height is animated rather than jumped. When one source's line
+        appears, every panel under it moves — up to three shifts inside half a
+        second on a query that matches everything — and a dashboard that jolts
+        while you are reading a number off it is hard to read. `grid-rows-[0fr]`
+        to `[1fr]` is the one way to transition to a content height CSS cannot
+        otherwise interpolate; the `overflow-hidden` child is what makes it
+        clip rather than overflow while collapsed. The reduced-motion block in
+        index.css flattens the duration, so this arrives instantly there.
+
+        Collapsed is not the same as gone: the text is still in the DOM, so it
+        is `aria-hidden` while clipped. Without that a screen reader would read
+        out a log line that the sighted page has just retracted, which is the
+        stale-claim problem again in the one place it would be hardest to spot.
 
         Clamped to two rows: the library caps the line at a byte count, and a
         byte count is not a row count. Without the clamp one long line — the
         Zookeeper seed has some — would make its panel several times the height
         of the other three.
       */}
-      {isMatched && line !== undefined && (
-        <div className="border-border/60 border-t px-3.5 py-2">
-          <p className="text-foreground/80 line-clamp-2 font-mono text-[11px] leading-relaxed break-words">
-            {highlight(line)}
-          </p>
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-300 ease-out',
+          quoting ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+        aria-hidden={!quoting}
+      >
+        <div className="overflow-hidden">
+          <div className="border-border/60 border-t px-3.5 py-2">
+            <p
+              className={cn(
+                'line-clamp-2 font-mono text-[11px] leading-relaxed break-words transition-colors',
+                pending ? 'text-muted-foreground/50' : 'text-foreground/80',
+              )}
+            >
+              {/* Stale: the text is context, the marks would be a claim. */}
+              {line !== undefined && (pending ? line.text : highlight(line))}
+            </p>
+          </div>
         </div>
-      )}
+      </div>
     </Card>
   );
 }

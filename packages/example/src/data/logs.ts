@@ -12,26 +12,20 @@ export type LogSource = {
   service: string;
   /** The seed file under `seeds/` the generator tiles to build this source. */
   seed: string;
-  /** The floor `build-logs.mjs` builds this file up to, in bytes. */
+  /**
+   * The floor `build-logs.mjs` builds this file up to, in bytes.
+   *
+   * A floor, not a size: tiling stops at the first whole seed copy past this
+   * number, so every file overshoots it by up to one seed. It is the fallback
+   * the page shows when the generated `manifest.json` — which carries the real
+   * figures — cannot be read, and it is never the better answer.
+   */
   targetBytes: number;
   /** The file's name within `public/logs/`. */
   file: string;
 };
 
 export const sources: LogSource[] = config.sources;
-
-/**
- * The combined floor of all four sources, in bytes.
- *
- * Each generated file actually lands slightly at or above its own
- * `targetBytes` — the generator stops at the first whole-seed copy that
- * reaches it, never mid-line — so this is the size the UI can promise a
- * search costs at least, not an exact total.
- */
-export const totalBytes: number = sources.reduce(
-  (sum, source) => sum + source.targetBytes,
-  0,
-);
 
 /**
  * Build the URL of a generated log file.
@@ -52,4 +46,18 @@ export const totalBytes: number = sources.reduce(
  */
 export function logUrl(source: LogSource): string {
   return `${import.meta.env.BASE_URL}logs/${source.file}`;
+}
+
+/**
+ * The URL of the generated size manifest, composed the same way and for the
+ * same reason as `logUrl`.
+ *
+ * Deliberately fetched rather than imported. `manifest.json` is generated
+ * output living in a gitignored directory, so a static import would make
+ * `pnpm typecheck:example` fail on a clean clone that has not run the
+ * generator — a missing module error about a file nobody committed, on a
+ * repository that otherwise typechecks.
+ */
+export function manifestUrl(): string {
+  return `${import.meta.env.BASE_URL}logs/manifest.json`;
 }

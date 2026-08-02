@@ -8,6 +8,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { sources } from '@/data/logs';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useLogSearch } from '@/hooks/use-log-search';
+import { useLogSizes } from '@/hooks/use-log-sizes';
+import { formatMs } from '@/lib/format';
 
 /**
  * Every keystroke starts four downloads totalling hundreds of megabytes, so the
@@ -15,10 +17,31 @@ import { useLogSearch } from '@/hooks/use-log-search';
  */
 const DEBOUNCE_MS = 250;
 
+/**
+ * What a screen reader is told about a run.
+ *
+ * Deliberately only two announcements per search — one when it starts, one when
+ * it finishes. The panels update four times over as much as two seconds, and a
+ * live region tracking each of them would talk over itself for the whole run
+ * while saying nothing a visitor could act on. Everything else is already
+ * readable as text: each row states its own status in words, not in colour.
+ */
+function announcement(state: ReturnType<typeof useLogSearch>): string {
+  if (state.error !== null) return 'The pattern did not compile.';
+  if (state.running) return `Searching ${sources.length} log sources.`;
+  if (state.answered === 0) return '';
+
+  const took =
+    state.allAnsweredMs === null ? '' : ` in ${formatMs(state.allAnsweredMs)}`;
+
+  return `Search finished${took}. ${state.matched} of ${state.answered} sources matched.`;
+}
+
 export function App() {
   const [query, setQuery] = useState('');
   const pattern = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const state = useLogSearch(pattern);
+  const sizes = useLogSizes();
 
   return (
     <div className="relative pb-24">
@@ -80,7 +103,16 @@ export function App() {
           </Alert>
         )}
 
-        <StatsBar state={state} />
+        {/*
+          The one place the page speaks. Results land per source over as much
+          as two seconds, and without this a screen-reader user gets a page
+          that silently rearranges itself and never says it is done.
+        */}
+        <p className="sr-only" role="status">
+          {announcement(state)}
+        </p>
+
+        <StatsBar state={state} corpusBytes={sizes.totalBytes} />
 
         {/*
           The panels are listed smallest source first and never reorder. That
@@ -97,9 +129,11 @@ export function App() {
               <li key={source.id}>
                 <LogPanel
                   source={source}
+                  bytes={sizes.bytes[source.id] ?? source.targetBytes}
                   status={state.statuses[source.id] ?? 'idle'}
                   line={state.lines[source.id]}
                   elapsedMs={state.elapsedMs[source.id]}
+                  pending={state.pending[source.id]}
                 />
               </li>
             ))}
