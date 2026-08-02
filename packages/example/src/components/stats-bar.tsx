@@ -41,7 +41,10 @@ const ms = (value: number | null) =>
  * gap between the two is the early-resolution property (decision 0002).
  *
  * The corpus total is stated because a query matching nothing has to download
- * every byte of it, and that cost should not be hidden behind a spinner.
+ * every byte of it, and that cost should not be hidden behind a spinner. The
+ * WebAssembly figure is stated for the same reason: it is the price of the
+ * approach, and a visitor who finds it in devtools rather than here stops
+ * trusting the rest of the page.
  */
 export function StatsBar({ state }: { state: SearchState }) {
   const idle = !state.running && state.resolved === 0;
