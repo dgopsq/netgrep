@@ -53,18 +53,18 @@ batches, and [The matching line](03-the-matching-line.md) covers getting the lin
 ## When to use it
 
 netgrep applies to a file you can address but cannot preprocess, and that a browser can fetch
-without signing in: a published corpus, an artefact or build log served openly or behind a signed
-URL, a document in a bucket you do not own. An index would answer faster, but building one means
-owning the build, and it cannot answer about a file that appeared a minute ago. Anything that loads
-only because you are signed in is out of reach — netgrep sends no credentials.
+without signing in: a document someone else publishes, an artefact or build log served openly or
+behind a signed URL, a file in a bucket you do not own. An index would answer faster, but building
+one means owning the build, and it cannot answer about a file that appeared a minute ago. Anything
+that loads only because you are signed in is out of reach — netgrep sends no credentials.
 
-It also fits a corpus you *do* own, when standing up a search backend is not worth it: a real-time
+It also fits files you *do* own, when standing up a search backend is not worth it: a real-time
 search over a blog's raw post files needs nothing deployed. One runs on
 [my blog](https://diegopasquali.com/search), and its [source](https://github.com/dgopsq/writings) is
 public.
 
-Use an index instead when the corpus is large, when you can preprocess it, or when results have to
-be ranked. netgrep reads every byte of a file that does not match, and it answers per file rather
-than ordering them; [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and
+Use an index instead when there are many files, when they are large, when you can preprocess them,
+or when results have to be ranked. netgrep reads every byte of a file that does not match, and it
+answers per file rather than ordering them; [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and
 [FlexSearch](https://github.com/nextapps-de/flexsearch) do those things well. The
 [limitations](07-limitations.md) page is specific about where the line falls.
