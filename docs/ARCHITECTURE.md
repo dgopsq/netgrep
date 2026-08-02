@@ -21,14 +21,30 @@ bundler configuration**: since 0.2.0 the WASM is loaded through a standard
 `new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
 understand out of the box.
 
+It also requires a URL the browser is allowed to read: a cross-origin file must be served with
+`Access-Control-Allow-Origin`, or the fetch rejects before a byte is searched, and it rejects with an opaque
+network error rather than anything netgrep can explain. That is the first gate a remote file has to pass, so
+it is a requirement rather than a caveat — and it bounds the *file you do not control* claim below to files
+whose **host** cooperates.
+
+It is not the only gate. netgrep builds its own request and sets nothing on it beyond `signal`, so no
+`Authorization` header and no API key go out, and `Request.credentials` defaults to `same-origin`, so no
+cookies go cross-origin either. A file behind a login is therefore fetched as an anonymous stranger and
+cannot be searched, however permissive its CORS policy — a host can answer `Access-Control-Allow-Origin: *`
+and still refuse the reader. That bound bites hardest on exactly the files this project positions itself
+around, and lifting it is [`BACKLOG`](BACKLOG.md) item **22**.
+
 **Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
 (Positions within the returned line are in scope since 0022; nothing else about locating a match is.)
 
-**It is an experiment rather than a recommended way to build search**, and the public README leads with that.
-A prebuilt index will usually beat it on size, speed and capability; what netgrep tests is whether ripgrep's
-real engine is usable over HTTP against files as they download. That framing is why the correctness caveats
-below are documented rather than hidden, and why the API has widened exactly once, deliberately, in four
-years — twice if the follow-up that added match positions within that line is counted separately.
+**The positioning is deliberate** — [decision 0025](decisions/0025-streaming-grep-over-http.md).
+netgrep is grep over HTTP: a regex engine answering a question about a remote file in constant memory,
+before the download finishes. Against a large corpus, or one you can preprocess, a prebuilt index wins
+on size, speed and capability; netgrep's ground is a file you do not control, cannot preprocess, and have no
+shell on the machine that holds the file. That is also why the correctness caveats below are documented
+rather than hidden, and why the API has widened exactly once in four years — twice, if
+[0022](decisions/0022-capture-ranges.md)'s positions within the returned line are counted apart from
+[0020](decisions/0020-the-matching-line.md)'s line itself.
 
 ---
 

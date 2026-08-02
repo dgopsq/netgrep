@@ -44,7 +44,7 @@ export function SearchField({ value, onChange, running }: SearchFieldProps) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder="Search 56 files with a ripgrep pattern…"
-          aria-label="Search the corpus"
+          aria-label="Search the stories"
           // This is the page's only interactive control, so focusing it takes
           // focus from nothing.
           autoFocus

@@ -112,7 +112,7 @@ export function App() {
           </p>
 
           <p>
-            netgrep is experimental, and{' '}
+            What netgrep{' '}
             {/*
               Composed from Vite's base rather than written as `/docs/`: the
               site sat at `/netgrep/` before the custom domain, and a
@@ -123,7 +123,7 @@ export function App() {
               className="hover:text-primary underline underline-offset-4"
               href={`${import.meta.env.BASE_URL}docs/#limitations`}
             >
-              what it cannot do
+              cannot do
             </a>{' '}
             is listed in the documentation.
           </p>

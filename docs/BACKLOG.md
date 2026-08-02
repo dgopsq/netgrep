@@ -204,6 +204,32 @@ whether the publish action performs the OIDC exchange at all. The answer to the 
 `workflow_dispatch` retry path for npm**, which exists precisely because a failed publish cannot be retried
 by re-running `release.yml`.
 
+### 22. `fetch` options are not passed through — `packages/netgrep/src/lib/Netgrep.ts`
+
+`search` builds its own request and forwards only `signal` (`fetch(url, { signal: config?.signal })`), so a
+URL needing an `Authorization` header, a cookie, or a non-default `mode` cannot be searched at all. It is not
+a workaround away either: netgrep owns the fetch because it needs `res.body` to stream, so a caller cannot
+hand it a `Request` or a response it made itself.
+
+Named in [0025](decisions/0025-streaming-grep-over-http.md)'s *Rejected alongside* as a real ask deferred
+rather than refused — and it bites hardest on exactly the files that record positions the project around,
+which are the ones somebody else hosts. The design question is unsettled: accepting a `RequestInit` wholesale
+is one line and hands callers `method` and `body`, neither of which means anything here and both of which
+would then have to be documented as ignored or rejected; naming the fields netgrep supports keeps the surface
+honest and makes every future field a change. Per
+[`../AGENTS.md` §1](../AGENTS.md#1-what-this-project-is) it starts as an issue.
+
+### 23. Chunk searching runs on the main thread — `packages/netgrep/src/lib/Netgrep.ts`
+
+Every chunk is handed to the WASM matcher between paints, so a large file's search competes with rendering on
+the same thread — the one workload the positioning in
+[0025](decisions/0025-streaming-grep-over-http.md) invites. A worker would move it off, at the cost of
+transferring chunks across the boundary, a second WASM instantiation per worker, and an abort path that has to
+cross it too.
+
+No consumer has reported it, and the demo does not show it: 56 files of prose are matched faster than a frame.
+Recorded so it is not rediscovered rather than because it is planned.
+
 ---
 
 # Done

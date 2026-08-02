@@ -1,5 +1,5 @@
 <!-- Absolute: npm renders this README off GitHub, where a relative path resolves to nothing. -->
-![new Netgrep(); — search remote files while they're downloading](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
+![The netgrep wordmark: new Netgrep(); set in monospace, fading from white into teal on a dark gradient](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
 
 # @netgrep/search
 
@@ -26,14 +26,6 @@ the pattern is not valid regex, so a stray `(` from a search box is an ordinary 
 Each is a separate entry point so a caller pays only for what it asks for, and all three share one compiled
 matcher and one searcher, so their matching semantics cannot differ.
 
-> [!IMPORTANT]
-> **This is an experiment, not a recommendation.** netgrep is almost certainly not the best way to add
-> search to your site — a prebuilt index ([Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/),
-> [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted service) will usually be smaller,
-> faster and far more capable. What this explores is a narrower question: what happens if you compile
-> ripgrep's actual search engine to WebAssembly and run it over HTTP against files *while they are still
-> downloading*.
->
-> Note also that this package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) and has
-> [known limitations](https://github.com/dgopsq/netgrep#known-limitations) — a single NUL byte discards the
-> chunk being searched, and `$` does not match on CRLF input.
+On its own this package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) and nothing else. Its
+[known limitations](https://github.com/dgopsq/netgrep#known-limitations) are worth reading first — a
+single NUL byte discards the block of lines being searched, and `$` does not match on CRLF input.

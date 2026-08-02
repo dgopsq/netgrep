@@ -64,6 +64,19 @@ export default defineConfig({
           name: 'tools',
           environment: 'node',
           include: ['scripts/**/*.spec.mjs', 'packages/example/**/*.spec.ts'],
+          // The first `renderGuide` call instantiates Shiki's WebAssembly
+          // highlighter, and that one test pays for it: 2.7s on a warm
+          // developer machine against Vitest's 5s default. The margin is the
+          // whole problem — a cold CI runner is several times slower and the
+          // test times out, which reads as a broken guide renderer rather than
+          // as a slow one. The cost is content-independent, so it does not
+          // grow with the guide.
+          //
+          // A number with headroom, not a target: nothing here should take
+          // seconds, and if something starts approaching this it is a defect
+          // rather than a budget to spend.
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
         },
       },
     ],

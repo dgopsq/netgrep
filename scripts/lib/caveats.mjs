@@ -50,7 +50,7 @@ export function renderGuideSection(caveats) {
     '',
     '# Limitations',
     '',
-    'netgrep is experimental, and the following are documented rather than fixed.',
+    'What netgrep gets wrong, and what it deliberately does not do.',
     'Each defect is pinned by a test, so it cannot change unnoticed.',
     '',
     '## Defects',

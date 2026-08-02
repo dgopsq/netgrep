@@ -18,10 +18,10 @@
     -->
     <link rel="canonical" href="https://netgrep.diegopasquali.com/" />
 
-    <title>netgrep — in-browser file search with ripgrep and WebAssembly</title>
+    <title>netgrep — grep over HTTP, in the browser</title>
     <meta
       name="description"
-      content="Search remote text files from the browser while they download. ripgrep's engine compiled to WebAssembly — no search index to build, no backend to run. Live demo over 56 files."
+      content="Point netgrep at a URL and a pattern: it streams the response through ripgrep's real regex engine and answers the moment a matching line arrives — no index to build, no backend to run. Live demo over 56 files."
     />
 
     <!--
@@ -52,11 +52,11 @@
     <meta property="og:url" content="https://netgrep.diegopasquali.com/" />
     <meta
       property="og:title"
-      content="netgrep — search remote files while they download"
+      content="netgrep — grep over HTTP, in the browser"
     />
     <meta
       property="og:description"
-      content="ripgrep's search engine, compiled to WebAssembly and pointed at plain static files. It answers the moment it sees a match, without reading the rest."
+      content="ripgrep's real regex engine over a streaming fetch. It answers the moment a matching line arrives, without waiting for the last byte and without holding the file in memory."
     />
     <meta
       property="og:image"
@@ -64,6 +64,13 @@
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <!--
+      A description of the artwork, not a statement of the project's copy: the
+      quoted line is the retired tagline, still baked into og-image.jpg and
+      assets/header.png. Alt text has to say what the image shows, so it stays
+      until the artwork is redrawn — do not sync it to the current lede while
+      the pixels disagree.
+    -->
     <meta
       property="og:image:alt"
       content="The netgrep wordmark — new Netgrep(); set in monospace, fading from white into teal — above the line 'Search remote files while they're downloading.', on a dark gradient."
@@ -73,11 +80,11 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="netgrep — search remote files while they download"
+      content="netgrep — grep over HTTP, in the browser"
     />
     <meta
       name="twitter:description"
-      content="ripgrep's search engine, compiled to WebAssembly and pointed at plain static files. It answers the moment it sees a match, without reading the rest."
+      content="ripgrep's real regex engine over a streaming fetch. It answers the moment a matching line arrives, without waiting for the last byte and without holding the file in memory."
     />
     <meta
       name="twitter:image"
@@ -105,7 +112,7 @@
             "@id": "https://netgrep.diegopasquali.com/#website",
             "url": "https://netgrep.diegopasquali.com/",
             "name": "netgrep",
-            "description": "Search remote text files from the browser while they download, using ripgrep's engine compiled to WebAssembly.",
+            "description": "grep over HTTP, running in the browser: search a remote file with ripgrep's real regex engine while it downloads.",
             "inLanguage": "en",
             "publisher": { "@id": "https://netgrep.diegopasquali.com/#author" }
           },
@@ -137,7 +144,7 @@
             "@type": "SoftwareSourceCode",
             "@id": "https://netgrep.diegopasquali.com/#library",
             "name": "@netgrep/netgrep",
-            "description": "A JavaScript library that searches remote files while they download, by streaming each HTTP chunk through ripgrep's search engine compiled to WebAssembly. Returns a boolean per file, and optionally the first matching line and where each match sits within it; builds no index and needs no backend.",
+            "description": "A JavaScript library that searches a remote file while it downloads, by streaming each HTTP chunk through ripgrep's regex engine compiled to WebAssembly. Answers before the last byte, in constant memory, with no index to build and no backend to run.",
             "codeRepository": "https://github.com/dgopsq/netgrep",
             "programmingLanguage": ["TypeScript", "Rust"],
             "runtimePlatform": "WebAssembly",
@@ -164,9 +171,10 @@
     <noscript>
       <h1>netgrep</h1>
       <p>
-        netgrep searches remote text files from the browser while they are still
-        downloading, using ripgrep's search engine compiled to WebAssembly. It
-        builds no search index and needs no backend.
+        netgrep is grep over HTTP, running in the browser: it streams a URL's
+        response through ripgrep's real regex engine and answers the moment a
+        matching line arrives, without waiting for the last byte. It builds no
+        index and needs no backend.
       </p>
       <p>
         This demo needs JavaScript and WebAssembly to run. The library is on npm

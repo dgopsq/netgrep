@@ -7,10 +7,13 @@ export function Hero() {
   return (
     <header className="flex flex-col items-center pt-20 pb-10 text-center sm:pt-28">
       {/*
-        The page used to open with "An experiment, not a recommendation" and a
-        paragraph recommending Pagefind, Lunr and FlexSearch — three hedges
-        before the reader reached the search box. The caveats are not gone; they
-        are stated plainly further down, where they inform rather than deter.
+        The lead line names the category before the property, and the accent
+        carries the capability rather than the timing — the timing is what the
+        grid below demonstrates, file by file. Constant memory is not itself
+        rare: a hand-written fetch loop feeding a per-chunk RegExp holds memory
+        flat too. Doing it with ripgrep's engine is the part nothing else in a
+        tab offers. The hedges that used to open this page are not gone — they
+        are on the limitations page, where they inform rather than deter.
       */}
       <Badge
         variant="outline"
@@ -28,14 +31,18 @@ export function Hero() {
       </h1>
 
       <p className="text-foreground/90 mt-6 max-w-2xl text-xl leading-relaxed text-balance sm:text-2xl">
-        Search remote files{' '}
-        <em className="text-primary not-italic">while they're downloading</em>.
+        grep over HTTP,{' '}
+        <em className="text-primary not-italic">
+          on files your tab could never hold
+        </em>
+        .
       </p>
 
       <p className="text-muted-foreground mt-4 max-w-xl leading-relaxed text-balance">
-        ripgrep's search engine, compiled to WebAssembly and pointed at plain
-        static files. It answers the moment it sees a match, without reading the
-        rest — no index to build, no backend to run.
+        ripgrep's real regex engine over a streaming fetch. It answers the
+        moment a matching line arrives — without waiting for the last byte, and
+        without holding the file in memory. No index to build, no backend to
+        run.
       </p>
 
       <div className="mt-7 flex flex-wrap items-center justify-center gap-2 text-sm">

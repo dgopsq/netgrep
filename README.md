@@ -1,19 +1,15 @@
-![new Netgrep(); — search remote files while they're downloading](assets/header.png)
+![The netgrep wordmark: new Netgrep(); set in monospace, fading from white into teal on a dark gradient](assets/header.png)
 
 # netgrep
 
-Search remote text files from the browser **while they are still downloading**. netgrep is
-[ripgrep](https://github.com/BurntSushi/ripgrep)'s search engine compiled to WebAssembly and pointed
-at plain static files. There is no index to build and no backend to run.
+**netgrep is grep over HTTP, running in the browser.** Point it at a URL and a pattern: it streams
+the response through [ripgrep](https://github.com/BurntSushi/ripgrep)'s real regex engine —
+`[[:alpha:]]`, `(?x)`, smart case, arbitrary
+mid-word substrings — and answers the moment a matching line arrives, without waiting for the last
+byte and without holding the file in memory. There is no index to build and no backend to run, so it
+works on files you don't control and can't preprocess, and the query never leaves the tab.
 
 **[Try it →](https://netgrep.diegopasquali.com/)** · **[Documentation →](https://netgrep.diegopasquali.com/docs/)**
-
-This is an experiment, not a recommendation. A prebuilt index ([Pagefind](https://pagefind.app/),
-[Lunr](https://lunrjs.com/), [FlexSearch](https://github.com/nextapps-de/flexsearch), or a hosted
-service) will usually be smaller and faster, and it can rank results and count matches, neither of
-which netgrep does. What this project explores is narrower: whether ripgrep's actual engine, run over
-HTTP against files as they arrive, is useful. On a small corpus it is. This is a demonstration of
-that idea, not infrastructure.
 
 ## Requirements
 
@@ -22,6 +18,9 @@ that idea, not infrastructure.
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
   the regex engine's Unicode tables, and it is the main cost of the approach.
+- **A URL the browser can fetch anonymously.** A cross-origin file needs `Access-Control-Allow-Origin`
+  from its host, and netgrep sets nothing on the request — no headers, no API key, and no cookies
+  cross-origin — so a file behind a login is out of reach whatever its CORS policy says.
 
 ## Install
 
@@ -46,13 +45,16 @@ if (output.result) {
 }
 ```
 
-Batches, match positions within the line, cancellation, caching and the regex dialect are all in the
+A result is a boolean per URL, plus — if you ask for it — the first matching line and each match's
+position within it. That is the whole answer: no ranking, no match counts, no line numbers. Batches,
+cancellation, caching and the regex dialect are all in the
 [documentation](https://netgrep.diegopasquali.com/docs/).
 
 ## Known limitations
 
-netgrep is experimental, and these are documented rather than fixed. Each is pinned by a test, and
-explained in full in the [documentation](https://netgrep.diegopasquali.com/docs/#limitations).
+These are documented rather than fixed. Each is pinned by a test, so none of them can change
+unnoticed, and each is explained in full in the
+[documentation](https://netgrep.diegopasquali.com/docs/#limitations).
 
 <!-- BEGIN GENERATED CAVEATS -->
 - **[Inside a line longer than 64 KB, results are approximate](https://netgrep.diegopasquali.com/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.

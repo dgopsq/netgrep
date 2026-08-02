@@ -16,15 +16,19 @@ occur in the file at this URL?* — a boolean, plus, if the caller asks for it, 
 ([decision 0022](docs/decisions/0022-capture-ranges.md)). Nothing more: no line numbers, no file offsets, no
 match counts, no ranking.
 
-The intended use case is a client-side search over a small, static, file-based corpus (e.g. Markdown posts
-emitted by a static site generator), instead of standing up an index-based search backend.
+The case it is built for is being handed a URL with no shell on the machine that holds the file: an
+artefact on a CI platform, a published corpus, a log a support agent can open but not download. The
+file still has to be one an anonymous cross-origin request can fetch — netgrep sends no headers and
+no cookies, so anything behind a login is out of reach until item **22** lands. It also works for a
+small static corpus you own — a blog's raw post files, searched with nothing new deployed — but that
+is an example, not the definition.
 
-**It is an experiment, and the README says so first.** netgrep is not claimed to be a good way to build
-search — a prebuilt index (Pagefind, Lunr, FlexSearch, a hosted service) is usually smaller, faster and more
-capable, and can rank and locate matches, neither of which netgrep does. What the project explores is the
-narrower question of whether ripgrep's real engine can usefully run over HTTP against files as they download.
-Keep that framing when you touch user-facing text: describe what it does and what it costs, and do not sell
-it.
+**Positioning is deliberate and is documented in [decision 0025](docs/decisions/0025-streaming-grep-over-http.md).**
+Describe what netgrep does and what it costs. The WebAssembly download is stated wherever the project
+is introduced; where a prebuilt index beats netgrep is stated plainly on the limitations page and in
+the guide, once. Neither belongs above the fold, and neither may be quietly dropped — the test for any
+sentence is whether a developer who reads it, installs the package, and hits the limit an hour later
+would feel informed or misled.
 
 **Project status: maintained, conservative.** The toolchain is current and CI is green. Keep it that way: fix
 defects, keep dependencies from rotting, keep it working for existing consumers. That is still the bulk of the
@@ -142,8 +146,12 @@ entered into it in the first place. So when you add one to [`docs/BACKLOG.md`](d
 decide whether a visitor is affected: if so, add an entry here; if not, no action — but make it a
 decision, not an omission.
 
-**Still not enforced, and still yours to check:** the hero copy and the `StatsBar` line, which state
-the scope of a result and the 1.17 MB WebAssembly download.
+**Still not enforced, and still yours to check:** the `StatsBar` line, which states the 1.17 MB
+WebAssembly download and has to move when the binary does; and the hero copy, which no longer states the
+scope of a result — since [decision 0025](docs/decisions/0025-streaming-grep-over-http.md) its accent
+claims **constant memory**. The second is the harder one, because the page demonstrates nothing about
+memory: the claim holds only while the library retains nothing, so anything that reintroduces retention
+makes the hero wrong with no test failing. **Do not add a number to the page to make it look measured.**
 
 > [!WARNING]
 > **The page measures the network, and that is now true by construction.** This section spent two revisions on
@@ -515,6 +523,12 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    visitor can see — copy, an image, a story file — must be committed as `fix(example):` or `feat(example):`
    or it will sit on `main` until some other component happens to release. `docs:` is for repository
    documentation. Nothing enforces this.
+
+   **The scope is necessary and not sufficient: release-please attributes a commit to a component by the
+   PATHS it touches, not by the scope in its subject.** A `fix(example):` commit that only edits `docs/guide/`
+   belongs to no component, so it produces no release and no deploy — and that is exactly the case this rule
+   gets invoked for, since `/docs` is built from those files. Touch something under `packages/example/` in the
+   same commit, or pair the guide edit with the demo change it goes with. Nothing enforces this either.
 
    It is still not a *correctness* check: nothing asserts what it renders. Correctness is established by
    `pnpm test`, `pnpm test:rust` and `pnpm verify:pack`. Rule 2 still applies to it — a version change is its

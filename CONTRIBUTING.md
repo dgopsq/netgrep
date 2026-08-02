@@ -1,14 +1,16 @@
 # Contributing
 
-netgrep is an **experiment**, and it is maintained conservatively: fix defects, keep dependencies from
-rotting, keep it working for existing consumers. That is most of the work, and
-[`docs/BACKLOG.md`](docs/BACKLOG.md) lists what is already sanctioned.
+netgrep is maintained conservatively: fix defects, keep dependencies from rotting, keep it working for
+existing consumers. That is most of the work, and [`docs/BACKLOG.md`](docs/BACKLOG.md) lists what is already
+sanctioned.
 
 **A feature starts as an issue, not as a pull request.** The public API is deliberately small — a boolean per
-URL, plus the first matching line on request — and it has widened exactly once. Argue the case in an issue
-first; if it is accepted it lands with a decision record that also says what it does *not* open the door to.
-[Decision 0020](docs/decisions/0020-the-matching-line.md) is the worked example, and its closing table lists
-the match details that have already been refused.
+URL, plus, on request, the first matching line and each match's position within it — and it has widened
+exactly once, twice if the positions are counted apart from the line. Argue the case in an issue first; if it
+is accepted it lands with a decision record that also says what it does *not* open the door to.
+[Decision 0020](docs/decisions/0020-the-matching-line.md) is the worked example;
+[0022](docs/decisions/0022-capture-ranges.md)'s closing table is the **current** list of match details already
+refused, carrying 0020's forward minus the one row it reopened and shipped.
 
 [`AGENTS.md`](AGENTS.md) is the authoritative guide to this repository — toolchain pins, the repository map,
 the hard rules, the known correctness caveats. This file is the short human on-ramp; where the two overlap,

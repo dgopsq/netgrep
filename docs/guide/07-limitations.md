@@ -2,7 +2,7 @@
 
 # Limitations
 
-netgrep is experimental, and the following are documented rather than fixed.
+What netgrep gets wrong, and what it deliberately does not do.
 Each defect is pinned by a test, so it cannot change unnoticed.
 
 ## Defects
@@ -37,6 +37,6 @@ netgrep retains nothing between searches, so there is no buffer for a second cal
 
 <a id="no-ranking"></a>
 
-### No ranking
+### Matches are reported per file, not ranked
 
-netgrep answers whether a pattern occurs in a file and, if you ask, the first line it occurs on, with each match highlighted within it. It does not rank: no match counts, no line numbers, no relevance ordering, so it cannot sort files by how well they match. If you need that, use a prebuilt index such as [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) or [FlexSearch](https://github.com/nextapps-de/flexsearch).
+netgrep answers whether a pattern occurs in a file and, if you ask, the first line it occurs on with each match highlighted within it. It does not rank, and not because ranking was left for later: ranking needs a scoring model, and netgrep has no term statistics, no document frequencies and no index to build one from. There is nothing to rank *with*. Match counts are refused for a different reason — counting means reading every byte of a file, which is exactly what answering before the download finishes avoids. So files come back in the order you asked for them, with no counts, no line numbers and no relevance ordering. If you need results sorted by how well they match, that is what a prebuilt index is for: [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and [FlexSearch](https://github.com/nextapps-de/flexsearch) all do it, and netgrep is not trying to.
