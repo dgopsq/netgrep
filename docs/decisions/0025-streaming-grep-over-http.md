@@ -1,9 +1,17 @@
 # 0025 — netgrep is streaming grep over HTTP, not client-side site search
 
-**Status: ACCEPTED (2026-08-02).** Amends [0002](0002-search-while-downloading.md) (its
-"bytes may keep arriving" consequence was closed by the cancel-on-match fix),
-[0017](0017-example-as-hosted-demo.md) and [0023](0023-documentation-site.md) (the demo's framing).
-Cites [0024](0024-remove-the-in-memory-cache.md), which made the constant-memory claim unconditional.
+**Status: ACCEPTED (2026-08-02).** Amends [0017](0017-example-as-hosted-demo.md) and
+[0023](0023-documentation-site.md) — both specified demo copy that this record rewrites. Cites
+[0002](0002-search-while-downloading.md), whose decision it leaves entirely intact, and
+[0024](0024-remove-the-in-memory-cache.md), which made the constant-memory claim unconditional.
+
+(A draft of this record said it *amends* 0002. It does not, by the test
+[0024](0024-remove-the-in-memory-cache.md) states: a record is amended when its decision survives in altered
+form. 0002's decision — search each chunk as it arrives — survives in exactly the form it was written, and
+this record leans on it rather than touching it. The ground that draft gave was also already spent: 0002's
+"bytes may keep arriving" consequence is struck through and annotated *Fixed 2026-08-01*, by the
+cancel-on-match change, not by anything here. Citation is the whole relationship, and the distinction is worth
+a paragraph because the index table is read as a map of what is still in force.)
 
 No issue preceded this one: as with [0022](0022-capture-ranges.md) and 0023, the argument was made in a
 written design and reviewed before any code was written. Here there is no code at all — nothing under
@@ -12,10 +20,26 @@ project is.
 
 ## Context
 
-For four years the README opened by saying netgrep was an **experiment** in client-side search over a small,
-static, file-based corpus, and that a prebuilt index would usually beat it. Both halves were honest, and that
-is the only thing to be said for them. The framing picked the one workload netgrep is worst at, conceded it in
-the first paragraph, and left a reader with no idea what the library is *for*. Four findings killed it.
+The framing this record retires was not four years of settled honesty. It was two claims made four days apart,
+and they are each other's opposite.
+
+**The word *experimental* is genuinely 2022** — `693c3e6`, 2022-08-28 — but the sentence next to it said this:
+*"The scope of this project is to provide a viable alternative to index-based search engines for applications
+with a small files-based database."* That is a claim to **beat** index search on index search's own ground,
+made by a project that could not rank, had never been measured against one, and shipped a megabyte of
+WebAssembly to start.
+
+**The concession is four days old.** `c4db8d8` (2026-07-29) put an *"experiment, not a recommendation"* callout
+above the first paragraph, named Pagefind, Lunr and FlexSearch as usually smaller, faster and more capable, and
+softened "provide a viable alternative" to "explore an alternative" so the page would stop contradicting
+itself one line later. That was the right correction and an honest one — but it inverted the project's stated
+purpose in a single commit and then left the inverted version as the headline. What a reader met from that day
+until this one was a project introduced by the comparison it had just lost, with no sentence anywhere saying
+what it is good at.
+
+So the position being retired here is four days old, not four years, and the speed is evidence rather than
+embarrassment: a framing that could be inverted and then discarded inside a week was never load-bearing. What
+made it discardable is four findings.
 
 **The site-search economics lose, and no version of them wins.** A visitor pays ~500 KB gzipped of
 WebAssembly before the first query is typed, and then the corpus downloads — every byte of every file,
@@ -57,8 +81,9 @@ Six properties, in the order they matter:
 
 1. **Constant memory over unbounded input.** One chunk plus the incomplete trailing line, capped at 64 KB,
    however large the file is — a property of the code rather than of a caller's configuration since
-   [0024](0024-remove-the-in-memory-cache.md) deleted the cache. Nothing else available in a browser tab
-   searches a file larger than the tab can hold.
+   [0024](0024-remove-the-in-memory-cache.md) deleted the cache. A hand-written `fetch` loop feeding a
+   per-chunk `RegExp` holds memory flat too, in about twenty lines; what is not otherwise available in a tab
+   is doing it with **ripgrep's** engine, which is properties 3 and 6.
 2. **An answer before the last byte.** [0002](0002-search-while-downloading.md): the engine runs on each chunk
    as it arrives, so a match in the first kilobyte resolves without the remaining megabytes. Since the
    cancel-on-match fix the reader is cancelled at the match site, so early exit ends the transfer rather than
@@ -79,11 +104,22 @@ The lede, in one sentence:
 
 > **netgrep is grep over HTTP, running in the browser.**
 
-It is stated in the `README`, both published npm READMEs, both `package.json` descriptions, the first line of
-[`docs/guide/01-getting-started.md`](../guide/01-getting-started.md), and the demo's hero, `<title>`,
-description, Open Graph and Twitter cards, JSON-LD and `<noscript>` block. Where the old framing chose to
-compare, the new one states, and the comparison survives once — plainly, on the limitations page and in the
-guide's *What this is for*, where a reader who needs an index is routed to one.
+It is quoted verbatim in the `README`, in the first line of
+[`docs/guide/01-getting-started.md`](../guide/01-getting-started.md), and in the demo's hero, `<title>`,
+meta description, Open Graph and Twitter cards, JSON-LD and `<noscript>` block. `@netgrep/netgrep`'s README
+and its `package.json` description carry the same claim in their own shape rather than the sentence — a
+package page and an 80-character npm field are not places to quote.
+
+**`@netgrep/search` deliberately does not carry it at all, and that is not an omission to correct later.** It
+is the low-level core: a WebAssembly binary exporting three functions over a byte slice, with no `fetch`, no
+stream and no HTTP anywhere in it. "grep over HTTP" would be false about that artefact and would pull readers
+into the wrong package, so its README and `package.json` describe what it actually is — ripgrep's engine
+compiled to WebAssembly, the core of `@netgrep/netgrep` — and send a reader to the wrapper, which is what
+someone landing there most needs to be told. A surface that states the lede and a surface that states its own
+subject are both correct; only a surface that states neither is a regression.
+
+Where the old framing chose to compare, the new one states, and the comparison survives once — plainly, on the
+limitations page and in the guide's *What this is for*, where a reader who needs an index is routed to one.
 
 ## Consequences
 
@@ -91,32 +127,38 @@ guide's *What this is for*, where a reader who needs an index is routed to one.
 published, in the place where it informs rather than deters: the WebAssembly download is a cost line under
 *Requirements* in the README, the guide and `@netgrep/netgrep`'s own README; where a prebuilt index beats
 netgrep is stated on the limitations page and in the guide, with Pagefind, Lunr and FlexSearch named; the
-match details netgrep refuses are stated in both npm READMEs and in the guide. Nothing was quietly dropped,
-and the test for any sentence written under this record is whether a developer who reads it, installs the
-package and hits the limit an hour later would feel informed or misled.
+match details netgrep refuses are stated in `@netgrep/netgrep`'s README and in the guide, while
+`@netgrep/search`'s keeps the two caveats that belong to the engine rather than to the wrapper — a NUL byte
+discarding the block, and `$` on CRLF. Nothing was quietly dropped, and the test for any sentence written
+under this record is whether a developer who reads it, installs the package and hits the limit an hour later
+would feel informed or misled.
 
 **The lede promises files you do not control, so CORS became a *Requirements* line.** Under the old framing
 the corpus was one you generated and served from your own origin, so the question never arose; a reader told
 netgrep works on files someone else hosts will point it at one, and the first thing that happens is an opaque
 network error before a single byte is searched. So `A URL the browser will let you read` now sits beside the
-browser, ESM and WebAssembly requirements in the README, the guide and the npm README. It also bounds the
-claim usefully, which is why it belongs here rather than in three bullets: netgrep's ground is a file you do
-not control **and whose host will let a browser read it**. Widening what a project claims widens the failure
-modes a reader meets first, and this is the one that bites first.
+browser, ESM and WebAssembly requirements in the README, the guide and `@netgrep/netgrep`'s README, and
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#scope)'s *Scope* carries it for the maintainer who reads the
+requirement list there rather than on a package page. It also bounds the claim usefully, which is why it
+belongs here rather than in four bullets nobody argued: netgrep's ground is a file you do not control **and
+whose host will let a browser read it**. Widening what a project claims widens the failure modes a reader
+meets first, and this is the one that bites first.
 
 **This does not pressure [0003](0003-boolean-only-results.md), and saying so is the point.** The obvious worry
 is that calling something *grep* invites every ask grep answers — counts, all matches, ranking — and that a
 bolder claim makes the boolean look like a gap. The dependency runs the other way. 0003's boolean is what lets
 the searcher stop at the first match; stopping at the first match is what makes early exit possible; early
-exit is what makes property 1 and property 2 above true at all. Ranking, match counts and all-matching-lines
-each delete early exit outright — you cannot score, count or enumerate what you have not read, so each turns
-every search into a full download and takes constant memory and the mid-download answer with it. The new
-framing therefore **strengthens** 0003 rather than straining it: the boolean is no longer "all we bothered to
-return", it is the mechanism the headline properties rest on. [0022](0022-capture-ranges.md)'s refusal table
-stands unchanged, including its rule that a row reopens only when its stated reason is shown false. Ranking's
-reason is not the early-exit one and is worth keeping straight, because it was got wrong once: ranking needs a
-scoring model, and netgrep has no term statistics, no document frequencies and no index to build one from.
-There is nothing to rank *with*.
+exit is what makes property 1 and property 2 above true at all. Match counts and all matching lines each
+delete early exit outright — you cannot count or enumerate what you have not read, so each turns every search
+into a full download and takes constant memory and the mid-download answer with it. The new framing therefore
+**strengthens** 0003 rather than straining it: the boolean is no longer "all we bothered to return", it is
+the mechanism the headline properties rest on. [0022](0022-capture-ranges.md)'s refusal table stands
+unchanged, including its rule that a row reopens only when its stated reason is shown false.
+
+Ranking is refused too, and **not** for the early-exit reason — keeping the two apart matters, because it has
+been got wrong once already. Ranking needs a scoring model, and netgrep has no term statistics, no document
+frequencies and no index to build one from. There is nothing to rank *with*, which is why the honest answer
+stays "use an index" and why no amount of reading the whole file would produce one.
 
 **The demo now claims something it cannot yet demonstrate.** The hero's accent is constant memory — *on files
 your tab could never hold* — and the page proves nothing of the sort. Constant memory is a documented property

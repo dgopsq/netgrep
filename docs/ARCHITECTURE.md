@@ -21,15 +21,23 @@ bundler configuration**: since 0.2.0 the WASM is loaded through a standard
 `new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
 understand out of the box.
 
+It also requires a URL the browser is allowed to read: a cross-origin file must be served with
+`Access-Control-Allow-Origin`, or the fetch rejects before a byte is searched, and it rejects with an opaque
+network error rather than anything netgrep can explain. This is the constraint that decides whether a given
+file is reachable at all, so it is a requirement rather than a caveat — and it bounds the *file you do not
+control* claim below to files whose **host** cooperates.
+
 **Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
 (Positions within the returned line are in scope since 0022; nothing else about locating a match is.)
 
 **The positioning is deliberate** — [decision 0025](decisions/0025-streaming-grep-over-http.md).
 netgrep is grep over HTTP: a regex engine answering a question about a remote file in constant memory,
 before the download finishes. Against a large corpus, or one you can preprocess, a prebuilt index wins
-on size, speed and capability; netgrep's ground is a file you do not control, cannot preprocess, and
-have no shell on the machine that holds. That is also why the correctness caveats below are documented
-rather than hidden, and why the API has widened exactly once in four years.
+on size, speed and capability; netgrep's ground is a file you do not control, cannot preprocess, and have no
+shell on the machine that holds the file. That is also why the correctness caveats below are documented
+rather than hidden, and why the API has widened exactly once in four years — twice, if
+[0022](decisions/0022-capture-ranges.md)'s positions within the returned line are counted apart from
+[0020](decisions/0020-the-matching-line.md)'s line itself.
 
 ---
 

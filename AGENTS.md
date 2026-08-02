@@ -144,8 +144,12 @@ entered into it in the first place. So when you add one to [`docs/BACKLOG.md`](d
 decide whether a visitor is affected: if so, add an entry here; if not, no action — but make it a
 decision, not an omission.
 
-**Still not enforced, and still yours to check:** the hero copy and the `StatsBar` line, which state
-the scope of a result and the 1.17 MB WebAssembly download.
+**Still not enforced, and still yours to check:** the `StatsBar` line, which states the 1.17 MB
+WebAssembly download and has to move when the binary does; and the hero copy, which no longer states the
+scope of a result — since [decision 0025](docs/decisions/0025-streaming-grep-over-http.md) its accent
+claims **constant memory**. The second is the harder one, because the page demonstrates nothing about
+memory: the claim holds only while the library retains nothing, so anything that reintroduces retention
+makes the hero wrong with no test failing. **Do not add a number to the page to make it look measured.**
 
 > [!WARNING]
 > **The page measures the network, and that is now true by construction.** This section spent two revisions on

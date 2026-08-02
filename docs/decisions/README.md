@@ -37,7 +37,7 @@ reasoning got wrong.
 | [0022](0022-capture-ranges.md) | Return each match's position within the captured line | Accepted — **amends 0020**: `capture: 'line' \| 'line-ranges'` replaces `captureLine`, and the "highlight ranges" refusal is reopened because **a JS re-match cannot reproduce the engine**; file-wide positions stay refused |
 | [0023](0023-documentation-site.md) | A documentation page at `/docs`, and one source for the caveat list | Accepted — **amends 0017**: the demo becomes a two-page site whose second page has no router and no React; every limitation now lives once, in `docs/guide/caveats.data.json`, and **CI fails when the three surfaces disagree** — which retires the hand-maintenance tables in AGENTS.md §2.3 |
 | [0024](0024-remove-the-in-memory-cache.md) | Remove the in-memory cache entirely | Accepted — **supersedes 0006 and 0019**; the library retains nothing, so constant memory is unconditional and concurrent searches of one url both fetch, by design |
-| [0025](0025-streaming-grep-over-http.md) | netgrep is streaming grep over HTTP, not client-side site search | Accepted — **amends 0002, 0017 and 0023**; the project is positioned on what it does rather than on what it is not, and **0003 is strengthened rather than pressured** |
+| [0025](0025-streaming-grep-over-http.md) | netgrep is streaming grep over HTTP, not client-side site search | Accepted — **amends 0017 and 0023** (the demo's framing), and cites 0002 without touching it; the project is positioned on what it does rather than on what it is not, and **0003 is strengthened rather than pressured** |
 
 ## Format
 
