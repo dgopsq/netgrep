@@ -1,5 +1,5 @@
 <!-- Absolute: npm renders this README off GitHub, where a relative path resolves to nothing. -->
-![new Netgrep(); — search remote files while they're downloading](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
+![The netgrep wordmark: new Netgrep(); set in monospace, fading from white into teal on a dark gradient](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
 
 # @netgrep/netgrep
 
@@ -11,7 +11,10 @@ without holding the file in memory. No index to build, no backend to run.
 
 It runs in a browser and nowhere else: it needs `fetch` with a streaming response body, it is ESM
 only, and a cross-origin URL has to send `Access-Control-Allow-Origin` or the request fails before
-the search starts.
+the search starts. That header is the first gate a remote file has to pass, not the only one: netgrep
+builds its own request and puts nothing on it — no `Authorization` header, no API key, and no
+cookies, since a cross-origin request sends none by default. A file behind a login is fetched
+anonymously and so cannot be searched, however permissive its CORS policy is.
 
 It answers one question per URL — *does this pattern occur?* — as a boolean, plus the first matching
 line if you pass `capture: 'line'`, or that line with each match's position within it under

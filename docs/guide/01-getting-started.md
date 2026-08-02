@@ -16,7 +16,14 @@ memory. There is no index to build and no backend to run.
 - **A URL the browser will let you read.** A cross-origin file needs `Access-Control-Allow-Origin`
   from the host serving it; without that header the fetch fails before the search starts, and the
   failure arrives as an opaque network error rather than as anything netgrep can explain. This is
-  the constraint that decides whether a given file is reachable at all, so check it first.
+  the first gate a remote file has to pass, so check it first — but it is not the only one.
+- **A file that is readable without signing in.** netgrep builds its own request and sets nothing on
+  it: no `Authorization` header, no API key, and no cookies, since a cross-origin request sends none
+  by default. Anything behind a login is fetched as an anonymous stranger and comes back as the
+  host's 401, 403 or sign-in page, so a file you can only reach while authenticated cannot be
+  searched — a host can send `Access-Control-Allow-Origin: *` and still refuse an anonymous reader.
+  Letting a caller supply its own request options is a real ask, and it is deferred rather than
+  refused.
 
 ## Install
 
@@ -51,10 +58,16 @@ batches, and [The matching line](03-the-matching-line.md) covers getting the lin
 ## What this is for
 
 The case netgrep is built for is being handed a URL with no shell on the machine that holds the file:
-a log or an artefact on a CI platform you are a customer of, a published corpus, a file a support
-agent can open but not download. An index cannot help there — building one means owning the build,
-and it cannot find a file that appeared thirty seconds ago. netgrep searches the file itself, as it
-arrives.
+a published corpus on someone else's host, a build log or an artefact whose URL opens in a browser
+tab, a file a support agent can read but not download. An index cannot help there — building one
+means owning the build, and it cannot find a file that appeared thirty seconds ago. netgrep searches
+the file itself, as it arrives.
+
+The niche is a **person** rather than a corpus size, but the file still has to be one an anonymous
+request can fetch. An artefact behind your CI provider's login, or a log that only loads because a
+session cookie rides along, is out of reach today — netgrep sends neither, so the request comes back
+unauthenticated. The same resources published under a signed or otherwise unguessable URL, or copied
+to a bucket that serves them openly, behave like any other file.
 
 The same property makes it work for a small static corpus you *do* own: a real-time search over a
 blog's raw post files needs nothing new deployed. One runs on

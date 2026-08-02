@@ -8,11 +8,12 @@ export function Hero() {
     <header className="flex flex-col items-center pt-20 pb-10 text-center sm:pt-28">
       {/*
         The lead line names the category before the property, and the accent
-        carries the capability rather than the timing: constant memory is the
-        thing nothing else in a tab does, while "before the download finishes"
-        is what the file below demonstrates. The hedges that used to open this
-        page are not gone — they are on the limitations page, where they inform
-        rather than deter.
+        carries the capability rather than the timing — the timing is what the
+        grid below demonstrates, file by file. Constant memory is not itself
+        rare: a hand-written fetch loop feeding a per-chunk RegExp holds memory
+        flat too. Doing it with ripgrep's engine is the part nothing else in a
+        tab offers. The hedges that used to open this page are not gone — they
+        are on the limitations page, where they inform rather than deter.
       */}
       <Badge
         variant="outline"

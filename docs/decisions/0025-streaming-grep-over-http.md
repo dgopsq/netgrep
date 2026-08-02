@@ -104,11 +104,24 @@ The lede, in one sentence:
 
 > **netgrep is grep over HTTP, running in the browser.**
 
-It is quoted verbatim in the `README`, in the first line of
-[`docs/guide/01-getting-started.md`](../guide/01-getting-started.md), and in the demo's hero, `<title>`,
-meta description, Open Graph and Twitter cards, JSON-LD and `<noscript>` block. `@netgrep/netgrep`'s README
-and its `package.json` description carry the same claim in their own shape rather than the sentence — a
-package page and an 80-character npm field are not places to quote.
+It is quoted verbatim in three places: the `README`'s first line, the first line of
+[`docs/guide/01-getting-started.md`](../guide/01-getting-started.md), and the demo's `<noscript>` block. The
+`#website` JSON-LD carries the phrase verbatim inside a longer description. The demo's `<title>`, `og:title`
+and `twitter:title` carry a shortened variant — *grep over HTTP, **in** the browser* — because a title tag
+truncates and the participle is the first word a reader loses. Everything else states the claim in its own
+shape rather than the sentence: the hero, the meta description, `og:description`, `twitter:description` and
+the `#library` JSON-LD name the properties instead, and `@netgrep/netgrep`'s README and `package.json`
+description do the same — a package page and an 80-character npm field are not places to quote. A surface
+that states the lede and a surface that states the properties are both correct; a count of quotations is not
+the measure.
+
+**One surface still carries the retired hero line, and it is not text.** `assets/header.png` — the masthead
+of all three READMEs — and the demo's `og-image.jpg` are the same artwork, and both have *Search remote files
+while they're downloading.* baked into the pixels. The three READMEs' alt texts now describe the wordmark
+only, so a screen reader no longer meets the retired line before the lede; the demo's `og:image:alt` still
+quotes it, because alt text has to say what the image shows and a description that contradicted the pixels
+would be the worse error. Redrawing the artwork is the maintainer's call and is not scheduled here — this
+paragraph exists so the next reader can find the one place the old wording survives.
 
 **`@netgrep/search` deliberately does not carry it at all, and that is not an omission to correct later.** It
 is the low-level core: a WebAssembly binary exporting three functions over a byte slice, with no `fetch`, no
@@ -125,24 +138,38 @@ limitations page and in the guide's *What this is for*, where a reader who needs
 
 **The hedges are gone from above the fold, not from the project.** Every fact the old blocks carried is still
 published, in the place where it informs rather than deters: the WebAssembly download is a cost line under
-*Requirements* in the README, the guide and `@netgrep/netgrep`'s own README; where a prebuilt index beats
-netgrep is stated on the limitations page and in the guide, with Pagefind, Lunr and FlexSearch named; the
-match details netgrep refuses are stated in `@netgrep/netgrep`'s README and in the guide, while
-`@netgrep/search`'s keeps the two caveats that belong to the engine rather than to the wrapper — a NUL byte
-discarding the block, and `$` on CRLF. Nothing was quietly dropped, and the test for any sentence written
-under this record is whether a developer who reads it, installs the package and hits the limit an hour later
-would feel informed or misled.
+*Requirements* in the README and the guide, and a clause of the closing paragraph in `@netgrep/netgrep`'s own
+README, which has no bullets and no Requirements section — an npm page is read top to bottom, not scanned;
+where a prebuilt index beats netgrep is stated on the limitations page and in the guide, with Pagefind, Lunr
+and FlexSearch named; the match details netgrep refuses are stated in `@netgrep/netgrep`'s README and in the
+guide, while `@netgrep/search`'s keeps the two caveats that belong to the engine rather than to the wrapper —
+a NUL byte discarding the block, and `$` on CRLF. Nothing was quietly dropped, and the test for any sentence
+written under this record is whether a developer who reads it, installs the package and hits the limit an
+hour later would feel informed or misled.
 
 **The lede promises files you do not control, so CORS became a *Requirements* line.** Under the old framing
 the corpus was one you generated and served from your own origin, so the question never arose; a reader told
 netgrep works on files someone else hosts will point it at one, and the first thing that happens is an opaque
 network error before a single byte is searched. So `A URL the browser will let you read` now sits beside the
-browser, ESM and WebAssembly requirements in the README, the guide and `@netgrep/netgrep`'s README, and
-[`ARCHITECTURE.md`](../ARCHITECTURE.md#scope)'s *Scope* carries it for the maintainer who reads the
-requirement list there rather than on a package page. It also bounds the claim usefully, which is why it
-belongs here rather than in four bullets nobody argued: netgrep's ground is a file you do not control **and
-whose host will let a browser read it**. Widening what a project claims widens the failure modes a reader
-meets first, and this is the one that bites first.
+browser, ESM and WebAssembly requirements in the README and the guide, in `@netgrep/netgrep`'s README as prose
+in the paragraph that states what it runs on, and in [`ARCHITECTURE.md`](../ARCHITECTURE.md#scope)'s *Scope*
+for the maintainer who reads the requirement list there rather than on a package page. It also bounds the
+claim usefully, which is why it belongs here rather than in four bullets nobody argued: netgrep's ground is a
+file you do not control **and whose host will let a browser read it**. Widening what a project claims widens
+the failure modes a reader meets first, and this is the one that bites first.
+
+**The same argument makes credentials a *Requirements* line, and it was missed once.** CORS is a gate, not
+*the* gate. The wrapper passes only `signal` to `fetch`, so no `Authorization` header and no API key are sent,
+and `Request.credentials` defaults to `same-origin`, so a cross-origin request carries no cookies either. A
+host can answer `Access-Control-Allow-Origin: *` and still hand an anonymous reader a 401 — which means the
+bound is not a subset of the CORS one and cannot be left implied by it. It was recorded twice, in
+[`BACKLOG`](../BACKLOG.md) item **22** and in *Rejected alongside* below, and both of those are read by
+maintainers; nothing a consumer reads said it. It now sits beside the CORS line in all four places, and the
+guide's *What this is for* is qualified to match: a CI artefact behind a provider login and a session-gated
+support log are named as out of reach today, with the signed or openly published URL that puts them back in.
+Refusing to soften the audience was deliberate — the niche argued above is a **person** with no shell, and
+that person is still real; what changed is that the guide now says which of their files netgrep can actually
+open. Lifting the bound is item 22's job.
 
 **This does not pressure [0003](0003-boolean-only-results.md), and saying so is the point.** The obvious worry
 is that calling something *grep* invites every ask grep answers — counts, all matches, ranking — and that a

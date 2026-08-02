@@ -23,9 +23,16 @@ understand out of the box.
 
 It also requires a URL the browser is allowed to read: a cross-origin file must be served with
 `Access-Control-Allow-Origin`, or the fetch rejects before a byte is searched, and it rejects with an opaque
-network error rather than anything netgrep can explain. This is the constraint that decides whether a given
-file is reachable at all, so it is a requirement rather than a caveat — and it bounds the *file you do not
-control* claim below to files whose **host** cooperates.
+network error rather than anything netgrep can explain. That is the first gate a remote file has to pass, so
+it is a requirement rather than a caveat — and it bounds the *file you do not control* claim below to files
+whose **host** cooperates.
+
+It is not the only gate. netgrep builds its own request and sets nothing on it beyond `signal`, so no
+`Authorization` header and no API key go out, and `Request.credentials` defaults to `same-origin`, so no
+cookies go cross-origin either. A file behind a login is therefore fetched as an anonymous stranger and
+cannot be searched, however permissive its CORS policy — a host can answer `Access-Control-Allow-Origin: *`
+and still refuse the reader. That bound bites hardest on exactly the files this project positions itself
+around, and lifting it is [`BACKLOG`](BACKLOG.md) item **22**.
 
 **Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
 (Positions within the returned line are in scope since 0022; nothing else about locating a match is.)

@@ -17,9 +17,11 @@ occur in the file at this URL?* — a boolean, plus, if the caller asks for it, 
 match counts, no ranking.
 
 The case it is built for is being handed a URL with no shell on the machine that holds the file: an
-artefact on a CI platform, a published corpus, a log a support agent can open but not download. It
-also works for a small static corpus you own — a blog's raw post files, searched with nothing new
-deployed — but that is an example, not the definition.
+artefact on a CI platform, a published corpus, a log a support agent can open but not download. The
+file still has to be one an anonymous cross-origin request can fetch — netgrep sends no headers and
+no cookies, so anything behind a login is out of reach until item **22** lands. It also works for a
+small static corpus you own — a blog's raw post files, searched with nothing new deployed — but that
+is an example, not the definition.
 
 **Positioning is deliberate and is documented in [decision 0025](docs/decisions/0025-streaming-grep-over-http.md).**
 Describe what netgrep does and what it costs. The WebAssembly download is stated wherever the project
@@ -521,6 +523,12 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    visitor can see — copy, an image, a story file — must be committed as `fix(example):` or `feat(example):`
    or it will sit on `main` until some other component happens to release. `docs:` is for repository
    documentation. Nothing enforces this.
+
+   **The scope is necessary and not sufficient: release-please attributes a commit to a component by the
+   PATHS it touches, not by the scope in its subject.** A `fix(example):` commit that only edits `docs/guide/`
+   belongs to no component, so it produces no release and no deploy — and that is exactly the case this rule
+   gets invoked for, since `/docs` is built from those files. Touch something under `packages/example/` in the
+   same commit, or pair the guide edit with the demo change it goes with. Nothing enforces this either.
 
    It is still not a *correctness* check: nothing asserts what it renders. Correctness is established by
    `pnpm test`, `pnpm test:rust` and `pnpm verify:pack`. Rule 2 still applies to it — a version change is its
