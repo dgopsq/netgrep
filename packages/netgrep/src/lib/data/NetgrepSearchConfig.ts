@@ -27,11 +27,10 @@ export type NetgrepSearchConfig<C extends NetgrepCapture = undefined> = {
   /**
    * Ceiling on the bytes of the returned line. Defaults to 4096.
    *
-   * Truncation happens inside WebAssembly, before the copy, so a corpus
-   * containing minified JavaScript or a one-line data dump cannot move
-   * megabytes per file into JavaScript. The cut is taken on a UTF-8 character
-   * boundary, and applies to the line's content — the terminator is stripped
-   * first.
+   * Truncation happens inside WebAssembly, before the copy, so minified
+   * JavaScript or a one-line data dump cannot move megabytes per file into
+   * JavaScript. The cut is taken on a UTF-8 character boundary, and applies to
+   * the line's content — the terminator is stripped first.
    *
    * Values below 1, and fractions, are clamped rather than rejected: the number
    * becomes a Rust `usize`, and wasm-bindgen does not validate it.

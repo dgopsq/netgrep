@@ -81,7 +81,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 /**
  * Serve every url but one, which rejects.
  *
- * The partial-failure shape is what a real corpus search produces — most files
+ * The partial-failure shape is what a real batch search produces — most files
  * answer, one is a 404 or a dropped connection — and three tests below need it
  * with a different url each time.
  */

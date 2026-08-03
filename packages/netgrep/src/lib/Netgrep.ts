@@ -15,8 +15,8 @@ import { splitAtLastLine } from './splitAtLastLine.js';
  * Ceiling on the bytes retained between two `fetch` chunks.
  *
  * Only terminator-free input reaches it — the tail is normally the incomplete
- * trailing line, 76 bytes at worst in the demo's corpus. Past it the guarantee
- * weakens to "a boundary never hides a match shorter than 64 KB".
+ * trailing line, 387 bytes at worst in the demo's log files. Past it the
+ * guarantee weakens to "a boundary never hides a match shorter than 64 KB".
  *
  * A safety valve for input netgrep is not aimed at, so not configurable.
  */
