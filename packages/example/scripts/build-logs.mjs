@@ -1,6 +1,6 @@
 // Tiles each seed in seeds/ into a large synthetic log under public/logs/, so
-// the demo has something worth downloading over HTTP instead of a corpus that
-// finishes before a progress bar could mean anything.
+// the demo has something worth downloading over HTTP instead of files that
+// finish before a progress bar could mean anything.
 //
 // The seeds themselves are committed (see seeds/NOTICE.md for their licence);
 // the output of this script is not — it is gitignored and can run into the
@@ -19,7 +19,7 @@
 // `--check` verifies each output exists, is already at its target size and is
 // listed in the manifest at its true size — writing nothing, and exiting 1 on
 // the first mismatch, for CI to fail fast rather than silently searching a
-// stale or half-built corpus.
+// stale or half-built set of logs.
 //
 // Every seed MUST end with a newline: copies are concatenated back to back,
 // and a seed without a trailing terminator would join its last line to the
@@ -47,7 +47,7 @@ const checkOnly = process.argv.includes('--check');
  * A marker line in the target service's own format, injected at roughly
  * `pct`% of the target size so a visitor can tell a match near the head of
  * the file from one buried near the tail. The `NETGREP-MARKER-<pct>` token
- * is what makes it a needle: nothing else in the corpus produces that text.
+ * is what makes it a needle: nothing else in these logs produces that text.
  */
 function markerLine(id, pct) {
   const text = `NETGREP-MARKER-${pct} unique needle for the demo`;

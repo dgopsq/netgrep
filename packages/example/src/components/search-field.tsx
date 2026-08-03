@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
  * accident. A pattern that matches nothing is the expensive case — it reads all
  * four sources to their last byte — and offering it as a chip invites hundreds
  * of megabytes of downloading on the visitor's connection for a row of dashes.
- * The cost is not hidden by leaving it out: the stats bar states the corpus
- * total and says in as many words that a query matching nothing reads every
- * byte, and anyone who types one gets exactly that, honestly timed.
+ * The cost is not hidden by leaving it out: the stats bar states the total size
+ * of the log files and says in as many words that a query matching nothing
+ * reads every byte, and anyone who types one gets exactly that, honestly timed.
  *
  * The generated logs tile a fixed sample, so anything drawn from the sample
  * recurs near the head of its file. The `NETGREP-MARKER-*` lines are the

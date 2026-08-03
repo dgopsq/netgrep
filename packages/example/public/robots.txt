@@ -1,7 +1,7 @@
 User-agent: *
 Allow: /
 
-# The corpus is four generated log files, tiled from committed seeds up to
+# The demo searches four generated log files, tiled from committed seeds up to
 # hundreds of megabytes each. They are not pages, they are test data manufactured
 # for the demo, and indexing them would put a few hundred MB of synthetic log
 # lines on this domain and bury the one page that is actually about netgrep.

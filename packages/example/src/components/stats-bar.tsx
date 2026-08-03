@@ -41,13 +41,13 @@ const ms = (value: number | null) => (value === null ? '—' : formatMs(value));
  * largest source at a quarter of a gigabyte that gap is now seconds wide rather
  * than milliseconds.
  *
- * The corpus total is stated because a query matching nothing has to download
- * every byte of it, and that cost should not be hidden behind a spinner. The
- * WebAssembly figure is stated for the same reason: it is the price of the
- * approach, and a visitor who finds it in devtools rather than here stops
- * trusting the rest of the page.
+ * The total size of the log files is stated because a query matching nothing
+ * has to download every byte of it, and that cost should not be hidden behind a
+ * spinner. The WebAssembly figure is stated for the same reason: it is the
+ * price of the approach, and a visitor who finds it in devtools rather than
+ * here stops trusting the rest of the page.
  *
- * "Scanned" sits beside the corpus total because that pairing is the other half
+ * "Scanned" sits beside that total because that pairing is the other half
  * of the argument: 60 MB read out of 408.6 MB is what cancelling a download
  * looks like as a number. It is measured rather than estimated — the page
  * counts bytes through its own `fetch` as they arrive — and it is DECOMPRESSED
@@ -62,22 +62,22 @@ const ms = (value: number | null) => (value === null ? '—' : formatMs(value));
  */
 export function StatsBar({
   state,
-  corpusBytes,
+  totalLogBytes,
 }: {
   state: SearchState;
-  corpusBytes: number;
+  totalLogBytes: number;
 }) {
   const idle = !state.running && state.answered === 0;
 
   // A pattern that will not compile answers four times in twenty milliseconds,
   // and every aggregate below is then true and misleading at once: `4/4` and
-  // `21ms` under a 400 MB corpus figure read as a completed search, not as four
+  // `21ms` under a 400 MB total read as a completed search, not as four
   // refusals. The alert above says what happened; these have nothing to add.
   const uncompiled = state.error !== null;
 
   return (
     <div className="border-border/60 bg-card/40 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border px-5 py-3.5 backdrop-blur">
-      <Stat label="Corpus" value={formatBytes(corpusBytes)} />
+      <Stat label="Log data" value={formatBytes(totalLogBytes)} />
       <Stat
         label="Scanned"
         value={idle || uncompiled ? '—' : formatBytes(state.scannedTotal)}

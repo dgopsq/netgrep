@@ -2,8 +2,8 @@
 
 The four files in this directory (`apache.log`, `zookeeper.log`, `hadoop.log`,
 `openssh.log`) are **truncated prefixes** — the first ~500 KB of whole lines —
-of log files from **loghub-2.0**, not the datasets themselves. The full corpus
-is not distributed by this project; `packages/example/scripts/build-logs.mjs`
+of log files from **loghub-2.0**, not the datasets themselves. The full
+datasets are not redistributed here; `packages/example/scripts/build-logs.mjs`
 tiles these prefixes into the larger files the demo actually searches, and
 those generated files are gitignored and never committed.
 

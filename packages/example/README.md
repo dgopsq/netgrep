@@ -30,7 +30,7 @@ fails to resolve the import. `pnpm bootstrap` covers the install and the WASM, b
 **`pnpm dev` writes 408.6 MB into `public/logs/` before Vite starts**, in under a second. `predev` and
 `prebuild` run `scripts/build-logs.mjs`, which tiles the four committed seeds up to the targets in
 `logs.config.json` and skips any file already at size — so it is paid once per checkout, and once per
-worktree. The directory is gitignored and must never be committed. To check a built corpus without writing
+worktree. The directory is gitignored and must never be committed. To check the built logs without writing
 anything:
 
 ```bash
@@ -88,7 +88,7 @@ sizes come from the `manifest.json` the generator writes beside the logs, fetche
 than imported, because a static import of a gitignored generated file breaks `pnpm typecheck:example` on a
 clean clone. A missing manifest is not an error; the page falls back to the targets.
 
-**The corpus is repetitive, and the page's honesty depends on not pretending otherwise.** Each file is one
+**The log files are repetitive, and the page's honesty depends on not pretending otherwise.** Each file is one
 ~512 KB seed concatenated to itself until it passes its target, so every term in it recurs within the first
 megabyte. The exceptions are the four `NETGREP-MARKER-<pct>` lines the generator injects at 25%, 50%, 75% and
 99% of each file — they are the only genuinely deep needles in 408 MB, and the only honest way to demonstrate
@@ -97,9 +97,9 @@ the regex examples on the page real; the volume is manufactured.
 
 **Every suggestion chip matches something, deliberately.** A pattern that matches nothing reads all four
 sources to their last byte, and offering that as a one-click chip spends hundreds of megabytes of a visitor's
-connection to show a row of dashes. The cost is not hidden by leaving it out — the stats bar states the corpus
-total and says in as many words that a query matching nothing reads every byte, and anyone who types one gets
-exactly that, honestly timed. Keep both halves.
+connection to show a row of dashes. The cost is not hidden by leaving it out — the stats bar states the total
+size of the log files and says in as many words that a query matching nothing reads every byte, and anyone
+who types one gets exactly that, honestly timed. Keep both halves.
 
 **The seeds are committed and the attribution is a licence term.** `seeds/*.log` are ~512 KB prefixes of
 loghub-2.0 under CC BY 4.0; `seeds/NOTICE.md` carries the citation. The footer line crediting loghub and
@@ -108,13 +108,13 @@ negation — the Vite template's blanket `*.log` would otherwise swallow the see
 
 **The logs are served as `.txt`, and renaming them to `.log` would cost ~380 MB per full-miss query.** GitHub
 Pages compresses `text/plain` and serves `.log` as an uncompressed `application/octet-stream`. Measured with
-local gzip, the four files compress about 16×, so the corpus is roughly 26 MB on the wire as `.txt` and the
+local gzip, the four files compress about 16×, so they are roughly 26 MB on the wire as `.txt` and the
 full 408.6 MB as anything Pages will not compress. The extension in `logs.config.json` is load-bearing.
 
 **`src/data/logs.ts` is the only module allowed to know the base path.** It is `/` today, so the indirection
 buys nothing visible — but under the old `dgopsq.github.io/netgrep/` project page a root-relative
-`/logs/x.txt` silently 404d and the page then looked like a corpus that simply matched nothing. Keep log URLs
-going through `logUrl()`.
+`/logs/x.txt` silently 404d and the page then looked like a set of files that simply matched nothing. Keep
+log URLs going through `logUrl()`.
 
 **The domain is hard-coded in three files, and nothing checks them.** `index.html` (canonical, `og:url`,
 `og:image`, and the `@id`s in the JSON-LD), `public/sitemap.xml` and `public/robots.txt` all spell out

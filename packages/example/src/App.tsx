@@ -28,7 +28,7 @@ const DEBOUNCE_MS = 250;
  */
 function announcement(
   state: ReturnType<typeof useLogSearch>,
-  corpusBytes: number,
+  totalLogBytes: number,
 ): string {
   if (state.error !== null) return 'The pattern did not compile.';
   if (state.running) return `Searching ${sources.length} log sources.`;
@@ -40,7 +40,7 @@ function announcement(
   // The scanned total is announced because it is half of what the run proved,
   // and the columns that show it are the one thing here a screen reader would
   // otherwise have to walk four rows to add up.
-  const read = `${formatBytes(state.scannedTotal)} of ${formatBytes(corpusBytes)} read`;
+  const read = `${formatBytes(state.scannedTotal)} of ${formatBytes(totalLogBytes)} read`;
 
   return `Search finished${took}. ${state.matched} of ${state.answered} sources matched, ${read}.`;
 }
@@ -120,7 +120,7 @@ export function App() {
           {announcement(state, sizes.totalBytes)}
         </p>
 
-        <StatsBar state={state} corpusBytes={sizes.totalBytes} />
+        <StatsBar state={state} totalLogBytes={sizes.totalBytes} />
 
         {/*
           The panels are listed smallest source first and never reorder. That
@@ -151,7 +151,7 @@ export function App() {
 
         <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
           <p>
-            Corpus: synthetic logs tiled from{' '}
+            Synthetic logs tiled from{' '}
             <a
               className="hover:text-primary underline underline-offset-4"
               href="https://zenodo.org/records/8275861"

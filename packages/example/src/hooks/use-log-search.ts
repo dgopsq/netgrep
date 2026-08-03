@@ -51,7 +51,7 @@ export type SearchState = {
    * source that matched this query and one that matched the previous one — both
    * read `matched` — so a panel drawing from it would spend the whole run
    * claiming a verdict for a pattern that is no longer in the search box. On
-   * the old 2.6 MB story corpus that window was a flicker; over 400 MB it is
+   * the old 2.6 MB of stories that window was a flicker; over 400 MB it is
    * nearly two seconds, which is the entire time a visitor is looking.
    */
   pending: Record<string, boolean>;
