@@ -47,9 +47,18 @@ const ms = (value: number | null) => (value === null ? '—' : formatMs(value));
  * approach, and a visitor who finds it in devtools rather than here stops
  * trusting the rest of the page.
  *
- * Nothing here reports bytes read or memory held. Neither is measurable from
- * this page — the library exposes no progress and the browser exposes no honest
- * per-stream figure — so the dashboard reports what it can actually time.
+ * "Scanned" sits beside the corpus total because that pairing is the other half
+ * of the argument: 60 MB read out of 408.6 MB is what cancelling a download
+ * looks like as a number. It is measured rather than estimated — the page
+ * counts bytes through its own `fetch` as they arrive — and it is DECOMPRESSED
+ * file content, not traffic: the logs are served gzipped at roughly 16×, so a
+ * reader who takes this for bandwidth is wrong by that factor. The copy beside
+ * these figures says so, and may not be shortened to the point where it stops
+ * saying it.
+ *
+ * Memory held is still not reported and still cannot be: no browser API gives
+ * an honest per-stream figure, so a number there would be a fabrication rather
+ * than a measurement.
  */
 export function StatsBar({
   state,
@@ -69,6 +78,10 @@ export function StatsBar({
   return (
     <div className="border-border/60 bg-card/40 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border px-5 py-3.5 backdrop-blur">
       <Stat label="Corpus" value={formatBytes(corpusBytes)} />
+      <Stat
+        label="Scanned"
+        value={idle || uncompiled ? '—' : formatBytes(state.scannedTotal)}
+      />
       <Stat
         label="Matches"
         value={idle || uncompiled ? '—' : `${state.matched}`}
@@ -90,9 +103,12 @@ export function StatsBar({
         value={uncompiled ? '—' : ms(state.allAnsweredMs)}
       />
 
-      <p className="text-muted-foreground/70 ml-auto max-w-xs text-xs leading-relaxed">
+      <p className="text-muted-foreground/70 ml-auto max-w-md text-xs leading-relaxed">
         Streamed from static files, plus a 1.17 MB WebAssembly download once per
-        page load. A query that matches nothing reads every byte.
+        page load. <strong className="font-medium">Scanned</strong> is
+        uncompressed log content reaching the search, not bytes on the wire —
+        these files are served gzipped at about 16×. A query that matches
+        nothing scans every byte.
       </p>
     </div>
   );

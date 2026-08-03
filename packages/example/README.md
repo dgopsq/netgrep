@@ -66,10 +66,20 @@ a repeat query from memory. What a repeat actually costs is the host's business 
 Read the comment in `src/hooks/use-log-search.ts` first; it also explains why overlapping runs still
 double-fetch, and why that is accepted.
 
-**Elapsed time is the only thing this page measures, and that is a decision rather than a shortfall.** There
-is no progress bar and no bytes-read counter because netgrep reports neither, and no memory figure because a
-tab cannot honestly measure one. Do not add a number here to make the page look more instrumented; a
-fabricated figure on the one page whose entire value is that it is accurate costs more than the gap does.
+**Every number on this page is measured, and the two it refuses are refused because they cannot be.** Elapsed
+time comes from the search; bytes read come from `src/lib/scan-meter.ts`, which wraps the demo's own
+`window.fetch` and pipes each log response through a counting stream — the library reports nothing of the
+kind, and the browser's Resource Timing entries report zero for an aborted transfer, which is the case worth
+showing. There is still **no progress bar**, because netgrep exposes no progress and a bar would be an
+animation impersonating a measurement, and **no memory figure**, because a tab cannot honestly measure one. Do
+not add a number here to make the page look more instrumented; a fabricated figure on the one page whose
+entire value is that it is accurate costs more than the gap does.
+
+⚠️ **The bytes-read figure is decompressed file content, not bandwidth.** The logs are served gzipped and
+compress about 16×, so a row reading `240.2 MB` was carried by roughly 15 MB on the wire. It is labelled
+**Scanned** precisely because that word cannot be mistaken for a transfer figure, and the sentence in the
+stats bar that spells the difference out is a term of the measurement rather than a caption. Do not shorten it
+to the point where it stops distinguishing the two.
 
 **`logs.config.json` is the one place that decides what the page searches.** Both `scripts/build-logs.mjs` and
 `src/data/logs.ts` read it, so a source's id, service name, seed, size target and filename are stated once.

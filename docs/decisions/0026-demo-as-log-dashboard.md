@@ -1,8 +1,8 @@
 # 0026 — The demo is a log dashboard over four large files
 
-**Status: ACCEPTED (2026-08-02).** Supersedes the **corpus half** of
-[0017](0017-example-as-hosted-demo.md); amends [0023](0023-documentation-site.md) and
-[0025](0025-streaming-grep-over-http.md).
+**Status: ACCEPTED (2026-08-02), amended (2026-08-03)** — the page now also reports bytes read per source, see
+*Amendment* at the end. Supersedes the **corpus half** of [0017](0017-example-as-hosted-demo.md); amends
+[0023](0023-documentation-site.md) and [0025](0025-streaming-grep-over-http.md).
 
 (The split status is deliberate, by the test [0024](0024-remove-the-in-memory-cache.md) states: a record is
 amended when its decision survives in altered form and superseded when it survives in none. Almost all of 0017
@@ -47,7 +47,7 @@ Four generated log files, one dashboard row each.
 | Generation | `scripts/build-logs.mjs`, tiling each seed to a target from `logs.config.json`, into a gitignored `public/logs/` |
 | Served as | `.txt` — see below; the extension is a bandwidth decision, not a naming one |
 | Layout | four rows, smallest source first, never reordered |
-| Reported | elapsed time from the run's first byte requested to each source's own answer. Nothing else |
+| Reported | elapsed time from the run's first byte requested to each source's own answer, and — from the amendment below — how much of that source was read before it answered. Nothing else |
 
 **The files are repetitive, and the page's honesty depends on saying so here.** Each is one ~512 KB seed
 concatenated to itself until it passes its target, with four `NETGREP-MARKER-<pct>` lines injected at 25%,
@@ -59,12 +59,17 @@ that matters is not aesthetic: **every non-marker term in the corpus recurs with
 the four markers are the only genuinely deep needles in 408 MB. Any claim the page makes about a *deep* match
 rests on them, and the suggestion chips label them as what they are.
 
-**What the page measures is elapsed time, and nothing is added to make it look more measured than that.**
-netgrep exposes no byte counter, and peak memory is not reliably measurable from inside a tab, so a progress
-bar here would be an animation impersonating a measurement and a memory figure would be a fabrication. Each
-row reports when its source answered; the stats bar reports the first match and the last answer. That is the
-whole instrument. **Do not add a number to the page to make it look measured** — this is 0025's instruction,
-restated because a dashboard is exactly the shape of page that invites one.
+**Everything the page reports is measured, and nothing is added to make it look more measured than that.**
+Each row reports when its source answered and how much of it was read to get there; the stats bar reports the
+first match, the last answer, and the total read. That is the whole instrument. A **progress bar** is still
+refused, because netgrep exposes no progress and a bar here would be an animation impersonating a measurement.
+A **memory figure** is still refused, because peak memory is not reliably measurable from inside a tab and any
+number for it would be a fabrication. **Do not add a number to the page to make it look measured** — this is
+0025's instruction, restated because a dashboard is exactly the shape of page that invites one.
+
+(This paragraph originally concluded that bytes read were unmeasurable too, from the true premise that the
+*library* exposes no byte counter. That conclusion does not follow: the demo owns its page, and can count at
+its own `fetch` boundary. It does — see the *Amendment* at the end.)
 
 **Elapsed time is enough, because the difference is now seconds wide.** Measured in Chrome against the built
 site: a match near the head of a file answers at **~16 ms** while the 240 MB OpenSSH read is still streaming;
@@ -155,5 +160,64 @@ the repository documentation around it are `docs:`, and none of it reaches the s
 | Commit the generated logs | A permanent multi-hundred-MB object in every clone, forever, to save a 0.77 s generation step |
 | Synthesise the log lines instead of using real ones | Then the regex examples stop being real too. The page's value is that `sshd\[[0-9]+\]: Failed` matches text a real sshd wrote; against generated filler it would be a pattern matching a pattern |
 | One large file instead of four | Four is what shows the property. A single row answering in 1.8 s is a number; four rows answering at 8, 40, 120 and 240 MB, read down against their sizes, is the demonstration that answering is paced by bytes read |
-| A progress bar, a bytes-read counter, or a memory figure | Nothing in the library reports progress and nothing in the tab reports honest per-stream memory. Each would be an invented number on the page least able to afford one — [0025](0025-streaming-grep-over-http.md) |
+| A progress bar, or a memory figure | Nothing in the library reports progress and nothing in the tab reports honest per-stream memory. Each would be an invented number on the page least able to afford one — [0025](0025-streaming-grep-over-http.md). **A bytes-read counter was refused on this row and should not have been** — it is measurable at the demo's own `fetch`, and the amendment below ships it |
 | Keep the story grid below the dashboard | A second corpus and a second pipeline to demonstrate a subset of what the first one demonstrates |
+
+---
+
+## Amendment (2026-08-03) — the page reports bytes read, measured at its own `fetch`
+
+**The record above refused a bytes-read counter, and the refusal rested on a non sequitur.** The premise was
+true: netgrep exposes no byte counter, and it still does not. The conclusion — therefore the page cannot
+report one — does not follow, because the page is not limited to what the library tells it. It owns its own
+document, and every byte of every log file passes through its own `fetch` on the way in. Counting there is a
+measurement, not an estimate, and it is the half of the argument the page could not previously make:
+*answered after reading 60 MB of 240 MB* is what cancelling a download looks like as a number, where elapsed
+time alone leaves a visitor to infer it.
+
+| | |
+|---|---|
+| How | `window.fetch` is wrapped once, in `packages/example/src/lib/scan-meter.ts`; a response for one of the four log URLs has its body piped through a counting `TransformStream`, and everything else is handed to the original untouched |
+| Shown per row | bytes read and the share of that file, e.g. `760 KB · 8.9%`, beside the elapsed time |
+| Shown in the stats bar | the run's total, next to the corpus total — `Scanned 104.0 MB` against `Corpus 408.6 MB` |
+| Tied to the run | reset when a run starts and written only when a source answers *that* run, exactly as the verdict and the elapsed time are. A row that has not answered the query now in the box shows `—`, not the last query's count |
+
+**⚠️ THE NUMBER IS DECOMPRESSED FILE CONTENT, NOT BANDWIDTH, AND THE LABEL HAS TO SURVIVE THAT TEST.** The logs
+are served gzipped and compress about 16×, so a row reading `240.2 MB` was carried by roughly 15 MB on the
+wire. The word chosen is **"Scanned"**: you scan bytes, you do not scan a network, so it cannot be read as a
+transfer figure the way "downloaded", "transferred" or even "read" can. The stats bar says the rest in as many
+words — *Scanned is uncompressed log content reaching the search, not bytes on the wire — these files are
+served gzipped at about 16×* — and that sentence is a term of the measurement rather than a caption. Shortening
+it until it stops distinguishing the two is how this page would come to overstate bandwidth by a factor of
+sixteen.
+
+**Patching a global is acceptable here and would not be acceptable in the library.** The demo owns its page,
+nothing but netgrep requests those four URLs, and there is no other seam — netgrep calls `fetch` internally and
+takes no hook for it. No library code was touched to get this number, and none should be: a
+`onBytes` callback on the search API is a widening that would need its own record and its own argument.
+
+**Resource Timing was probed first and is not usable for this.** `performance.getEntriesByType('resource')`
+reports `encodedBodySize: 0` and `decodedBodySize: 0` for an **aborted** fetch in Chromium — which is
+precisely the case this page exists to show — and reports a cache hit as `transferSize: 300` beside a full
+body size. Anything built on it would read `0 MB` for the early match and be wrong twice over.
+
+**Measured in Chrome against the built site**, four rows against the four sources, as a share of each file:
+
+| Query | Apache 8.3 MB | ZooKeeper 40.0 MB | Hadoop 120.1 MB | OpenSSH 240.2 MB |
+|---|---|---|---|---|
+| `workerEnv` — matches Apache only, near its head | **8.9%** (760 KB) | 100% | 100% | 100% |
+| `NETGREP-MARKER-25` | 32.3% | 27.4% | 25.2% | 25.0% |
+| `NETGREP-MARKER-75` | 77.1% | 78.1% | 75.3% | 75.0% |
+| a pattern matching nothing | 100% | 100% | 100% | 100% |
+
+The marker rows land on their planted depths, which is the check that the count is real. **The overshoot is
+real too and is not error**: a match is only found once the chunk carrying it has arrived, and more of the
+transfer is already in flight by then — the smallest file overshoots most, because 8.3 MB is small enough that
+a large fraction of it is in flight at any moment. The counter reports bytes that actually arrived, which is
+the honest figure: those are the bytes cancellation did not save.
+
+**Peak memory remains genuinely unmeasurable, and this amendment does not weaken that.** No browser API gives
+an honest per-stream figure, so a memory number on this page would still be a fabrication. The distinction
+this amendment draws is between a quantity the page can observe at its own boundary and one it cannot observe
+at all — bytes in are the first, memory held is the second. **Do not add a number to the page to make it look
+measured** stands exactly as written.

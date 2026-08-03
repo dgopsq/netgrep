@@ -400,6 +400,10 @@ packages/
     src/hooks/use-log-search.ts      the whole netgrep integration. Its timings are
                                      network timings — read the comment before
                                      changing what a repeat query costs
+    src/lib/scan-meter.ts            DEMO-ONLY INSTRUMENTATION. Wraps window.fetch to
+                                     count bytes per log file, because netgrep exposes
+                                     no counter. Counts DECOMPRESSED content, not wire
+                                     bytes — the page must keep saying which
     src/data/logs.ts                 the sources, read from logs.config.json, and the
                                      ONLY module that knows the base path
     src/App.tsx                      the demo page. It states no limitation of its

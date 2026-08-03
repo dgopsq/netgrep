@@ -2,6 +2,7 @@ import type { NetgrepMatchRange } from '@netgrep/netgrep';
 import { Netgrep } from '@netgrep/netgrep';
 import { useEffect, useRef, useState } from 'react';
 import { logUrl, sources } from '@/data/logs';
+import { beginScanRun, installScanMeter, scannedBytes } from '@/lib/scan-meter';
 
 /**
  * How a single source is currently rendered.
@@ -41,9 +42,9 @@ export type SearchState = {
    */
   lines: Record<string, MatchedLine>;
   /**
-   * Whether a source's `status`, `line` and `elapsedMs` are still last run's,
-   * per source id: true from the moment a run starts until that source answers
-   * it.
+   * Whether a source's `status`, `line`, `elapsedMs` and `scanned` are still
+   * last run's, per source id: true from the moment a run starts until that
+   * source answers it.
    *
    * This is the price of the stale-while-revalidate design below, and it has to
    * be paid explicitly. `statuses` alone cannot tell the difference between a
@@ -62,7 +63,28 @@ export type SearchState = {
    * actually took.
    */
   elapsedMs: Record<string, number>;
+  /**
+   * Bytes of each source that reached the search before it answered, per source
+   * id — the other half of what `elapsedMs` reports. A source that matches
+   * early stops its download there, and this is the figure that says so: 8% of
+   * one file against 100% of three.
+   *
+   * ⚠️ Decompressed bytes, not wire bytes. The logs are served gzipped at about
+   * 16×, so anything rendering this must name it as file content read rather
+   * than as bandwidth spent.
+   *
+   * Carried across runs and gated by `pending`, exactly as `elapsedMs` is: a
+   * source that has not answered the query now in the box must not show the
+   * last query's count.
+   */
+  scanned: Record<string, number>;
   matched: number;
+  /**
+   * `scanned` summed over the sources that have answered THIS run, so it grows
+   * as the four settle and never carries a byte from the previous query. Zeroed
+   * at the start of a run, like `matched` and `answered`.
+   */
+  scannedTotal: number;
   /** How many of the four sources have answered. */
   answered: number;
   /** Milliseconds from the first byte requested to the first match resolving. */
@@ -105,6 +127,12 @@ export type SearchState = {
 const netgrep = new Netgrep();
 
 /**
+ * Counting has to be in place before the first search, and this module is the
+ * only thing that starts one. Idempotent, so a second import costs nothing.
+ */
+installScanMeter();
+
+/**
  * Built once. The metadata generic carries each source's id back into the
  * callback, so a result can be matched to its panel without parsing the url.
  */
@@ -121,7 +149,9 @@ function idleState(): SearchState {
     lines: {},
     pending: {},
     elapsedMs: {},
+    scanned: {},
     matched: 0,
+    scannedTotal: 0,
     answered: 0,
     firstMatchMs: null,
     allAnsweredMs: null,
@@ -160,6 +190,11 @@ export function useLogSearch(pattern: string): SearchState {
     const controller = new AbortController();
     const startedAt = performance.now();
 
+    // The two things a run is measured against, zeroed together. The previous
+    // run's downloads were aborted by this effect's cleanup a moment ago, so
+    // nothing is being counted when the counters go back to zero.
+    beginScanRun();
+
     // Stale-while-revalidate: the previous run's data stays in state, and each
     // panel replaces its own only when its own new answer arrives. Clearing it
     // all here instead makes the dashboard flash — on every debounced keystroke
@@ -178,6 +213,7 @@ export function useLogSearch(pattern: string): SearchState {
       ),
       pending: Object.fromEntries(sourceIds.map((id) => [id, true])),
       matched: 0,
+      scannedTotal: 0,
       answered: 0,
       firstMatchMs: null,
       allAnsweredMs: null,
@@ -196,6 +232,11 @@ export function useLogSearch(pattern: string): SearchState {
         if (!id) return;
 
         const elapsed = performance.now() - startedAt;
+
+        // Read here rather than inside the updater: the counter is a live
+        // mutable total, and an updater React may re-run would sample it again
+        // later, after more of a still-draining sibling had arrived.
+        const bytes = scannedBytes(result.url);
 
         setState((prev) => {
           const status: SourceStatus = result.error
@@ -223,7 +264,9 @@ export function useLogSearch(pattern: string): SearchState {
             lines: line === null ? prev.lines : { ...prev.lines, [id]: line },
             pending: { ...prev.pending, [id]: false },
             elapsedMs: { ...prev.elapsedMs, [id]: elapsed },
+            scanned: { ...prev.scanned, [id]: bytes },
             matched,
+            scannedTotal: prev.scannedTotal + bytes,
             answered,
             firstMatchMs:
               prev.firstMatchMs === null && status === 'matched'

@@ -476,6 +476,9 @@ OpenSSH 240.2 MB, 408.6 MB together — built by `packages/example/scripts/build
 ~512 KB loghub-2.0 seeds and served as `.txt` so GitHub Pages compresses them. The corpus is **generated
 output and gitignored**, so `pnpm dev` and `pnpm build:example` run the generator first. It is repetitive by
 construction: each file is one seed tiled to size, so every term in it recurs within the first megabyte except
-the four `NETGREP-MARKER-*` lines the generator plants at fixed depths. The page reports **elapsed time per
-source and nothing else** — no bytes read, no memory — because neither of those is measurable from inside the
-tab. See [decision 0026](decisions/0026-demo-as-log-dashboard.md).
+the four `NETGREP-MARKER-*` lines the generator plants at fixed depths. The page reports **elapsed time and
+bytes read, per source** — the byte figure counted by wrapping the demo's own `window.fetch`, since netgrep
+exposes no counter and an aborted transfer reports zero to Resource Timing. It is **decompressed file content
+rather than traffic**, the logs being served gzipped at ~16×, and is labelled *Scanned* on the page for that
+reason. **No memory figure**, because a tab cannot honestly measure one. See
+[decision 0026](decisions/0026-demo-as-log-dashboard.md).

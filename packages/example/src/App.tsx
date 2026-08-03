@@ -9,7 +9,7 @@ import { sources } from '@/data/logs';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useLogSearch } from '@/hooks/use-log-search';
 import { useLogSizes } from '@/hooks/use-log-sizes';
-import { formatMs } from '@/lib/format';
+import { formatBytes, formatMs } from '@/lib/format';
 
 /**
  * Every keystroke starts four downloads totalling hundreds of megabytes, so the
@@ -26,7 +26,10 @@ const DEBOUNCE_MS = 250;
  * while saying nothing a visitor could act on. Everything else is already
  * readable as text: each row states its own status in words, not in colour.
  */
-function announcement(state: ReturnType<typeof useLogSearch>): string {
+function announcement(
+  state: ReturnType<typeof useLogSearch>,
+  corpusBytes: number,
+): string {
   if (state.error !== null) return 'The pattern did not compile.';
   if (state.running) return `Searching ${sources.length} log sources.`;
   if (state.answered === 0) return '';
@@ -34,7 +37,12 @@ function announcement(state: ReturnType<typeof useLogSearch>): string {
   const took =
     state.allAnsweredMs === null ? '' : ` in ${formatMs(state.allAnsweredMs)}`;
 
-  return `Search finished${took}. ${state.matched} of ${state.answered} sources matched.`;
+  // The scanned total is announced because it is half of what the run proved,
+  // and the columns that show it are the one thing here a screen reader would
+  // otherwise have to walk four rows to add up.
+  const read = `${formatBytes(state.scannedTotal)} of ${formatBytes(corpusBytes)} read`;
+
+  return `Search finished${took}. ${state.matched} of ${state.answered} sources matched, ${read}.`;
 }
 
 export function App() {
@@ -109,7 +117,7 @@ export function App() {
           that silently rearranges itself and never says it is done.
         */}
         <p className="sr-only" role="status">
-          {announcement(state)}
+          {announcement(state, sizes.totalBytes)}
         </p>
 
         <StatsBar state={state} corpusBytes={sizes.totalBytes} />
@@ -133,6 +141,7 @@ export function App() {
                   status={state.statuses[source.id] ?? 'idle'}
                   line={state.lines[source.id]}
                   elapsedMs={state.elapsedMs[source.id]}
+                  scanned={state.scanned[source.id]}
                   pending={state.pending[source.id]}
                 />
               </li>

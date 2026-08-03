@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Card } from '@/components/ui/card';
 import type { LogSource } from '@/data/logs';
 import type { MatchedLine, SourceStatus } from '@/hooks/use-log-search';
-import { formatBytes, formatMs } from '@/lib/format';
+import { formatBytes, formatMs, formatShare } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /*
@@ -12,13 +12,23 @@ import { cn } from '@/lib/utils';
  * elapsed times do not line up read as four cards; lined up, they read as a
  * table, which is the whole difference between this and the grid it replaced.
  *
- * The service column is `sm:`-prefixed because it is the only one that changes
- * below that breakpoint, where it gives up its fixed width and takes the space
- * the file name vacates. The header carries no unprefixed variant of it and
- * needs none: the header itself is hidden below `sm`.
+ * THE TABLE FORMS AT `md`, NOT AT `sm`, and that moved when the scanned column
+ * arrived: five columns need 7.5rem more than four, and at `sm` the file name
+ * paid for it by truncating to `zookeeper.txt · 40…`, which drops the size.
+ * Below `md` the row is two lines instead — service, status and elapsed above,
+ * file and scanned below — so the service column is the only one that changes,
+ * giving up its fixed width to take the space the file name vacates. The header
+ * needs no unprefixed variant of it, being itself hidden below `md`.
  */
-const SERVICE_COL = 'sm:w-28 sm:shrink-0';
+const SERVICE_COL = 'md:w-28 md:shrink-0';
 const STATUS_COL = 'w-[5.5rem] shrink-0 text-right';
+/*
+ * A column only above `md`; below it the figure moves to the file's own line,
+ * which has room and already states the total it is a share of. That is why the
+ * inline variant carries the word "scanned": off the column it has no header to
+ * name it.
+ */
+const SCANNED_COL = 'hidden w-[7.5rem] shrink-0 text-right md:block';
 const ELAPSED_COL = 'w-16 shrink-0 text-right';
 
 /** The word each state is announced with, in the log-tailing vocabulary. */
@@ -73,11 +83,12 @@ function highlight({ text, ranges }: MatchedLine): ReactNode[] {
  */
 export function LogPanelHeader() {
   return (
-    <div className="text-muted-foreground/50 hidden items-center gap-x-3 border border-transparent px-3.5 pb-1.5 text-[10px] tracking-wider uppercase sm:flex">
+    <div className="text-muted-foreground/50 hidden items-center gap-x-3 border border-transparent px-3.5 pb-1.5 text-[10px] tracking-wider uppercase md:flex">
       <span className="size-4 shrink-0" aria-hidden="true" />
       <span className={SERVICE_COL}>Source</span>
       <span className="min-w-0 flex-1">File</span>
       <span className={STATUS_COL}>Status</span>
+      <span className={SCANNED_COL}>Scanned</span>
       <span className={ELAPSED_COL}>Elapsed</span>
     </div>
   );
@@ -93,8 +104,14 @@ type LogPanelProps = {
   /** Milliseconds from the run's start to this source's own answer. */
   elapsedMs?: number;
   /**
-   * Whether `status`, `line` and `elapsedMs` still describe the previous query.
-   * True from the start of a run until this source answers it.
+   * Bytes of this source that reached the search before it answered. Shown
+   * against `bytes`, and decompressed rather than transferred — the file is
+   * served gzipped, so the transfer was a fraction of this.
+   */
+  scanned?: number;
+  /**
+   * Whether `status`, `line`, `elapsedMs` and `scanned` still describe the
+   * previous query. True from the start of a run until this source answers it.
    */
   pending?: boolean;
 };
@@ -102,20 +119,27 @@ type LogPanelProps = {
 /**
  * One log source, as a dashboard row.
  *
- * The elapsed time is the figure worth reading, so it is the only large number
- * here and it is the last thing on the line. Note that misses are NOT faded the
- * way the old story cards were: a miss is when the elapsed time is at its most
- * interesting — it is what draining the whole file to the end costs — and
- * dimming the row would hide the number that makes the page's argument.
+ * TWO FIGURES CARRY THE ARGUMENT, and they are the two large numbers on the
+ * line: how much of the file it took to answer, and how long that took. A row
+ * reading `8.9%` beside three reading `100%` is the cancellation, stated. Note
+ * that misses are NOT faded the way the old story cards were: a miss is when
+ * both figures are at their most interesting — they are what draining the whole
+ * file to the end costs — and dimming the row would hide the numbers that make
+ * the page's argument.
  *
- * There is no progress bar, because there is no progress to report: the library
- * exposes no byte counter, so a bar here would be an animation pretending to be
- * a measurement. The pulsing hairline says "this source is being read right
- * now" and claims nothing further.
+ * `scanned` is decompressed file content delivered to the search, counted at
+ * the page's own `fetch`, and it is not a transfer figure: these logs are
+ * served gzipped at roughly 16×, so the bytes on the wire were far fewer.
+ *
+ * There is still no progress bar. The figure appears when a source answers, not
+ * while it streams — a total repainting on every chunk is a progress bar with
+ * extra steps, and the number that argues anything is the final one. The
+ * pulsing hairline says "this source is being read right now" and claims
+ * nothing further.
  *
  * WHILE `pending`, THIS ROW MAY NOT ASSERT ANYTHING. The state it holds belongs
- * to the previous query, so the verdict, the elapsed time and the highlight all
- * stand down: the row reads `streaming`, the time reads `—`, and the last
+ * to the previous query, so the verdict, the two figures and the highlight all
+ * stand down: the row reads `streaming`, both numbers read `—`, and the last
  * matching line stays visible but dimmed and unmarked, as context for what is
  * being replaced rather than as an answer. Blanking it instead was tried in the
  * design this replaced and is worse — four rows emptying and refilling on every
@@ -130,6 +154,7 @@ export function LogPanel({
   status,
   line,
   elapsedMs,
+  scanned,
   pending = false,
 }: LogPanelProps) {
   // Nothing but `streaming` can be shown for a source that has not answered the
@@ -182,7 +207,7 @@ export function LogPanel({
 
         <span
           className={cn(
-            'min-w-0 flex-1 truncate text-sm leading-snug font-medium transition-colors sm:flex-none',
+            'min-w-0 flex-1 truncate text-sm leading-snug font-medium transition-colors md:flex-none',
             SERVICE_COL,
             isMatched ? 'text-foreground' : 'text-muted-foreground',
           )}
@@ -191,17 +216,25 @@ export function LogPanel({
         </span>
 
         {/*
-          Below `sm` the four columns do not fit on one line, and the first
+          Below `md` the five columns do not fit on one line, and the first
           thing to go is the file name — truncated to `apache.txt · 8.3…`,
-          which drops the size. So it wraps to its own line instead: `w-full`
-          on a wrapping row takes the whole second line, and `order-last` is
-          what puts it after the two figures rather than in front of them.
-          `pl-7` lines it up under the service name, past the status dot.
+          which drops the size. So it wraps to its own line instead, carrying
+          the scanned share with it: `w-full` on a wrapping row takes the whole
+          second line, and `order-last` is what puts it after the figures
+          rather than in front of them. `pl-7` lines it up under the service
+          name, past the status dot.
         */}
-        <span className="text-muted-foreground/70 order-last mt-0.5 w-full truncate pl-7 font-mono text-[11px] tabular-nums sm:order-none sm:mt-0 sm:w-auto sm:min-w-0 sm:flex-1 sm:pl-0">
+        <span className="text-muted-foreground/70 order-last mt-0.5 w-full truncate pl-7 font-mono text-[11px] tabular-nums md:order-none md:mt-0 md:w-auto md:min-w-0 md:flex-1 md:pl-0">
           {source.file}
           <span className="text-muted-foreground/40"> · </span>
           {formatBytes(bytes)}
+          <span className="md:hidden">
+            <span className="text-muted-foreground/40"> · </span>
+            scanned{' '}
+            {pending || scanned === undefined
+              ? '—'
+              : formatShare(scanned, bytes)}
+          </span>
         </span>
 
         <span
@@ -215,6 +248,30 @@ export function LogPanel({
           )}
         >
           {STATUS_LABEL[shown]}
+        </span>
+
+        <span
+          className={cn(
+            'font-mono text-sm leading-none tabular-nums transition-colors',
+            SCANNED_COL,
+            isMatched ? 'text-primary' : 'text-muted-foreground',
+          )}
+        >
+          {pending || scanned === undefined ? (
+            '—'
+          ) : (
+            <>
+              {/* Both figures, because they do different work: `60.1 MB` is
+                  what was actually spent and `25.0%` is what it is a quarter
+                  of. The percentage is the one that reads down the column, so
+                  it takes the weight and the byte figure is dimmed. */}
+              <span className="text-muted-foreground/50 text-[11px]">
+                {formatBytes(scanned)}
+                <span className="text-muted-foreground/30"> · </span>
+              </span>
+              {formatShare(scanned, bytes)}
+            </>
+          )}
         </span>
 
         <span
