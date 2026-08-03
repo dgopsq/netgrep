@@ -39,7 +39,7 @@ testem.log
 Thumbs.db
 /target
 
-# Generated demo corpus. Tiled from the committed seeds under
+# Generated demo logs. Tiled from the committed seeds under
 # packages/example/seeds/ by packages/example/scripts/build-logs.mjs — up to
 # ~400 MB, never committed. See packages/example/logs.config.json.
 /packages/example/public/logs/

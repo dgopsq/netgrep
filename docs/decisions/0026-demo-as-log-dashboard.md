@@ -1,15 +1,15 @@
 # 0026 — The demo is a log dashboard over four large files
 
 **Status: ACCEPTED (2026-08-02), amended (2026-08-03)** — the page now also reports bytes read per source, see
-*Amendment* at the end. Supersedes the **corpus half** of [0017](0017-example-as-hosted-demo.md); amends
-[0023](0023-documentation-site.md) and [0025](0025-streaming-grep-over-http.md).
+*Amendment* at the end. Supersedes the row labelled `Corpus` in [0017](0017-example-as-hosted-demo.md);
+amends [0023](0023-documentation-site.md) and [0025](0025-streaming-grep-over-http.md).
 
 (The split status is deliberate, by the test [0024](0024-remove-the-in-memory-cache.md) states: a record is
 amended when its decision survives in altered form and superseded when it survives in none. Almost all of 0017
 survives untouched — the example is still the public demo, its dependencies are still on the maintenance path,
 `searchBatchWithCallback` is still what drives it, and the base-path hazard its `story-url.ts` guarded against
-is still guarded, now by `data/logs.ts`. Its **Corpus** row survives in no form: not a smaller grid, not fewer
-stories, not the same files renamed. `public/stories/`, `stories.ts`, `story-url.ts`, `story-card.tsx`,
+is still guarded, now by `data/logs.ts`. Its row labelled `Corpus` survives in no form: not a smaller grid,
+not fewer stories, not the same files renamed. `public/stories/`, `stories.ts`, `story-url.ts`, `story-card.tsx`,
 `build-manifest.mjs` and `use-flip.ts` are deleted, and the argument that produced that row — the eleven canon
 and omnibus files were supersets of the other 56 — is now about a choice nobody in this repository makes. So
 that row is superseded and the rest of the record stands. 0023 and 0025 are amended rather than superseded
@@ -33,7 +33,7 @@ had to take the two headline claims on trust while watching evidence for neither
 **Nothing about that is fixable by editing copy.** A page can only measure the workload it is given, and 2.6 MB
 of prose is not the workload the project positions itself around. 0025's niche is a person handed a URL for a
 file they cannot open any other way, and that file is large — that is *why* they cannot open it. The demo was
-searching the one size of corpus for which netgrep's properties do not matter.
+searching the one size of file for which netgrep's properties do not matter.
 
 ## Decision
 
@@ -55,7 +55,7 @@ concatenated to itself until it passes its target, with four `NETGREP-MARKER-<pc
 ZooKeeper, Hadoop and OpenSSH deployments, which is what keeps the regex examples on the page real — a visitor
 who types `sshd\[[0-9]+\]: Failed` is matching text a real sshd emitted. The **volume** is manufactured, and a
 visitor who scrolls one of these files will see the same few thousand lines come round again. The consequence
-that matters is not aesthetic: **every non-marker term in the corpus recurs within the first megabyte**, so
+that matters is not aesthetic: **every non-marker term in these files recurs within the first megabyte**, so
 the four markers are the only genuinely deep needles in 408 MB. Any claim the page makes about a *deep* match
 rests on them, and the suggestion chips label them as what they are.
 
@@ -80,7 +80,7 @@ grid could produce, because at 46 KB all three would have been the same number.
 **The grid is deleted rather than kept beside the logs.** It earned its place by showing batching and
 independent resolution — and the dashboard shows both, over four sources instead of 56, with the difference
 that the resolutions are now seconds apart and legible. What the grid could never show, the logs show:
-constant memory over input no tab could hold. Keeping it would have cost a second corpus, a second data
+constant memory over input no tab could hold. Keeping it would have cost a second set of files, a second data
 pipeline and a page arguing with itself about which half is the demonstration.
 
 **The logs are served as `.txt`, and that is a bandwidth decision.** GitHub Pages compresses `text/plain`;
@@ -96,7 +96,7 @@ one.** Those are two halves of one decision and both are deliberate. `kernel pan
 chips and is gone: a chip is an invitation, and inviting a visitor to spend 408 MB of their connection — on a
 phone, on a metered link — to be shown a row of dashes is not a demonstration, it is a bill. Every remaining
 suggestion matches something, and that is a rule rather than the current state of a list. **The statement had
-to survive the removal**, and it is still in the stats bar in as many words, beside the corpus total: the cost
+to survive the removal**, and it is still in the stats bar in as many words, beside the log total: the cost
 is the most important true thing this page can tell a visitor about netgrep's shape, it is the direct
 consequence of having no index, and a page that quietly stopped mentioning it after removing the one control
 that demonstrated it would have hidden a cost by deleting its evidence. Anyone who types a miss still gets
@@ -124,8 +124,8 @@ waits on `drain`, so writing 428 MB peaks at **~52 MB** of RSS; it is not a scri
 writing to fit in memory, which would be an odd thing for this project to ship.
 
 **The seeds are a permanent ~2 MB in git, and that is the price of not depending on a research host.** They
-are committed because every alternative is worse (see the table below), and they are the only part of the
-corpus in version control: `public/logs/` and its generated `manifest.json` are gitignored, and the app treats
+are committed because every alternative is worse (see the table below), and they are the only log data in
+version control: `public/logs/` and its generated `manifest.json` are gitignored, and the app treats
 the manifest as optional, falling back to the configured targets — a clean clone that has not run the
 generator must not fail to typecheck over a file nobody committed.
 
@@ -138,7 +138,7 @@ first person to remove it as clutter will not know that.
 record said the demo claims something it cannot demonstrate and that PR 4 would close the timing half. It does:
 elapsed-at-answer against elapsed-for-a-full-read is now visible per source. **Constant memory is still not
 demonstrated on the page and will not be** — it stays a documented property a visitor can check in devtools,
-for exactly the reason 0025 gave. What changed is that the corpus no longer contradicts the claim.
+for exactly the reason 0025 gave. What changed is that the demo's data no longer contradicts the claim.
 
 **[`BACKLOG`](../BACKLOG.md) item 23 stopped being invisible.** Chunk searching runs on the main thread, and
 its entry said the demo does not show it because 56 files of prose are matched faster than a frame. Reading
@@ -161,7 +161,7 @@ the repository documentation around it are `docs:`, and none of it reaches the s
 | Synthesise the log lines instead of using real ones | Then the regex examples stop being real too. The page's value is that `sshd\[[0-9]+\]: Failed` matches text a real sshd wrote; against generated filler it would be a pattern matching a pattern |
 | One large file instead of four | Four is what shows the property. A single row answering in 1.8 s is a number; four rows answering at 8, 40, 120 and 240 MB, read down against their sizes, is the demonstration that answering is paced by bytes read |
 | A progress bar, or a memory figure | Nothing in the library reports progress and nothing in the tab reports honest per-stream memory. Each would be an invented number on the page least able to afford one — [0025](0025-streaming-grep-over-http.md). **A bytes-read counter was refused on this row and should not have been** — it is measurable at the demo's own `fetch`, and the amendment below ships it |
-| Keep the story grid below the dashboard | A second corpus and a second pipeline to demonstrate a subset of what the first one demonstrates |
+| Keep the story grid below the dashboard | A second set of files and a second pipeline to demonstrate a subset of what the first one demonstrates |
 
 ---
 
@@ -179,7 +179,7 @@ time alone leaves a visitor to infer it.
 |---|---|
 | How | `window.fetch` is wrapped once, in `packages/example/src/lib/scan-meter.ts`; a response for one of the four log URLs has its body piped through a counting `TransformStream`, and everything else is handed to the original untouched |
 | Shown per row | bytes read and the share of that file, e.g. `760 KB · 8.9%`, beside the elapsed time |
-| Shown in the stats bar | the run's total, next to the corpus total — `Scanned 104.0 MB` against `Corpus 408.6 MB` |
+| Shown in the stats bar | the run's total, next to the total size of the four logs — `Scanned 104.0 MB` against `Log data 408.6 MB` |
 | Tied to the run | reset when a run starts and written only when a source answers *that* run, exactly as the verdict and the elapsed time are. A row that has not answered the query now in the box shows `—`, not the last query's count |
 
 **⚠️ THE NUMBER IS DECOMPRESSED FILE CONTENT, NOT BANDWIDTH, AND THE LABEL HAS TO SURVIVE THAT TEST.** The logs

@@ -12,7 +12,7 @@
       "!**/pkg",
       "!**/pkg-node",
       "!**/coverage",
-      // The demo corpus: 56 public-domain text files, not source.
+      // The demo's generated log files and static assets, not source.
       "!packages/example/public"
     ]
   },
