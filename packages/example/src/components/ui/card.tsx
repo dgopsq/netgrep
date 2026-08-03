@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 /**
  * Only the surface. shadcn's card ships CardHeader/Title/Description/Content/
- * Footer alongside this; `story-card.tsx` is the one consumer and lays out its
+ * Footer alongside this; `log-panel.tsx` is the one consumer and lays out its
  * own contents, so those were dead code rather than a component library.
  */
 function Card({ className, ...props }: React.ComponentProps<'div'>) {

@@ -39,7 +39,7 @@ around, and lifting it is [`BACKLOG`](BACKLOG.md) item **22**.
 
 **The positioning is deliberate** — [decision 0025](decisions/0025-streaming-grep-over-http.md).
 netgrep is grep over HTTP: a regex engine answering a question about a remote file in constant memory,
-before the download finishes. Against a large corpus, or one you can preprocess, a prebuilt index wins
+before the download finishes. Against a large set of files, or one you can preprocess, a prebuilt index wins
 on size, speed and capability; netgrep's ground is a file you do not control, cannot preprocess, and have no
 shell on the machine that holds the file. That is also why the correctness caveats below are documented
 rather than hidden, and why the API has widened exactly once in four years — twice, if
@@ -53,8 +53,8 @@ rather than hidden, and why the API has widened exactly once in four years — t
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ packages/example  — the public demo, deployed to GitHub Pages     │
-│   Vite + React + Tailwind, 56 .txt files, debounced input →      │
-│   searchBatchWithCallback (decision 0017)                        │
+│   Vite + React + Tailwind, four generated logs (408.6 MB),       │
+│   debounced input → searchBatchWithCallback (decisions 0017,0026)│
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
@@ -265,7 +265,8 @@ a seam.
 > with `capture: 'line-ranges'` its `ranges` can come back empty, since the fragment need not contain the
 > match. `result` stays correct, and returning `null` there was rejected in
 > [decision 0020](decisions/0020-the-matching-line.md). All three need a line longer than 64 KB, so all three
-> are unreachable in hand-written text — the demo corpus is 2.6 MB of prose whose longest line is 76 bytes.
+> are unreachable in hand-written text, and in the demo's log files too: 408.6 MB of real log lines whose
+> longest, across all four sources, is 387 bytes. Size is not what reaches this — line length is.
 > Pinned by the three `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each alongside its control case.
 
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
@@ -469,3 +470,15 @@ establishes no correctness. Its timings measure the network, and since
 [decision 0024](decisions/0024-remove-the-in-memory-cache.md) that is true by construction rather than by
 configuration — the library retains nothing to answer a second query from. See
 [decision 0017](decisions/0017-example-as-hosted-demo.md).
+
+It searches four generated log files — Apache httpd 8.3 MB, ZooKeeper 40.0 MB, Hadoop YARN 120.1 MB and
+OpenSSH 240.2 MB, 408.6 MB together — built by `packages/example/scripts/build-logs.mjs` from four committed
+~512 KB loghub-2.0 seeds and served as `.txt` so GitHub Pages compresses them. They are **generated
+output and gitignored**, so `pnpm dev` and `pnpm build:example` run the generator first. It is repetitive by
+construction: each file is one seed tiled to size, so every term in it recurs within the first megabyte except
+the four `NETGREP-MARKER-*` lines the generator plants at fixed depths. The page reports **elapsed time and
+bytes read, per source** — the byte figure counted by wrapping the demo's own `window.fetch`, since netgrep
+exposes no counter and an aborted transfer reports zero to Resource Timing. It is **decompressed file content
+rather than traffic**, the logs being served gzipped at ~16×, and is labelled *Scanned* on the page for that
+reason. **No memory figure**, because a tab cannot honestly measure one. See
+[decision 0026](decisions/0026-demo-as-log-dashboard.md).

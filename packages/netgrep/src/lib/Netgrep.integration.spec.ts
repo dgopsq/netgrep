@@ -449,7 +449,7 @@ describe('Netgrep integration (real WASM)', () => {
     });
 
     it('reports hits, misses and failures side by side', async () => {
-      // The shape a real corpus search produces: most files answer, one is a
+      // The shape a real batch search produces: most files answer, one is a
       // 404 or a dropped connection, and none of it stops the rest.
       mockFetch.mockImplementation((url: string) => {
         if (url === 'broken') return Promise.reject(new Error('offline'));
@@ -889,7 +889,7 @@ describe('Netgrep integration (real WASM)', () => {
       // entire response, so past a 64 KB ceiling the tail becomes a window on the
       // last 64 KB — and a match starting before that window and ending after the
       // buffer is lost. Needs a line over 64 KB AND a match spanning most of it,
-      // so it is unreachable in prose: this corpus's longest line is 76 bytes.
+      // so it is unreachable in prose: the demo's longest log line is 387 bytes.
       const NG = new Netgrep();
       const filler = 'x'.repeat(70_000);
 
@@ -960,7 +960,7 @@ describe('Netgrep integration (real WASM)', () => {
       // calls it a line.
       //
       // Same precondition as the two 3g tests above, so equally unreachable in
-      // prose: this corpus's longest line is 76 bytes. Not fixable without
+      // prose: the demo's longest log line is 387 bytes. Not fixable without
       // either buffering without bound or teaching the engine that a block
       // starts mid-line, which is offset bookkeeping and out of scope.
       const NG = new Netgrep();

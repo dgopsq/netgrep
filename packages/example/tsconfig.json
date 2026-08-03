@@ -12,6 +12,10 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
 
+    // `src/data/logs.ts` imports `logs.config.json` directly, so its shape is
+    // checked at compile time rather than trusted at runtime.
+    "resolveJsonModule": true,
+
     "types": ["vite/client"],
     "paths": {
       "@/*": ["./src/*"]

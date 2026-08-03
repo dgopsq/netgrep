@@ -7,6 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# The four loghub seeds are committed on purpose (see seeds/NOTICE.md) — the
+# blanket `*.log` above would otherwise swallow them too.
+!/seeds/*.log
+
 node_modules
 dist
 dist-ssr

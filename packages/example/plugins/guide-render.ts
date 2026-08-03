@@ -199,7 +199,7 @@ export function renderToc(toc: TocEntry[]): string {
  * `base` is Vite's resolved `base`, threaded in rather than assumed. It is `/`
  * today, but the site sat at `/netgrep/` before the custom domain and decision
  * 0017 records that path as a real hazard: a root-relative URL silently 404s,
- * and the page looks like a corpus that matches nothing rather than a bug.
+ * and the page looks like a set of files that match nothing rather than a bug.
  */
 export function renderNav(current: 'demo' | 'docs', base: string): string {
   // Only the Docs link can ever be current. The demo has no nav entry — the

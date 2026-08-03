@@ -1,0 +1,32 @@
+{
+  "sources": [
+    {
+      "id": "apache",
+      "service": "Apache httpd",
+      "seed": "apache.log",
+      "targetBytes": 8388608,
+      "file": "apache.txt"
+    },
+    {
+      "id": "zookeeper",
+      "service": "ZooKeeper",
+      "seed": "zookeeper.log",
+      "targetBytes": 41943040,
+      "file": "zookeeper.txt"
+    },
+    {
+      "id": "hadoop",
+      "service": "Hadoop YARN",
+      "seed": "hadoop.log",
+      "targetBytes": 125829120,
+      "file": "hadoop.txt"
+    },
+    {
+      "id": "openssh",
+      "service": "OpenSSH",
+      "seed": "openssh.log",
+      "targetBytes": 251658240,
+      "file": "openssh.txt"
+    }
+  ]
+}

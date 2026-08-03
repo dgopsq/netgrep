@@ -17,11 +17,11 @@ occur in the file at this URL?* — a boolean, plus, if the caller asks for it, 
 match counts, no ranking.
 
 The case it is built for is being handed a URL with no shell on the machine that holds the file: an
-artefact on a CI platform, a published corpus, a log a support agent can open but not download. The
+artefact on a CI platform, a published dataset, a log a support agent can open but not download. The
 file still has to be one an anonymous cross-origin request can fetch — netgrep sends no headers and
 no cookies, so anything behind a login is out of reach until item **22** lands. It also works for a
-small static corpus you own — a blog's raw post files, searched with nothing new deployed — but that
-is an example, not the definition.
+small set of static files you own — a blog's raw post files, searched with nothing new deployed — but
+that is an example, not the definition.
 
 **Positioning is deliberate and is documented in [decision 0025](docs/decisions/0025-streaming-grep-over-http.md).**
 Describe what netgrep does and what it costs. The WebAssembly download is stated wherever the project
@@ -162,8 +162,8 @@ makes the hero wrong with no test failing. **Do not add a number to the page to 
 > fetch. What survives is the property those revisions were protecting: **the demo's numbers are network
 > numbers, and anything that would answer a repeat query from memory breaks them.** The browser's own HTTP
 > cache is the one thing that still can, and it is not the library's to switch off — GitHub Pages serves the
-> corpus with `cache-control: max-age=600` (measured 2026-08-01), so what a repeat costs is the host's answer
-> rather than netgrep's. Read the comment in `packages/example/src/hooks/use-corpus-search.ts` before changing
+> logs with `cache-control: max-age=600` (measured 2026-08-01), so what a repeat costs is the host's answer
+> rather than netgrep's. Read the comment in `packages/example/src/hooks/use-log-search.ts` before changing
 > anything about it. See also
 > [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
 > [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md), which record the shape this used to have.
@@ -225,7 +225,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
 | Typecheck the demo | `pnpm typecheck:example` | Separate from `pnpm typecheck`; **needs `pnpm build` first** |
 | Build the demo | `pnpm build:example` | → `packages/example/dist/`. **Needs `pnpm build` first** |
-| Regenerate the corpus manifest | `pnpm --filter @netgrep/example manifest` | After adding or removing a story file |
+| Generate the demo's log files | `pnpm --filter @netgrep/example logs` | Tiles `seeds/` into `public/logs/` — 408.6 MB, gitignored, ~0.8 s. `predev` and `prebuild` run it; it skips files already at their target. `node scripts/build-logs.mjs --check` verifies without writing |
 
 The three demo commands need `pnpm build`, not just `pnpm build:wasm`: the app imports `@netgrep/netgrep`,
 which resolves to this workspace and points at the gitignored `packages/netgrep/dist/`. This is why
@@ -394,12 +394,18 @@ packages/
     → published as @netgrep/netgrep
 
   example/           THE PUBLIC DEMO — https://netgrep.diegopasquali.com/
-                     Vite + React + Tailwind v4 + shadcn, searching 56 Sherlock Holmes
-                     .txt files. Not published to npm; deployed to Pages on release.
-    src/hooks/use-corpus-search.ts   the whole netgrep integration. Its timings are
+                     Vite + React + Tailwind v4 + shadcn, a dashboard over four
+                     generated log files totalling 408.6 MB (decision 0026). Not
+                     published to npm; deployed to Pages on release.
+    src/hooks/use-log-search.ts      the whole netgrep integration. Its timings are
                                      network timings — read the comment before
                                      changing what a repeat query costs
-    src/lib/story-url.ts             the ONLY module that knows the base path
+    src/lib/scan-meter.ts            DEMO-ONLY INSTRUMENTATION. Wraps window.fetch to
+                                     count bytes per log file, because netgrep exposes
+                                     no counter. Counts DECOMPRESSED content, not wire
+                                     bytes — the page must keep saying which
+    src/data/logs.ts                 the sources, read from logs.config.json, and the
+                                     ONLY module that knows the base path
     src/App.tsx                      the demo page. It states no limitation of its
                                      own: the footer links to the guide's, which
                                      `pnpm docs:sync` generates
@@ -413,8 +419,14 @@ packages/
                                      site nav, the link rewriting. Unit-tested
     plugins/guide.ts                 the Vite plugin that reads docs/guide/ and
                                      splices the result into docs/index.html
-    scripts/build-manifest.mjs       regenerates src/data/stories.ts from public/stories/
-    public/stories/                  the corpus, 56 files, 2.6 MB
+    scripts/build-logs.mjs           tiles each seed up to its target from logs.config.json.
+                                     `--check` verifies the built logs without writing
+    logs.config.json                 the four sources: id, service, seed, target, filename.
+                                     Read by the generator AND by src/data/logs.ts
+    seeds/                           four ~512 KB loghub-2.0 prefixes, CC BY 4.0, COMMITTED.
+                                     See seeds/NOTICE.md — the attribution is an obligation
+    public/logs/                     BUILD OUTPUT, gitignored, 408.6 MB. Generated by
+                                     `prebuild`/`predev`; served as .txt so Pages gzips it
     → deployed by .github/workflows/deploy-pages.yml. See decision 0017
 
 docs/guide/               THE CANONICAL PROSE. Seven numbered .md files, readable as
@@ -520,7 +532,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    released.
 
    **A consequence to write commits around: `docs:` does not release, so it does not deploy.** A change a
-   visitor can see — copy, an image, a story file — must be committed as `fix(example):` or `feat(example):`
+   visitor can see — copy, an image, a log seed — must be committed as `fix(example):` or `feat(example):`
    or it will sit on `main` until some other component happens to release. `docs:` is for repository
    documentation. Nothing enforces this.
 

@@ -1,16 +1,15 @@
 User-agent: *
 Allow: /
 
-# The corpus is 56 public-domain Sherlock Holmes stories, served as plain .txt
-# for the demo to fetch. They are not pages, they are test data, and they are
-# available verbatim on Project Gutenberg and a hundred mirrors — indexing them
-# would put 2.6 MB of duplicate public-domain text on this domain and bury the
-# one page that is actually about netgrep.
+# The demo searches four generated log files, tiled from committed seeds up to
+# hundreds of megabytes each. They are not pages, they are test data manufactured
+# for the demo, and indexing them would put a few hundred MB of synthetic log
+# lines on this domain and bury the one page that is actually about netgrep.
 #
 # This does not affect the demo. robots.txt binds crawlers, not the browser, so
 # a visitor's search still fetches every file. Googlebot only fetches what the
 # page requests while rendering, and the page requests nothing until someone
 # types a query, which Googlebot does not do.
-Disallow: /stories/
+Disallow: /logs/
 
 Sitemap: https://netgrep.diegopasquali.com/sitemap.xml

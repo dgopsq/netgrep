@@ -191,3 +191,17 @@ belongs — but it now argues the property rather than the flag, because there i
 nothing, so the page's timings are network timings by construction. Both passages are left as written; this
 record's decision — one source for the caveat list, `kind` as the only judgement in the data file — is
 unaffected.
+
+---
+
+## Note (2026-08-02) — `use-corpus-search.ts` is gone, and the reasoning moved with it
+
+[0026](0026-demo-as-log-dashboard.md) rebuilt the demo as a log dashboard, so two passages above point at a
+file that no longer exists: the amendment's claim that the reason for the cache-off card "is still in the
+comment in `use-corpus-search.ts`", and the 2026-08-01 note restating it. The hook is now
+`src/hooks/use-log-search.ts` and the comment is still there, still arguing the property rather than the
+deleted flag — the page's timings are network timings by construction.
+
+Nothing else here changes. One data file still feeds two surfaces, the demo page still states no limitation of
+its own, and its footer still links to the guide's — the footer has simply gained a second line, the CC BY 4.0
+attribution the new corpus obliges.

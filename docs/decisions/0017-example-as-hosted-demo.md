@@ -248,3 +248,19 @@ had already been overtaken by [0018](0018-line-oriented-tail-buffer.md) and
 [0019](0019-in-flight-fetch-registry.md): **the page measures the network.** That is now true by construction
 rather than by configuration. Both passages are left as written, because they are why the site said what it
 said — and because the property they were protecting is still the one to protect.
+
+---
+
+## Note (2026-08-02) — the corpus this record chose no longer exists
+
+[0026](0026-demo-as-log-dashboard.md) supersedes the **Corpus** row of the table above, and with it the
+*Titles* row, the `story-url.ts` sentence under *The base path is a real hazard*, and the `robots.txt`
+paragraph. The 56 stories, `stories.ts`, `story-url.ts`, `story-card.tsx` and `build-manifest.mjs` are
+deleted; the demo searches four generated log files totalling 408.6 MB, and `robots.txt` now disallows
+`/logs/` for the reason the old paragraph gave about `/stories/`. The base-path invariant survives intact —
+one module still owns it, and it is now `src/data/logs.ts`.
+
+Everything else here stands and is why the site is what it is: the example is the public demo, its
+dependencies are maintained, `searchBatchWithCallback` is still what makes each source resolve visibly on its
+own. The passages above are left as written, because a record that quietly agreed with whatever was done last
+would be worth nothing.

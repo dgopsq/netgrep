@@ -11,7 +11,7 @@ export default defineConfig({
   //
   // Stated explicitly rather than left to Vite's default, because it is the one
   // knob that has to move if the site ever goes back onto a project page — and
-  // because `src/lib/story-url.ts` composes story URLs from
+  // because `src/data/logs.ts` composes log file URLs from
   // `import.meta.env.BASE_URL`, which is exactly this value. Keeping that
   // indirection now that it resolves to `/` costs nothing and means a future
   // base change stays a one-line edit here.
