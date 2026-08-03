@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/dgopsq/netgrep/compare/search-0.3.0...search-0.4.0) (2026-08-03)
+
+
+### Features
+
+* **netgrep:** remove the in-memory cache ([#39](https://github.com/dgopsq/netgrep/issues/39)) ([9f1a4b7](https://github.com/dgopsq/netgrep/commit/9f1a4b7bafdc1819b0ac1695dd549240bb327af7))
+
 ## [0.3.0](https://github.com/dgopsq/netgrep/compare/search-0.2.0...search-0.3.0) (2026-08-01)
 
 

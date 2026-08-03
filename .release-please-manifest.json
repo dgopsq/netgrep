@@ -1,5 +1,5 @@
 {
-  "packages/search": "0.3.0",
-  "packages/netgrep": "0.3.0",
-  "packages/example": "0.2.0"
+  "packages/search": "0.4.0",
+  "packages/netgrep": "0.4.0",
+  "packages/example": "0.3.0"
 }

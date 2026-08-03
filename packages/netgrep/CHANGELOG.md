@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/dgopsq/netgrep/compare/netgrep-0.3.0...netgrep-0.4.0) (2026-08-03)
+
+
+### Features
+
+* **example:** the demo is a log dashboard over four large files ([#41](https://github.com/dgopsq/netgrep/issues/41)) ([f32a0f8](https://github.com/dgopsq/netgrep/commit/f32a0f80147a64b0a3492d6031a03eefd6c393b4))
+* **netgrep:** remove the in-memory cache ([#39](https://github.com/dgopsq/netgrep/issues/39)) ([9f1a4b7](https://github.com/dgopsq/netgrep/commit/9f1a4b7bafdc1819b0ac1695dd549240bb327af7))
+
+
+### Bug fixes
+
+* **netgrep:** cancel the reader on an early match ([#37](https://github.com/dgopsq/netgrep/issues/37)) ([858f028](https://github.com/dgopsq/netgrep/commit/858f02897a1d0eeb2e6b8551e043026fc40afc93))
+
 ## [0.3.0](https://github.com/dgopsq/netgrep/compare/netgrep-0.2.0...netgrep-0.3.0) (2026-08-01)
 
 
