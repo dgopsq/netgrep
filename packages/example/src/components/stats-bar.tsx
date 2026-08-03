@@ -3,6 +3,13 @@ import type { SearchState } from '@/hooks/use-log-search';
 import { formatBytes, formatMs } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
+/**
+ * One figure and its label, as a cell in the grid below.
+ *
+ * A `dt`/`dd` pair rather than two spans: these are six name/value pairs, and
+ * the markup may as well say so — a screen reader then reads "first match,
+ * 27ms" instead of two unrelated strings.
+ */
 function Stat({
   label,
   value,
@@ -13,18 +20,18 @@ function Stat({
   accent?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground/60 text-[10px] leading-none tracking-wider uppercase">
+    <div className="min-w-0">
+      <dt className="text-muted-foreground/60 truncate text-[10px] leading-none tracking-wider uppercase">
         {label}
-      </span>
-      <span
+      </dt>
+      <dd
         className={cn(
-          'font-mono text-lg leading-none tabular-nums',
+          'mt-1.5 font-mono text-lg leading-none tabular-nums',
           accent ? 'text-primary' : 'text-foreground',
         )}
       >
         {value}
-      </span>
+      </dd>
     </div>
   );
 }
@@ -76,34 +83,44 @@ export function StatsBar({
   const uncompiled = state.error !== null;
 
   return (
-    <div className="border-border/60 bg-card/40 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-xl border px-5 py-3.5 backdrop-blur">
-      <Stat label="Log data" value={formatBytes(totalLogBytes)} />
-      <Stat
-        label="Scanned"
-        value={idle || uncompiled ? '—' : formatBytes(state.scannedTotal)}
-      />
-      <Stat
-        label="Matches"
-        value={idle || uncompiled ? '—' : `${state.matched}`}
-        accent={!uncompiled && state.matched > 0}
-      />
-      <Stat
-        label="Sources answered"
-        value={
-          uncompiled ? '—' : `${idle ? 0 : state.answered}/${sources.length}`
-        }
-      />
-      <Stat
-        label="First match"
-        value={uncompiled ? '—' : ms(state.firstMatchMs)}
-        accent
-      />
-      <Stat
-        label="All answered"
-        value={uncompiled ? '—' : ms(state.allAnsweredMs)}
-      />
+    /*
+      Six equal columns, not a flex row. Sized by content, a wide label over a
+      narrow value — `Sources answered` over `4/4` — leaves a gap the eye reads
+      as a mistake, and the six figures never line up with each other or with
+      the table below. The note is its own full-width line under a rule for the
+      same reason: floated to the right of the figures it set the row's height
+      and left half the bar empty.
+    */
+    <div className="border-border/60 bg-card/40 rounded-xl border backdrop-blur">
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-5 px-5 py-4 sm:grid-cols-3 lg:grid-cols-6 lg:gap-x-4">
+        <Stat label="Log data" value={formatBytes(totalLogBytes)} />
+        <Stat
+          label="Scanned"
+          value={idle || uncompiled ? '—' : formatBytes(state.scannedTotal)}
+        />
+        <Stat
+          label="Matches"
+          value={idle || uncompiled ? '—' : `${state.matched}`}
+          accent={!uncompiled && state.matched > 0}
+        />
+        <Stat
+          label="Sources answered"
+          value={
+            uncompiled ? '—' : `${idle ? 0 : state.answered}/${sources.length}`
+          }
+        />
+        <Stat
+          label="First match"
+          value={uncompiled ? '—' : ms(state.firstMatchMs)}
+          accent
+        />
+        <Stat
+          label="All answered"
+          value={uncompiled ? '—' : ms(state.allAnsweredMs)}
+        />
+      </dl>
 
-      <p className="text-muted-foreground/70 ml-auto max-w-md text-xs leading-relaxed">
+      <p className="border-border/60 text-muted-foreground/70 border-t px-5 py-2.5 text-xs leading-relaxed">
         Streamed from static files, plus a 1.17 MB WebAssembly download once per
         page load. <strong className="font-medium">Scanned</strong> is
         uncompressed log content reaching the search, not bytes on the wire —
