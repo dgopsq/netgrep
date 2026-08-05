@@ -104,26 +104,6 @@ do.
 Not obviously worth fixing. Raising the ceiling trades memory for a case nobody has hit; removing it means
 buffering without bound. Left recorded rather than planned.
 
-### 3f. A single NUL byte discards the whole searched block — `packages/search/src/lib.rs`
-
-`BinaryDetection::quit(b'\x00')` does not merely stop at the NUL; it abandons the entire chunk. A match is
-dropped even when it occurs *before* the NUL, and even on an earlier line.
-
-```
-"needle here"              ~  "needle"  ->  true
-"needle here\0tail"        ~  "needle"  ->  false   # match precedes the NUL
-"needle here\n\0tail"      ~  "needle"  ->  false   # and is on an earlier line
-```
-
-Quitting on binary input is a reasonable ripgrep default; the surprise is that a boolean API cannot
-distinguish "binary, not searched" from "no match". Options: `BinaryDetection::none()`, or surfacing the
-distinction — which is an API change and therefore out of scope today.
-
-Decision 0018 changed its blast radius without fixing it. The engine is handed the block of complete lines in a
-chunk rather than the chunk, so how far a NUL reaches now depends on where the last `\n` falls, and a match on
-an earlier line survives *if* the NUL lands in the held-back partial line. Incidental, and pinned in both
-directions so it is not mistaken for a fix. **Fix it in `lib.rs` or not at all.**
-
 ### 17. `$` never matches on CRLF input — `packages/search/src/lib.rs`
 
 The matcher is built without `.crlf(true)`, and the searcher's line terminator is `\n`, so on a
@@ -243,6 +223,7 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 3f | A single NUL byte discards the whole searched block | **Fixed, 2026-08-05.** `BinaryDetection::quit(b'\x00')` never stopped *at* the NUL — it abandoned the entire block the searcher was handed, so a match was dropped even when it preceded the NUL and even when it sat on an earlier line, and a boolean cannot tell "binary, not searched" from "no match". `BinaryDetection::none()`. The entry's own analysis offered two options and this took the first; the second — surfacing the distinction — remains an API change and stays out of scope. The incidental narrowing [0018](decisions/0018-line-oriented-tail-buffer.md) introduced, where a NUL landing in the held-back partial line let the match survive, is no longer load-bearing but its assertion is kept: it now passes for the ordinary reason rather than the accidental one, and the two must not be told apart by chance. **The trade is real and is published as a caveat:** nothing now declines to search binary input, so a pattern occurring inside a `.png` is reported like any other match. Pinned in both `search.rs` and `Netgrep.integration.spec.ts` under decision [0011](decisions/0011-tests-that-assert-known-bugs.md)'s rule — inverted and renamed, not deleted. |
 | 24 | The demo could not demonstrate what the project claims | **Shipped, 2026-08-02** — see [0026](decisions/0026-demo-as-log-dashboard.md). Never an Open item: it was recorded in [0025](decisions/0025-streaming-grep-over-http.md)'s *Consequences* as a gap that record could not close itself, and it is here so the closure is on the list rather than only in a decision. The demo searched 56 files averaging 46 KB under a hero reading *on files your tab could never hold*, so the demo's own files were a standing counterexample to the claim above it, and an answer-before-the-last-byte on a file that arrives in two chunks is invisible. Four generated logs — 8.3, 40.0, 120.1 and 240.2 MB, 408.6 MB together — tiled from four committed ~512 KB CC BY 4.0 loghub-2.0 seeds into a gitignored `public/logs/`, served as `.txt` so Pages compresses them. Measured in a browser: an early match answers at ~16 ms while the 240 MB source still streams, all four settle at ~1.8 s, and a marker a quarter of the way into that source answers at ~467 ms against ~1.8 s for a full read of it. **Half the gap only.** Constant memory is still not demonstrated on the page and is not scheduled to be: no browser API gives an honest per-stream memory figure, so a number there would be a fabrication. — **Extended, 2026-08-03.** The clause that read *the page reports elapsed time and nothing else, because nothing else is honestly measurable from inside a tab* was wrong in its second half and is retracted. The page now also reports **bytes read per source and in total**, counted by wrapping the demo's own `window.fetch` and piping each log response through a counting `TransformStream` — a measurement at the page's own boundary, needing nothing from the library. Measured against the built site: a match near the head of Apache answers after **8.9%** of that file while the other three read 100%, `NETGREP-MARKER-25` lands at 25.0–32.3% across the four, `-75` at 75.0–78.1%, and a miss reads 100% of all of them. ⚠️ The figure is **decompressed file content, not wire bytes** — the logs are served gzipped at ~16× — so it is labelled *Scanned* and the stats bar says which it is; do not let that sentence be shortened away. Resource Timing was probed and cannot do this: an aborted fetch reports `encodedBodySize: 0` in Chromium, which is exactly the case worth showing. Two costs accepted: `pnpm dev` and `pnpm build:example` now depend on a ~0.8 s generation step, and the generated logs are repetitive by construction, so the four `NETGREP-MARKER-*` lines are their only deep needles. Made item **23** visible — see above. |
 | 19 | The cache has no eviction, size cap or TTL | **Closed by deleting the cache**, not by adding eviction — see [0024](decisions/0024-remove-the-in-memory-cache.md). This was what remained of item **11** after [0018](decisions/0018-line-oriented-tail-buffer.md) fixed its O(n²) half. The eviction it asked for is the browser HTTP cache's, and always was: netgrep now retains nothing between searches, so there is no growth to bound. ⚠️ **This is the second item numbered 19** — see the note under *Item numbers are stable*, above. |
 | 21 | Early resolution did not cancel the request | **Fixed.** `resolve()` on a match stopped issuing reads but left the request open, so the remaining bytes still arrived and were still paid for — the saving was latency only. `reader.cancel()` at the match site ends the transfer. Never an Open item on this list: it was recorded in [0002](decisions/0002-search-while-downloading.md)'s *Consequences* and nowhere else, which is why it went unclosed for years. Pinned by "cancels the response stream on a match, ending the transfer" in `Netgrep.integration.spec.ts`, with the stream-ends-normally control beside it. |
