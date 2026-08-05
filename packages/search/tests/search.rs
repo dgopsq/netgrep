@@ -395,9 +395,10 @@ mod matching_line {
     fn test_a_carriage_return_before_the_newline_is_stripped_too() {
         // On CRLF input the `\r` is the last byte of the line under netgrep's
         // `\n`-terminator semantics, so without this it would render as a
-        // control character in whatever the caller displays. Note BACKLOG 17
-        // is untouched by this: `$` still cannot match here, because the
-        // stripping happens after matching, not before.
+        // control character in whatever the caller displays. BACKLOG 17 fixed
+        // `$` matching here; this strip is unrelated to that fix — it runs on
+        // the captured line for display, after the match already happened
+        // against the raw bytes.
         assert_eq!(
             first_line(b"alpha\r\nbeta\r\n", "alpha", NO_CAP).as_deref(),
             Some("alpha")
@@ -799,5 +800,27 @@ mod documented_defects {
         // was not moved off `\n`.
         assert!(matches(b"needle\nnext\n", "needle$"));
         assert!(matches(b"a\nneedle\n", "^needle"));
+    }
+
+    #[test]
+    fn backlog_17_widened_bare_cr_is_also_a_line_boundary_to_the_anchors() {
+        // The price of `crlf(true)`, not an accident: `Look::EndCRLF` /
+        // `Look::StartCRLF` treat a bare `\r` as a line boundary too, not just
+        // `\r\n`. A file with old-Mac or progress-bar `\r` endings now gets
+        // anchor matches on either side of one, none of which fired before
+        // this PR.
+        assert!(matches(b"foo\rbar\n", "foo$"));
+        assert!(matches(b"foo\rbar\n", "^bar"));
+
+        // The line splitter disagrees: it only ever breaks on `\n`
+        // (`test_a_lone_carriage_return_is_content`, above), so the anchors
+        // and the returned line now describe different boundaries for the
+        // same bytes — the captured line is the whole un-split text, not
+        // "foo" or "bar" alone.
+        use super::first_line;
+        assert_eq!(
+            first_line(b"foo\rbar\n", "foo$", 4096).as_deref(),
+            Some("foo\rbar")
+        );
     }
 }
