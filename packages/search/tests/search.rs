@@ -818,6 +818,12 @@ mod encoding {
             ));
         }
 
+        // Prove the encoding is exactly consumed, not merely a prefix of it: a
+        // stray trailing table word or an extra joined segment would otherwise
+        // pass every assertion above unnoticed.
+        assert_eq!(cursor, table.len(), "the table has unconsumed words");
+        assert!(lines.next().is_none(), "the text has unconsumed segments");
+
         (lines_in_block, out)
     }
 
@@ -885,17 +891,55 @@ mod encoding {
     #[test]
     fn a_line_past_the_cap_is_truncated_and_its_ranges_drop_or_clamp() {
         // block()'s test helper (above) hardcodes max_line_bytes = 4096, so no
-        // block-path test exercises truncation — the drop/clamp branches were
-        // pinned only through `search_bytes_line_ranges`. This threads a small
-        // cap through the encoder instead, so a match fully past the cap is
-        // dropped and the survivor is clamped to the cut.
-        let encoded = ::search::try_encode_block(b"needle and needle\n", "needle", 8)
+        // block-path test exercised truncation before this — the drop/clamp
+        // branches were pinned only through `search_bytes_line_ranges`. This
+        // threads a small cap through the encoder instead: the first match
+        // straddles the cut and is clamped, the second sits entirely past it
+        // and is dropped.
+        let encoded = ::search::try_encode_block(b"needle and needle\n", "needle", 4)
             .expect("the pattern should compile");
 
         let (_, decoded) = decode(&encoded);
 
         assert_eq!(decoded.len(), 1);
-        assert_eq!(decoded[0], (1, "needle a".to_string(), vec![0, 6]));
+        assert_eq!(decoded[0], (1, "need".to_string(), vec![0, 4]));
+    }
+
+    #[test]
+    fn a_hit_whose_match_is_entirely_past_the_cap_is_a_two_word_record() {
+        // The first hit's only match starts past the cap and is dropped, so
+        // its record collapses to its two fixed words — `nRanges` is
+        // legitimately 0 without the hit itself being absent. The second hit
+        // is included alongside it, unmodified, as the control: its match
+        // starts before the cap and is clamped instead, so a walker reading
+        // this table has to size each record from its own `nRanges` rather
+        // than assume a fixed stride.
+        let encoded = ::search::try_encode_block(b"aaaa needle\nzz needle\n", "needle", 4)
+            .expect("the pattern should compile");
+
+        assert_eq!(encoded.table, vec![2, 2, 1, 0, 2, 1, 3, 4]);
+        assert_eq!(encoded.text, "aaaa\nzz n");
+
+        let (_, decoded) = decode(&encoded);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], (1, "aaaa".to_string(), vec![]));
+        assert_eq!(decoded[1], (2, "zz n".to_string(), vec![3, 4]));
+    }
+
+    #[test]
+    fn a_single_empty_matching_hit_still_reports_hit_count_one() {
+        // The trap for a walker written against this format: `text == ""` is
+        // also what a ZERO-hit block encodes, so a guard like `if (!text)
+        // return` would silently drop this real hit rather than decode it.
+        // `hitCount` is what distinguishes the two, not `text`'s truthiness.
+        let encoded = ::search::try_encode_block(b"a\n\nb\n", "^$", 4096)
+            .expect("the pattern should compile");
+
+        assert_eq!(encoded.text, "");
+
+        let (_, decoded) = decode(&encoded);
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0], (2, "".to_string(), vec![0, 0]));
     }
 }
 
