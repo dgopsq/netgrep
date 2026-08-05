@@ -159,10 +159,13 @@ mod search {
     // ---------------------------------------------------------------
     // Line semantics
     //
-    // The searcher is given `line_terminator(Some(b'\n'))`, which makes `^`,
-    // `$` and `.` line-scoped rather than chunk-scoped. `^` used to anchor to
-    // the chunk instead whenever smart case left the pattern case-sensitive —
-    // see BACKLOG 3e, fixed upstream — so this is guarded from both sides.
+    // The searcher is given `line_terminator(Some(b'\n'))`, which scopes `.`
+    // to a line. `^` and `$` are not decided by this setting alone: the
+    // matcher's `crlf(true)` and `multi_line(true)` (BACKLOG 17) are what make
+    // them CRLF-aware, and `line_terminator` here does not touch that. `^`
+    // used to anchor to the chunk instead whenever smart case left the
+    // pattern case-sensitive — see BACKLOG 3e, fixed upstream — so this is
+    // guarded from both sides.
     // ---------------------------------------------------------------
 
     #[test]
@@ -408,8 +411,11 @@ mod matching_line {
     #[test]
     fn test_a_lone_carriage_return_is_content() {
         // Not a terminator here, so not structure: only the `\r\n` PAIR is
-        // dropped. A file with bare CR endings is one line to this engine, and
-        // pretending otherwise would silently truncate it.
+        // dropped. A file with bare CR endings is one line to the line
+        // SPLITTER — it still only ever breaks on `\n` — and pretending
+        // otherwise here would silently truncate it. The anchors disagree
+        // since `crlf(true)`: they treat a bare `\r` as a line boundary too,
+        // which is BACKLOG 25, pinned below.
         assert_eq!(
             first_line(b"alpha\rbeta\n", "alpha", NO_CAP).as_deref(),
             Some("alpha\rbeta")
@@ -722,8 +728,13 @@ mod line_ranges_tests {
 /// not evidence of it either way, so do the deletion here.
 #[cfg(test)]
 mod documented_defects {
-    use super::matches;
+    use super::{first_line, matches};
     use ::search::try_search_bytes;
+
+    /// Comfortably above every line used here, so a test only exercises the
+    /// cap when it says so — same rationale as `matching_line`'s constant of
+    /// the same name.
+    const NO_CAP: usize = 4096;
 
     #[test]
     fn backlog_3c_fixed_an_invalid_pattern_is_an_error() {
@@ -817,9 +828,8 @@ mod documented_defects {
         // and the returned line now describe different boundaries for the
         // same bytes — the captured line is the whole un-split text, not
         // "foo" or "bar" alone.
-        use super::first_line;
         assert_eq!(
-            first_line(b"foo\rbar\n", "foo$", 4096).as_deref(),
+            first_line(b"foo\rbar\n", "foo$", NO_CAP).as_deref(),
             Some("foo\rbar")
         );
     }
