@@ -8,6 +8,14 @@
     "backlog": "3g"
   },
   {
+    "id": "bare-cr-anchors",
+    "title": "`^`/`$` also anchor to a bare `\\r`, not just `\\r\\n`",
+    "short": "A file with old-Mac or progress-bar `\\r` line endings gets extra anchor matches the returned line doesn't agree with.",
+    "body": "Fixing `$` on CRLF input meant enabling the regex engine's CRLF-aware anchors, and they treat a lone `\\r` as a line boundary too, not only a `\\r\\n` pair. So `foo$` and `^bar` both match `\"foo\\rbar\\n\"`, on either side of the bare `\\r` — matches that did not happen before. The line splitter disagrees: it still only ever breaks on `\\n`, so the line `capture` returns for that match is the whole unsplit text, not `\"foo\"` or `\"bar\"` alone. A caller cannot predict which boundary applies from the documented behaviour of either.",
+    "kind": "defect",
+    "backlog": null
+  },
+  {
     "id": "no-binary-detection",
     "title": "netgrep does not detect binary files",
     "short": "A pattern that occurs inside a `.png` is reported like any other match.",

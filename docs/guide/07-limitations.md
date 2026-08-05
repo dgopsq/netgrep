@@ -13,6 +13,12 @@ Each defect is pinned by a test, so it cannot change unnoticed.
 
 netgrep holds back the incomplete last *line* of each chunk and prepends it to the next. That is exact, since a match can never cross a newline, so ordinary text is unaffected no matter how the network splits the response. The exception is a line with no terminator in 64 KB, such as minified JavaScript or a one-line data dump. Past that ceiling the retained bytes become a plain 64 KB window, so a match longer than the window is lost, `^` can match at a window edge where no line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line. That fragment need not contain the match, so `ranges` can come back empty even though `result` is still correct. Newline-free input is also answered more slowly, because nothing can be searched until the ceiling fills or the download ends.
 
+<a id="bare-cr-anchors"></a>
+
+### `^`/`$` also anchor to a bare `\r`, not just `\r\n`
+
+Fixing `$` on CRLF input meant enabling the regex engine's CRLF-aware anchors, and they treat a lone `\r` as a line boundary too, not only a `\r\n` pair. So `foo$` and `^bar` both match `"foo\rbar\n"`, on either side of the bare `\r` — matches that did not happen before. The line splitter disagrees: it still only ever breaks on `\n`, so the line `capture` returns for that match is the whole unsplit text, not `"foo"` or `"bar"` alone. A caller cannot predict which boundary applies from the documented behaviour of either.
+
 ## By design
 
 These are not bugs and will not be fixed.
