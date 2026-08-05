@@ -97,12 +97,43 @@ the window is taken; `^` does not match when the window is never flushed on its 
 single chunk starts where the line starts.
 
 **Published anyway**, in [`guide/caveats.data.json`](guide/caveats.data.json) and so in the guide and the
-README — the only defect left in that list. The demo used to filter its own list down to what its own files
-could reach; it no longer carries one, and a reader running netgrep over minified JavaScript reaches this
-whether or not the demo's logs do.
+README, alongside item 25 below. The demo used to filter its own list down to what its own files could reach;
+it no longer carries one, and a reader running netgrep over minified JavaScript reaches this whether or not
+the demo's logs do.
 
 Not obviously worth fixing. Raising the ceiling trades memory for a case nobody has hit; removing it means
 buffering without bound. Left recorded rather than planned.
+
+### 25. `^`/`$` anchor to a bare `\r`, but the line splitter does not — `packages/search/src/lib.rs`
+
+A side effect of fixing item 17, found by review rather than by design. `RegexMatcherBuilder::crlf(true)` —
+the fix for `$` on CRLF input — enables the regex engine's CRLF-aware anchors, and those treat a lone `\r` as
+a line boundary too, not only a `\r\n` pair. The line splitter (`grep-searcher`'s own line-finding, unrelated
+to the matcher's anchor config) disagrees: it still only ever breaks a chunk into lines on `\n`. So on input
+using bare CR line endings — old Mac text, or log output using `\r` to overwrite a progress line in place —
+the anchors and the returned line describe different boundaries for the same bytes.
+
+```
+"foo\rbar\n" ~ "foo$"              -> true    # was false before item 17
+"foo\rbar\n" ~ "^bar"              -> true    # was false before item 17
+"foo\rbar\n" ~ capture: 'line'     -> "foo\rbar"   # NOT "foo", even though "foo$" just matched
+```
+
+`result` is correct either way — the anchors did match. What is surprising is `capture`: a caller whose
+pattern matched on the strength of `$` reasonably expects the returned line to end where `$` matched, and it
+does not.
+
+A fix would mean either making the line splitter agree with the anchors — teaching it to also break on a bare
+`\r`, which `grep-searcher` does not expose as a configuration and would mean patching it, reopening the fork
+[decision 0001](decisions/0001-fork-ripgrep-for-wasm.md) removed — or making the anchors agree with the
+splitter, which is not a knob `crlf(true)` offers separately from its CRLF behaviour: the underlying regex
+engine's `Look::EndCRLF`/`StartCRLF` are what they are. Bare-CR line endings are decades obsolete for text
+files; the progress-bar case is real but the "line" a caller would want back from it is not obviously
+well-defined either. Not obviously worth fixing. Pinned in the `documented_defects` module of
+`packages/search/tests/search.rs` and in `Netgrep.integration.spec.ts`. Published in
+[`guide/caveats.data.json`](guide/caveats.data.json) as `bare-cr-anchors`.
+
+Found on 2026-08-05 during review of item 17's fix.
 
 ---
 

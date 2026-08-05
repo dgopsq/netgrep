@@ -335,9 +335,10 @@ The fix widened the anchors further than the entry anticipated: `crlf(true)` tre
 happen before. The line splitter disagrees; it still only ever breaks on `\n`, so the line a caller gets back
 from `capture` and the boundary the anchors just matched against can now describe different bytes. That trade
 is real and published rather than hidden: `bare-cr-anchors` in
-[`guide/caveats.data.json`](guide/caveats.data.json), `kind: "defect"` — old-Mac and bare-CR progress-bar
-output are the files this reaches, and a caller cannot predict which boundary applies from either behaviour's
-documentation. Closed as BACKLOG 17; see the `# Done` table in [`BACKLOG.md`](BACKLOG.md).
+[`guide/caveats.data.json`](guide/caveats.data.json), `kind: "defect"`, tracked as backlog item **25** — old-Mac
+and bare-CR progress-bar output are the files this reaches, and a caller cannot predict which boundary applies
+from either behaviour's documentation. Item 6 itself is closed as BACKLOG 17; see the `# Done` table in
+[`BACKLOG.md`](BACKLOG.md).
 
 ### 7. Concurrent searches of one url each download it — BY DESIGN
 
