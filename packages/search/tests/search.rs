@@ -509,16 +509,23 @@ mod matching_line {
     #[test]
     fn test_the_three_entry_points_share_one_searcher_configuration() {
         // All three go through `build_searcher`, so binary detection cannot
-        // differ between them. That matters more than it looks: a NUL abandons
-        // the whole block, so a divergence would change `result` — adding
-        // `capture: 'line-ranges'` to a working search would change its
-        // ANSWER, not just what came back alongside it.
+        // differ between them. That matters more than it looks: a divergence
+        // would change `result` — adding `capture: 'line-ranges'` to a working
+        // search would change its ANSWER, not just what came back alongside it.
         //
         // Asserted through the observable behaviour rather than the builder,
-        // because the builder is not comparable.
-        assert!(!matches(b"needle here\x00tail", "needle"));
-        assert_eq!(first_line(b"needle here\x00tail", "needle", NO_CAP), None);
-        assert_eq!(line_ranges(b"needle here\x00tail", "needle", NO_CAP), None);
+        // because the builder is not comparable. The input still carries a NUL
+        // because that is the setting most able to diverge — it used to abandon
+        // the whole block and now searches it as text.
+        assert!(matches(b"needle here\x00tail", "needle"));
+        assert_eq!(
+            first_line(b"needle here\x00tail", "needle", NO_CAP).as_deref(),
+            Some("needle here\u{0}tail")
+        );
+        assert_eq!(
+            line_ranges(b"needle here\x00tail", "needle", NO_CAP),
+            Some(("needle here\u{0}tail".to_string(), vec![0, 6]))
+        );
 
         // The control, so this is pinning the shared config rather than an
         // input that never matched.
@@ -755,15 +762,22 @@ mod documented_defects {
     }
 
     #[test]
-    fn backlog_3f_one_nul_byte_discards_the_whole_chunk() {
-        // `BinaryDetection::quit(b'\x00')` does not stop AT the NUL; it
-        // abandons everything it was given. The match is dropped even when it
-        // precedes the NUL, and even when it is on an earlier line.
+    fn backlog_3f_fixed_a_nul_byte_no_longer_discards_the_block() {
+        // `BinaryDetection::quit(b'\x00')` abandoned everything it was given on
+        // the first NUL, so a match was dropped even when it preceded the NUL
+        // and even when it sat on an earlier line. `BinaryDetection::none()`
+        // searches the bytes as text and reports what is there.
         assert!(matches(b"needle here", "needle"));
 
-        assert!(!matches(b"needle here\x00tail", "needle"));
-        assert!(!matches(b"needle here\n\x00tail", "needle"));
-        assert!(!matches(b"\x00needle here", "needle"));
+        assert!(matches(b"needle here\x00tail", "needle"));
+        assert!(matches(b"needle here\n\x00tail", "needle"));
+        assert!(matches(b"\x00needle here", "needle"));
+
+        // The cost of the fix, pinned so it is not mistaken for an oversight:
+        // nothing now declines to search binary input, so a pattern that occurs
+        // inside a `.png` is reported like any other match. The caller decides
+        // what it is pointing at.
+        assert!(matches(b"\x89PNG\r\n\x1a\nIHDRneedle", "needle"));
     }
 
     #[test]
