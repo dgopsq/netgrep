@@ -205,6 +205,16 @@ fn with_matcher<T>(
 /// `test_a_match_cannot_span_a_line_terminator` pins. `multi_line` does not
 /// interact with this: it only chooses which `Look` a line anchor compiles to,
 /// and does not touch the line terminator field.
+///
+/// Reversed, this does not fail silently in the sense of shipping a wrong
+/// answer unnoticed: `build_searcher`'s own line terminator stays `\n`, so
+/// `grep-searcher`'s internal `check_config` rejects the mismatch against the
+/// matcher's `\r\n` on every call — though that `Result` is discarded below
+/// (`let _ = searcher.search_slice(…)`), so the rejection itself never
+/// surfaces anywhere. What is loud is the symptom: measured, not assumed — 49
+/// of this crate's 58 tests fail immediately when the two lines above are
+/// swapped, because nearly every search comes back with no match. CI catches
+/// that before it reaches anything downstream.
 fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
     RegexMatcherBuilder::new()
         .crlf(true)
