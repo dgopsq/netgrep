@@ -121,11 +121,11 @@ Per call it:
 1. Reuses the **last compiled matcher** if the pattern is unchanged, and otherwise compiles a new one with
    `crlf(true)`, `multi_line(true)`, `line_terminator(b'\n')` and **`case_smart(true)`** — smart case is
    hardcoded on and not configurable, and `crlf`/`multi_line` make `^`/`$` CRLF-aware without moving the line
-   terminator off `\n` (item 6, below). A
-   lowercase pattern matches case-insensitively; a pattern containing an uppercase character matches
-   case-sensitively. netgrep calls this once per network chunk with the same pattern every time, so the cache
-   hits on every chunk after the first; compilation was 97–99% of the cost before it existed. Failed compiles
-   are cached alongside successful ones. See [decision 0016](decisions/0016-compiled-matcher-memo.md).
+   terminator off `\n` (item 6, below). A lowercase pattern matches case-insensitively; a pattern containing an
+   uppercase character matches case-sensitively. netgrep calls this once per network chunk with the same
+   pattern every time, so the cache hits on every chunk after the first; compilation was 97–99% of the cost
+   before it existed. Failed compiles are cached alongside successful ones. See
+   [decision 0016](decisions/0016-compiled-matcher-memo.md).
 2. Builds a `Searcher` with `BinaryDetection::none()` and `line_number(false)`.
 3. Runs `search_slice` into `MemSink`, a minimal `Sink` implementation that does nothing but record that a
    match happened and stop — chosen because ripgrep's real sinks write to stdout, which does not exist in
@@ -242,7 +242,9 @@ deleted the cache both of them described; their headings are kept because the nu
 this file's own text and from [decision 0002](decisions/0002-search-while-downloading.md), which cites both by
 number. Caveat 7 stopped being a defect on the same day, for the same reason, and is now a design consequence.
 Caveats 5 and 6 were both fixed on 2026-08-05, and what replaced each is described below rather than removed,
-because the trade each made is a caveat worth publishing rather than a closed matter.
+because the trade each made is a caveat worth publishing rather than a closed matter. Caveat 6's fix left a new
+one behind — reviewed, not designed — so caveat **8** is new rather than renumbered: it gets its own heading
+because it is still open, unlike the fix it was found alongside.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 
@@ -330,14 +332,8 @@ absolute end-of-haystack one when multi-line mode is on — `.multi_line(true)` 
 call touches the matcher's line terminator, which stays `\n`, so the invariant `test_a_match_cannot_span_a_line_terminator`
 pins is undisturbed.
 
-The fix widened the anchors further than the entry anticipated: `crlf(true)` treats a **bare `\r`**, not only a
-`\r\n` pair, as a line boundary, so `foo$` and `^bar` now both match `"foo\rbar\n"` — matches that did not
-happen before. The line splitter disagrees; it still only ever breaks on `\n`, so the line a caller gets back
-from `capture` and the boundary the anchors just matched against can now describe different bytes. That trade
-is real and published rather than hidden: `bare-cr-anchors` in
-[`guide/caveats.data.json`](guide/caveats.data.json), `kind: "defect"`, tracked as backlog item **25** — old-Mac
-and bare-CR progress-bar output are the files this reaches, and a caller cannot predict which boundary applies
-from either behaviour's documentation. Item 6 itself is closed as BACKLOG 17; see the `# Done` table in
+The fix widened the anchors further than the entry anticipated, which is caveat 8, below — that side effect is
+still open, unlike this one. Item 6 itself is closed as BACKLOG 17; see the `# Done` table in
 [`BACKLOG.md`](BACKLOG.md).
 
 ### 7. Concurrent searches of one url each download it — BY DESIGN
@@ -357,6 +353,33 @@ nobody asked to keep, or teeing the response stream and with it the first caller
 wasted request into a wrong answer. So both callers fetch, deliberately, and the browser's own HTTP cache
 decides what the repeat actually costs. Pinned by *fetches once per concurrent search of one url, by design*
 in `Netgrep.integration.spec.ts` — an ordinary assertion, not a defect one.
+
+### 8. `^`/`$` anchor to a bare `\r`, but the line splitter does not
+
+A side effect of fixing caveat 6, found by review rather than by design. `crlf(true)` — the fix for `$` on CRLF
+input — enables the regex engine's CRLF-aware anchors, and those treat a lone `\r` as a line boundary too, not
+only a `\r\n` pair. The line splitter (`grep-searcher`'s own line-finding, unrelated to the matcher's anchor
+config) disagrees: it still only ever breaks a chunk into lines on `\n`. So on input using bare CR line
+endings — old Mac text, or log output using `\r` to overwrite a progress line in place — the anchors and the
+returned line describe different boundaries for the same bytes:
+
+```
+"foo\rbar\n" ~ "foo$"              -> true    # was false before caveat 6 was fixed
+"foo\rbar\n" ~ "^bar"              -> true    # was false before caveat 6 was fixed
+"foo\rbar\n" ~ capture: 'line'     -> "foo\rbar"   # NOT "foo", even though "foo$" just matched
+```
+
+`result` is correct either way — the anchors did match. What is surprising is `capture`: a caller whose pattern
+matched on the strength of `$` reasonably expects the returned line to end where `$` matched, and it does not.
+
+A fix would mean either making the line splitter agree with the anchors — teaching it to also break on a bare
+`\r`, which `grep-searcher` does not expose as a configuration and would mean patching it, reopening the fork
+[decision 0001](decisions/0001-fork-ripgrep-for-wasm.md) removed — or making the anchors agree with the
+splitter, which is not a knob `crlf(true)` offers separately from its CRLF behaviour. Bare-CR line endings are
+decades obsolete for text files; the progress-bar case is real but the "line" a caller would want back from it
+is not obviously well-defined either. Not obviously worth fixing. Published as `bare-cr-anchors` in
+[`guide/caveats.data.json`](guide/caveats.data.json), `kind: "defect"`, tracked as backlog item **25**. Pinned
+in the `documented_defects` module of `packages/search/tests/search.rs` and in `Netgrep.integration.spec.ts`.
 
 ---
 
@@ -460,8 +483,8 @@ components straight out of `rust-toolchain.toml`.
 |---|---|---|
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
 | `Netgrep.spec.ts` | Vitest in **Node**, 48 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 47 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 57 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 49 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 58 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin

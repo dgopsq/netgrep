@@ -6,8 +6,9 @@
 
 netgrep has known, unfixed correctness bugs: a single NUL byte discards a block of lines, `$` misses on CRLF
 input, concurrent searches of one url both fetch it, and a match longer than the 64 KB tail ceiling can still
-span a chunk boundary. (The invalid-pattern trap was on this list until 2026-07-29, and the chunk-boundary and
-partial-cache bugs until 2026-07-30; see the amendments below.) They are documented in
+span a chunk boundary. (The invalid-pattern trap was on this list until 2026-07-29, the chunk-boundary and
+partial-cache bugs until 2026-07-30, and the NUL byte and CRLF `$` bugs until 2026-08-05; see the amendments
+below.) They are documented in
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md#known-limitations--correctness-caveats) and tracked in
 [`../BACKLOG.md`](../BACKLOG.md).
 
@@ -83,3 +84,17 @@ assertion was inverted in the same PR. That is the mechanism working exactly as 
 > This is the case §2.1's instructions do not quite cover: a defect test can go green because a *different*
 > change moved the boundary the defect operates on, and the right answer is neither "invert it" nor "restore
 > the old fixture and say nothing".
+
+> **Amended a fourth time (2026-08-05).** BACKLOG **3f** (a NUL byte discarding the whole searched block) and
+> **17** (`$` missing on CRLF input) were fixed in two stacked PRs, and each assertion was inverted in the same
+> PR that fixed it rather than deleted — `backlog_3f_fixed_a_nul_byte_no_longer_discards_the_block` and
+> `backlog_17_fixed_dollar_matches_before_a_carriage_return` in `search.rs`, following the same pattern 3c and
+> 3a/3b set before them. These are the last two bugs this record's own Context paragraph named at the top —
+> closing them does not, by itself, empty the block; see below.
+>
+> Closing 17 opened one, though, rather than leaving the module thinner: `crlf(true)` — the fix itself — widens
+> `^`/`$` to treat a bare `\r` as a line boundary, which the line splitter does not follow, and that gap is new
+> rather than pre-existing. `backlog_17_widened_bare_cr_is_also_a_line_boundary_to_the_anchors` pins it,
+> tracked as BACKLOG 25. It sits in this same block under this same rule — current behaviour, asserted rather
+> than described, to be inverted the day it closes — because that is what the block is for, not because the
+> block needed something to keep it from reading as empty.
