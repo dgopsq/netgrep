@@ -185,9 +185,30 @@ fn with_matcher<T>(
 }
 
 /// Compile a pattern with netgrep's fixed matching semantics: `\n` terminates a
-/// line, and smart case is on.
+/// line, `^` and `$` treat a `\r\n` ending as the line ending, and smart case is
+/// on.
+///
+/// `.multi_line(true)` is required alongside `.crlf(true)`: a bare `$` parses
+/// to the same AST node as `(?m)$`, and `regex-syntax` only picks the
+/// CRLF-aware `Look::EndCRLF` over the absolute-end `Look::End` when multi-line
+/// mode is on — `crlf(true)` alone leaves an unqualified `$` untouched, so it
+/// still misses before `\r\n` exactly as before. Verified empirically against
+/// `grep-regex-0.1.14`, since the crate's own doc comment on `crlf` does not
+/// say this.
+///
+/// ⚠️ `.crlf(true)` MUST come before `.line_terminator(…)`. `crlf` sets the line
+/// terminator as well as the anchor behaviour — to `\r\n` — while
+/// `line_terminator` leaves the anchor behaviour alone. Called the other way
+/// round the terminator ends up `\r\n`, and the whole streaming loop rests on it
+/// being `\n`: `splitAtLastLine` carries the incomplete trailing *line* between
+/// chunks because a match can never span a `\n`, which is what
+/// `test_a_match_cannot_span_a_line_terminator` pins. `multi_line` does not
+/// interact with this: it only chooses which `Look` a line anchor compiles to,
+/// and does not touch the line terminator field.
 fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
     RegexMatcherBuilder::new()
+        .crlf(true)
+        .multi_line(true)
         .line_terminator(Some(b'\n'))
         .case_smart(true)
         .build(pattern)

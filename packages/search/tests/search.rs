@@ -781,18 +781,23 @@ mod documented_defects {
     }
 
     #[test]
-    fn backlog_17_dollar_does_not_match_before_a_carriage_return() {
-        // On CRLF input the line terminator is `\n`, so `\r` is the last
-        // character of the line and `$` sits behind it. A `$`-anchored pattern
-        // therefore misses silently on any Windows-authored file, while the
-        // same pattern unanchored matches fine.
+    fn backlog_17_fixed_dollar_matches_before_a_carriage_return() {
+        // The searcher's line terminator is `\n`, so on Windows-authored text
+        // the `\r` was the last character of the line and `$` sat behind it. A
+        // `$`-anchored pattern therefore missed silently on any CRLF file while
+        // the same pattern unanchored matched. `crlf(true)` on the matcher makes
+        // the anchors treat `\r\n` as the ending.
         assert!(matches(b"needle\r\nnext\r\n", "needle"));
-        assert!(!matches(b"needle\r\nnext\r\n", "needle$"));
+        assert!(matches(b"needle\r\nnext\r\n", "needle$"));
 
-        // `^` is unaffected — the CR is at the other end of the line.
+        // `^` was never affected — the CR is at the other end of the line — and
+        // must not become affected.
         assert!(matches(b"a\r\nneedle\r\n", "^needle"));
 
-        // And the LF-only case, to show the anchor itself works.
+        // The LF-only case still works, which is the half that could regress:
+        // `crlf(true)` sets the matcher's line terminator, and this asserts it
+        // was not moved off `\n`.
         assert!(matches(b"needle\nnext\n", "needle$"));
+        assert!(matches(b"a\nneedle\n", "^needle"));
     }
 }
