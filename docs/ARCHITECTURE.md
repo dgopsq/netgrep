@@ -119,7 +119,9 @@ truncated string, since a byte offset into the input would be wrong wherever los
 Per call it:
 
 1. Reuses the **last compiled matcher** if the pattern is unchanged, and otherwise compiles a new one with
-   `line_terminator(b'\n')` and **`case_smart(true)`** — smart case is hardcoded on and not configurable. A
+   `crlf(true)`, `multi_line(true)`, `line_terminator(b'\n')` and **`case_smart(true)`** — smart case is
+   hardcoded on and not configurable, and `crlf`/`multi_line` make `^`/`$` CRLF-aware without moving the line
+   terminator off `\n` (item 6, below). A
    lowercase pattern matches case-insensitively; a pattern containing an uppercase character matches
    case-sensitively. netgrep calls this once per network chunk with the same pattern every time, so the cache
    hits on every chunk after the first; compilation was 97–99% of the cost before it existed. Failed compiles
@@ -239,8 +241,8 @@ overtaken entirely on 2026-08-01 by [decision 0024](decisions/0024-remove-the-in
 deleted the cache both of them described; their headings are kept because the numbering is referenced from
 this file's own text and from [decision 0002](decisions/0002-search-while-downloading.md), which cites both by
 number. Caveat 7 stopped being a defect on the same day, for the same reason, and is now a design consequence.
-Caveat 5 was fixed on 2026-08-05, and what replaced it is described below rather than removed, because the
-trade it made is a caveat worth publishing rather than a closed matter.
+Caveats 5 and 6 were both fixed on 2026-08-05, and what replaced each is described below rather than removed,
+because the trade each made is a caveat worth publishing rather than a closed matter.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 
@@ -314,15 +316,28 @@ earlier match survive by accident, rather than by design — stopped being incid
 for the ordinary reason, and that case is still pinned so the two are not told apart by chance. Closed as
 BACKLOG 3f; see the `# Done` table in [`BACKLOG.md`](BACKLOG.md).
 
-### 6. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
+### 6. `$` did not match on CRLF input — FIXED
 
-The searcher is given `line_terminator(Some(b'\n'))`, so on a Windows-authored file the `\r` is the last
-character of the line and `$` sits behind it. `needle$` matches `"needle\n"` and does **not** match
-`"needle\r\n"`, while plain `needle` matches both. `^` is unaffected — the CR is at the other end.
+The searcher was given `line_terminator(Some(b'\n'))` with no `.crlf(true)` on the matcher, so on a
+Windows-authored file the `\r` was the last character of the line and `$` sat behind it. `needle$` matched
+`"needle\n"` and did **not** match `"needle\r\n"`, while plain `needle` matched both. `^` was unaffected — the
+CR is at the other end.
 
-Silent, and it depends on who wrote the file rather than on anything the caller did.
-`RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
-deliberate task rather than a drive-by.
+Silent, and it depended on who wrote the file rather than on anything the caller did. It was not the one-line
+fix this entry expected: `RegexMatcherBuilder::crlf(true)` alone leaves a bare `$` compiling unchanged, because
+`$` parses to the same AST node as `(?m)$` and `regex-syntax` only picks the CRLF-aware anchor over the
+absolute end-of-haystack one when multi-line mode is on — `.multi_line(true)` had to go alongside it. Neither
+call touches the matcher's line terminator, which stays `\n`, so the invariant `test_a_match_cannot_span_a_line_terminator`
+pins is undisturbed.
+
+The fix widened the anchors further than the entry anticipated: `crlf(true)` treats a **bare `\r`**, not only a
+`\r\n` pair, as a line boundary, so `foo$` and `^bar` now both match `"foo\rbar\n"` — matches that did not
+happen before. The line splitter disagrees; it still only ever breaks on `\n`, so the line a caller gets back
+from `capture` and the boundary the anchors just matched against can now describe different bytes. That trade
+is real and published rather than hidden: `bare-cr-anchors` in
+[`guide/caveats.data.json`](guide/caveats.data.json), `kind: "defect"` — old-Mac and bare-CR progress-bar
+output are the files this reaches, and a caller cannot predict which boundary applies from either behaviour's
+documentation. Closed as BACKLOG 17; see the `# Done` table in [`BACKLOG.md`](BACKLOG.md).
 
 ### 7. Concurrent searches of one url each download it — BY DESIGN
 

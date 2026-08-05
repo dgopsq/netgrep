@@ -62,8 +62,8 @@ Three things will mislead you if you do not know them.
 
 `packages/netgrep/src/lib/Netgrep.integration.spec.ts` ends with a block titled
 **`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a match
-longer than the 64 KB tail ceiling still spanning a chunk boundary, `$` missing on CRLF input, and so on.
-`packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
+longer than the 64 KB tail ceiling still spanning a chunk boundary, `^`/`$` also anchoring to a bare `\r`, and so
+on. `packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
 the engine, where a failure names `lib.rs` without a browser and a stream in the way.
 
 They are not mistakes and they are not out of date. Their job is to detect *unintended* change during
@@ -561,15 +561,17 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 ## 7. Known correctness caveats
 
 Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test that
-asserts the wrong behaviour — in `Netgrep.integration.spec.ts`, and for the one that lives in the engine also
-in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
+asserts the wrong behaviour — in `Netgrep.integration.spec.ts` for what a consumer can observe, and in
+`packages/search/tests/search.rs` for the ones that live in the engine; a row engine-only so far has no
+`Netgrep.integration.spec.ts` pin yet. Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|
 | Anchors and long matches inside a >64 KB line | `Netgrep.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window. Inside such a line a match longer than 64 KB is lost, **and** `^` can match at the window's first byte. Needs a line over 64 KB — unreachable in prose. |
-| `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
+| `^`/`$` also anchor to a bare `\r` | `lib.rs`, `crlf(true)` | `crlf(true)` — the fix for the CRLF row below — treats a lone `\r` as a line boundary too, not only a `\r\n` pair, so `foo$` and `^bar` both match `"foo\rbar\n"` on either side of the bare `\r`. The line splitter disagrees: it still only ever breaks on `\n`, so `capture` can return a line that describes a different boundary than the anchor just matched against. |
 
-The last was found while broadening the test suite on 2026-07-29 and is backlog item 17.
+The last was found during code review on 2026-08-05, riding along with the CRLF fix below, and has no backlog
+item of its own yet.
 
 **Three entries left this table on 2026-07-30.** Two were closed by
 [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md): chunk-boundary false negatives and the
@@ -594,6 +596,12 @@ declines to search binary input, so a pattern occurring inside a `.png` is repor
 real trade, published under *By design* as `no-binary-detection` rather than dropped silently. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#known-limitations--correctness-caveats) and
 [decision 0002](docs/decisions/0002-search-while-downloading.md).
+
+**A fifth left the same day, replaced rather than dropped: the CRLF row.** `$` now matches on CRLF input —
+`RegexMatcherBuilder::crlf(true)` plus `.multi_line(true)`, since a bare `$` parses to the same AST node as
+`(?m)$` and only picks the CRLF-aware anchor when multi-line mode is on. What replaces the row is narrower and
+still a defect, not a design trade: `crlf(true)` treats a bare `\r` as a line boundary too, which the fix did
+not need and the entry did not anticipate, so it is the row above rather than a closed matter.
 
 ---
 
