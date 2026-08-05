@@ -431,7 +431,11 @@ fn decode_line(line: &[u8], max_line_bytes: usize) -> String {
 ///
 /// Only as a pair: a lone `\r` in the middle of a line under netgrep's
 /// `\n`-terminator semantics is ordinary content, and a file using bare CR line
-/// endings is one line as far as this engine is concerned.
+/// endings is one line as far as the line SPLITTER is concerned — it still
+/// only ever breaks on `\n`. `^`/`$` disagree since `crlf(true)`: they treat a
+/// bare `\r` as a line boundary too, so the anchors and the returned line can
+/// now describe different boundaries for the same bytes. Published as
+/// `bare-cr-anchors` in `docs/guide/caveats.data.json`.
 fn strip_terminator(line: &[u8]) -> &[u8] {
     match line.strip_suffix(b"\n") {
         Some(rest) => rest.strip_suffix(b"\r").unwrap_or(rest),
