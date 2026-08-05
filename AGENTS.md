@@ -219,7 +219,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Test TS | `pnpm test` | Vitest — **180 tests**: 60 unit in Node, 49 integration in headless Chromium, 71 tooling in Node |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
 | Test the tooling | `pnpm test:tools` | **71 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **58 tests** |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **73 tests** |
 | Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide and the README. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
@@ -365,15 +365,22 @@ Three packages, ~530 lines of first-party source. pnpm workspaces link them; the
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         ~430 lines, mostly comment. Exports three functions,
+    src/lib.rs         ~670 lines, mostly comment. Exports four functions,
                        sharing one compiled-matcher memo (decision 0016) and one
-                       searcher, so a caller pays only for the mode it names:
+                       searcher, so a caller pays only for the mode it names.
+                       Binary detection is fixed for all four; line-number
+                       counting is the one thing that varies by caller:
                          search_bytes(&[u8], &str) -> Result<bool, JsError>
                          search_bytes_line(&[u8], &str, usize)
                              -> Result<Option<String>, JsError>   see decision 0020
                          search_bytes_line_ranges(&[u8], &str, usize)
                              -> Result<Option<LineWithRanges>, JsError>
                                                                   see decision 0022
+                         search_block(&[u8], &str, usize)
+                             -> Result<BlockHits, JsError>        every match in
+                                                                  the block, not
+                                                                  just the first;
+                                                                  no TS caller yet
     tests/search.rs    plain native `cargo test` — no browser, no WebDriver.
                        Ends with a `documented_defects` module; read §2.1 first
     scripts/post_build.js   fixes up the generated pkg/ (see below)
