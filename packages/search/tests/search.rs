@@ -700,6 +700,93 @@ mod line_ranges_tests {
     }
 }
 
+/// Assert-friendly wrapper for the block API, matching `matches` above.
+#[cfg(test)]
+fn block(haystack: &[u8], pattern: &str) -> ::search::BlockOutcome {
+    ::search::try_search_block(haystack, pattern, 4096).expect("the pattern should compile")
+}
+
+#[cfg(test)]
+mod block {
+    use super::block;
+
+    #[test]
+    fn every_matching_line_is_returned_not_just_the_first() {
+        // The whole point of the export: `LineSink` stops at the first match,
+        // this one does not.
+        let out = block(b"needle one\nmiss\nneedle two\nneedle three\n", "needle");
+
+        assert_eq!(out.hits.len(), 3);
+        assert_eq!(out.hits[0].line, "needle one");
+        assert_eq!(out.hits[1].line, "needle two");
+        assert_eq!(out.hits[2].line, "needle three");
+    }
+
+    #[test]
+    fn line_numbers_are_one_based_and_relative_to_the_block() {
+        let out = block(b"a\nb\nneedle\nc\nneedle\n", "needle");
+
+        assert_eq!(out.hits.len(), 2);
+        assert_eq!(out.hits[0].line_number, 3);
+        assert_eq!(out.hits[1].line_number, 5);
+    }
+
+    #[test]
+    fn lines_in_block_counts_the_final_line_without_a_terminator() {
+        // The streaming loop hands over whole lines, but the LAST block of a
+        // file that does not end in a newline has no trailing terminator. The
+        // count has to include that line or the running base in TypeScript
+        // drifts by one for the rest of the file.
+        assert_eq!(block(b"a\nb\nc\n", "zzz").lines_in_block, 3);
+        assert_eq!(block(b"a\nb\nc", "zzz").lines_in_block, 3);
+        assert_eq!(block(b"", "zzz").lines_in_block, 0);
+    }
+
+    #[test]
+    fn ranges_are_utf16_offsets_into_the_returned_line() {
+        // Same contract as `search_bytes_line_ranges`: offsets index the
+        // decoded string, not the bytes.
+        let out = block("café needle\n".as_bytes(), "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "café needle");
+        assert_eq!(out.hits[0].ranges, vec![5, 11]);
+    }
+
+    #[test]
+    fn several_matches_on_one_line_each_get_a_range() {
+        let out = block(b"needle and needle\n", "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].ranges, vec![0, 6, 11, 17]);
+    }
+
+    #[test]
+    fn a_block_with_no_match_returns_no_hits_but_still_counts_lines() {
+        let out = block(b"alpha\nbeta\n", "needle");
+
+        assert!(out.hits.is_empty());
+        assert_eq!(out.lines_in_block, 2);
+    }
+
+    #[test]
+    fn a_match_on_an_empty_line_is_an_empty_string_with_a_range() {
+        // The trap `search_bytes_line` documents: an empty string is falsy, so
+        // a consumer must count hits rather than test the line for truthiness.
+        let out = block(b"a\n\nb\n", "^$");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "");
+        assert_eq!(out.hits[0].line_number, 2);
+        assert_eq!(out.hits[0].ranges, vec![0, 0]);
+    }
+
+    #[test]
+    fn an_invalid_pattern_is_an_error_not_a_panic() {
+        assert!(::search::try_search_block(b"anything", "(", 4096).is_err());
+    }
+}
+
 /// ---------------------------------------------------------------------
 /// DOCUMENTED DEFECTS — these assertions pin behaviour that is WRONG.
 /// ---------------------------------------------------------------------
