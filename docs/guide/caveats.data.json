@@ -16,14 +16,6 @@
     "backlog": null
   },
   {
-    "id": "crlf-dollar",
-    "title": "`$` does not match on CRLF files",
-    "short": "On Windows-authored text the `\\r` sits between your text and the anchor, so `needle$` misses what `needle` finds.",
-    "body": "The line terminator is `\\n`, so on Windows-authored text the `\\r` sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.",
-    "kind": "defect",
-    "backlog": "17"
-  },
-  {
     "id": "concurrent-dedup",
     "title": "Concurrent searches of one URL each download it",
     "short": "Two searches of one URL running at once both fetch it: correct answers, one wasted request.",

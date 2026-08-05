@@ -28,4 +28,4 @@ matcher and one searcher, so their matching semantics cannot differ.
 
 On its own this package is a **~1.17 MB WebAssembly binary** (~500 KB gzipped) and nothing else. Its
 [known limitations](https://github.com/dgopsq/netgrep#known-limitations) are worth reading first — netgrep
-does not detect binary files, and `$` does not match on CRLF input.
+does not detect binary files, and results inside a line longer than 64 KB are approximate.
