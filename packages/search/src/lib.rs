@@ -226,29 +226,27 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
 }
 
 /// Build a searcher with netgrep's fixed reading semantics: search every byte
-/// as text, and do not count lines.
+/// as text, and count lines only when the caller needs them.
 ///
-/// Shared by all three entry points rather than spelled out in each. They must
-/// agree — a caller who adds `capture: 'line-ranges'` to an existing search is
-/// entitled to the same answer — and binary detection in particular decides
-/// whether a whole block is abandoned, so a divergence here would be a
-/// difference in `result`, not merely in what is returned alongside it.
+/// Shared by every entry point rather than spelled out in each. They must agree
+/// on binary detection in particular, because it decides whether a block is
+/// abandoned — a divergence there would be a difference in `result`, not merely
+/// in what is returned alongside it. `BinaryDetection::none()` is therefore
+/// fixed here for all callers and is not a parameter.
 ///
-/// `BinaryDetection::none()` rather than `quit(b'\x00')`, which abandoned the
-/// entire block on the first NUL and so dropped matches that preceded it. The
-/// trade is that netgrep no longer declines to search binary input at all: a
-/// pattern occurring inside a `.png` is reported like any other match, and the
-/// line handed back is whatever those bytes decode to.
-fn build_searcher() -> Searcher {
+/// `line_numbers` is a parameter because it is the one setting that changes
+/// cost without changing answers: counting terminators is work the membership
+/// path has no use for, and `search_bytes` exists to allocate nothing.
+fn build_searcher(line_numbers: bool) -> Searcher {
     SearcherBuilder::new()
         .binary_detection(BinaryDetection::none())
-        .line_number(false)
+        .line_number(line_numbers)
         .build()
 }
 
 /// Run a compiled matcher over one chunk of bytes.
 fn search_with(matcher: &RegexMatcher, chunk: &[u8]) -> bool {
-    let mut searcher = build_searcher();
+    let mut searcher = build_searcher(false);
 
     let mut sink = MemSink { found: false };
 
@@ -286,7 +284,7 @@ impl Sink for MemSink {
 /// Run a compiled matcher over one block of bytes, keeping the first matching
 /// line.
 fn search_line_with(matcher: &RegexMatcher, chunk: &[u8], max_line_bytes: usize) -> Option<String> {
-    let mut searcher = build_searcher();
+    let mut searcher = build_searcher(false);
 
     let mut sink = LineSink { first: None };
 
@@ -338,7 +336,7 @@ fn search_line_ranges_with(
     chunk: &[u8],
     max_line_bytes: usize,
 ) -> Option<(String, Vec<u32>)> {
-    let mut searcher = build_searcher();
+    let mut searcher = build_searcher(false);
     let mut sink = LineSink { first: None };
 
     let _ = searcher.search_slice(matcher, chunk, &mut sink);
