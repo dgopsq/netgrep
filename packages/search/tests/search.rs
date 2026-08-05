@@ -332,13 +332,13 @@ fn first_line(haystack: &[u8], pattern: &str, max_line_bytes: usize) -> Option<S
 ///
 /// Everything here is about what `search_bytes_line` returns *given* a match;
 /// whether something matches at all is `mod search` above, and is deliberately
-/// not re-asserted. All three entry points share one compiled matcher and one
+/// not re-asserted. All four entry points share one compiled matcher and one
 /// searcher configuration, so matching semantics cannot diverge between them —
-/// `test_the_three_entry_points_share_one_matcher` is the assertion that keeps
+/// `test_the_four_entry_points_share_one_matcher` is the assertion that keeps
 /// that true.
 #[cfg(test)]
 mod matching_line {
-    use super::{first_line, line_ranges, matches};
+    use super::{block, first_line, line_ranges, matches};
     use ::search::try_search_bytes_line;
 
     /// Comfortably above every line used here, so a test only exercises the cap
@@ -514,8 +514,8 @@ mod matching_line {
     // ---------------------------------------------------------------
 
     #[test]
-    fn test_the_three_entry_points_share_one_searcher_configuration() {
-        // All three go through `build_searcher`, so binary detection cannot
+    fn test_the_four_entry_points_share_one_searcher_configuration() {
+        // All four go through `build_searcher`, so binary detection cannot
         // differ between them. That matters more than it looks: a divergence
         // would change `result` — adding `capture: 'line-ranges'` to a working
         // search would change its ANSWER, not just what came back alongside it.
@@ -533,6 +533,9 @@ mod matching_line {
             line_ranges(b"needle here\x00tail", "needle", NO_CAP),
             Some(("needle here\u{0}tail".to_string(), vec![0, 6]))
         );
+        let block_hit = block(b"needle here\x00tail", "needle");
+        assert_eq!(block_hit.hits[0].line, "needle here\u{0}tail");
+        assert_eq!(block_hit.hits[0].ranges, vec![0, 6]);
 
         // The control, so this is pinning the shared config rather than an
         // input that never matched.
@@ -545,11 +548,14 @@ mod matching_line {
             line_ranges(b"needle here", "needle", NO_CAP),
             Some(("needle here".to_string(), vec![0, 6]))
         );
+        let block_hit = block(b"needle here", "needle");
+        assert_eq!(block_hit.hits[0].line, "needle here");
+        assert_eq!(block_hit.hits[0].ranges, vec![0, 6]);
     }
 
     #[test]
-    fn test_the_three_entry_points_share_one_matcher() {
-        // All three go through `with_matcher`, so a pattern compiled by one is
+    fn test_the_four_entry_points_share_one_matcher() {
+        // All four go through `with_matcher`, so a pattern compiled by one is
         // reused by the others. That is the point — but it also means a stale
         // slot would let one entry point answer with another's matcher, which
         // is the same silent-wrong-answer failure `mod search` guards for
@@ -563,11 +569,16 @@ mod matching_line {
             line_ranges(b"one wiseman", "wiseman", NO_CAP),
             Some(("one wiseman".to_string(), vec![4, 11]))
         );
+        assert_eq!(
+            block(b"one wiseman", "wiseman").hits[0].line,
+            "one wiseman"
+        );
 
         // Smart case is decided at compile time, so these need different
         // matchers despite differing by one bit.
         assert_eq!(first_line(b"one wiseman", "Wiseman", NO_CAP), None);
         assert_eq!(line_ranges(b"one wiseman", "Wiseman", NO_CAP), None);
+        assert!(block(b"one wiseman", "Wiseman").hits.is_empty());
         assert!(matches(b"one wiseman", "wiseman"));
     }
 
@@ -800,6 +811,15 @@ mod encoding {
         let hit_count = table[0];
         let lines_in_block = table[1];
 
+        if hit_count == 0 {
+            // `"".split('\n')` yields ONE empty segment, not zero — splitting
+            // unconditionally would misread a zero-hit block as one empty hit.
+            // A walker that skips this guard has the same bug.
+            assert_eq!(table.len(), 2, "a zero-hit table carries only its header");
+            assert_eq!(hits.text, "", "a zero-hit block has no text to join");
+            return (lines_in_block, Vec::new());
+        }
+
         let mut out = Vec::new();
         let mut cursor = 2;
         let mut lines = hits.text.split('\n');
@@ -854,6 +874,13 @@ mod encoding {
 
         assert_eq!(encoded.table, vec![0, 2]);
         assert_eq!(encoded.text, "");
+
+        // Exercise `decode` itself on the zero-hit case, not just the raw
+        // fields: its own doc calls it the walker's Rust mirror, so its
+        // zero-hit path needs to be run at least once.
+        let (lines_in_block, decoded) = decode(&encoded);
+        assert_eq!(lines_in_block, 2);
+        assert!(decoded.is_empty());
     }
 
     #[test]
@@ -877,8 +904,13 @@ mod encoding {
         // The format's whole safety argument: lines are terminator-stripped and
         // a match can never span a '\n', so '\n' is an unambiguous separator.
         // If this ever fails, the encoding is unsound, not merely wrong.
+        //
+        // `(?s).*` is deliberate, not `.`: dot-matches-newline is what would
+        // actually drive a cross-line match through the line reader if
+        // anything here were unsound. A plain `.` can never span a line under
+        // ANY implementation, so it would pass even if this were broken.
         let encoded =
-            ::search::try_encode_block(b"one\ntwo\nthree\n", ".", 4096)
+            ::search::try_encode_block(b"one\ntwo\nthree\n", "(?s).*", 4096)
                 .expect("the pattern should compile");
 
         let (_, decoded) = decode(&encoded);
