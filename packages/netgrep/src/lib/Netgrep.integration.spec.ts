@@ -1135,5 +1135,25 @@ describe('Netgrep integration (real WASM)', () => {
         result: true,
       });
     });
+
+    it('BACKLOG 25: `^`/`$` also anchor to a bare `\\r`, disagreeing with the returned line', async () => {
+      // The CRLF-aware anchors that fixed BACKLOG 17 treat a lone `\r` as a
+      // line boundary too, not only `\r\n`. `result` is correct — the anchor
+      // did match — but the line splitter never split here, so `capture`
+      // hands back the whole unsplit text rather than what `$`/`^` anchored
+      // against. That disagreement, not just the extra match, is what a
+      // consumer sees.
+      const NG = new Netgrep();
+
+      serve([bytes('foo\rbar\n')]);
+      await expect(NG.search('a', 'foo$')).resolves.toMatchObject({
+        result: true,
+      });
+
+      serve([bytes('foo\rbar\n')]);
+      await expect(
+        NG.search('b', 'foo$', undefined, { capture: 'line' }),
+      ).resolves.toMatchObject({ result: true, line: 'foo\rbar' });
+    });
   });
 });
