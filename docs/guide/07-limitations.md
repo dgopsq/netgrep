@@ -13,12 +13,6 @@ Each defect is pinned by a test, so it cannot change unnoticed.
 
 netgrep holds back the incomplete last *line* of each chunk and prepends it to the next. That is exact, since a match can never cross a newline, so ordinary text is unaffected no matter how the network splits the response. The exception is a line with no terminator in 64 KB, such as minified JavaScript or a one-line data dump. Past that ceiling the retained bytes become a plain 64 KB window, so a match longer than the window is lost, `^` can match at a window edge where no line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line. That fragment need not contain the match, so `ranges` can come back empty even though `result` is still correct. Newline-free input is also answered more slowly, because nothing can be searched until the ceiling fills or the download ends.
 
-<a id="nul-byte"></a>
-
-### A file containing a NUL byte reports no match
-
-The block of lines containing the NUL reports no match, even when the match came earlier. ripgrep's binary detection abandons what it is given rather than stopping at the NUL, and a boolean cannot distinguish “binary, not searched” from “no match”. Plain text, the intended use, is unaffected.
-
 <a id="crlf-dollar"></a>
 
 ### `$` does not match on CRLF files
@@ -28,6 +22,12 @@ The line terminator is `\n`, so on Windows-authored text the `\r` sits between y
 ## By design
 
 These are not bugs and will not be fixed.
+
+<a id="no-binary-detection"></a>
+
+### netgrep does not detect binary files
+
+netgrep searches every byte it is given as text. It does not sniff for binary content and does not decline to search it, so pointing it at an image, an archive or an executable produces matches wherever the pattern's bytes occur, and a captured line is whatever the surrounding bytes decode to — lossily, so anything that is not valid UTF-8 becomes `U+FFFD`. This is deliberate: the alternative ripgrep offers is to abandon the whole block of lines on the first NUL byte, which discarded matches that came *before* it and made a file's answer depend on a byte the caller never looked for. Deciding what a url points at is the caller's job, and it is the one thing the caller can actually do.
 
 <a id="concurrent-dedup"></a>
 

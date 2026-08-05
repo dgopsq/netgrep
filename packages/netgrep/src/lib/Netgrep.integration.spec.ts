@@ -1079,14 +1079,15 @@ describe('Netgrep integration (real WASM)', () => {
       });
     });
 
-    it('BACKLOG 3f: one NUL byte discards the whole searched block, match included', async () => {
-      // `BinaryDetection::quit(b'\x00')` abandons what it was given on the first
-      // NUL, so the match is dropped even when it precedes the NUL.
+    it('BACKLOG 3f (FIXED): a NUL byte no longer discards the searched block', async () => {
+      // `BinaryDetection::quit(b'\x00')` abandoned the block on the first NUL,
+      // so the match was dropped even when it preceded the NUL. With
+      // `BinaryDetection::none()` the bytes are searched as text.
       //
-      // STILL OPEN, but the blast radius changed shape: the engine now gets a
-      // chunk's block of COMPLETE LINES, so a NUL's reach depends on where the
-      // last `\n` falls. Case (c) needed a terminator added, or the NUL lands in
-      // the held-back partial line and never shares a block with the match.
+      // Case (d) used to be the incidental narrowing — the NUL landing in the
+      // held-back partial line so it never shared a block with the match. It is
+      // kept because it now passes for the ordinary reason rather than the
+      // accidental one, and the two must not be told apart by chance.
       const NG = new Netgrep();
 
       serve([bytes('needle here')]);
@@ -1096,19 +1097,14 @@ describe('Netgrep integration (real WASM)', () => {
 
       serve([bytes('needle here', 0x00, 'tail')]);
       await expect(NG.search('b', 'needle')).resolves.toMatchObject({
-        result: false,
+        result: true,
       });
 
       serve([bytes('needle here\n', 0x00, 'tail\n')]);
       await expect(NG.search('c', 'needle')).resolves.toMatchObject({
-        result: false,
+        result: true,
       });
 
-      // The incidental narrowing, pinned so it is not mistaken for the fix: case
-      // (c) minus the final terminator, so the NUL sits in the trailing partial
-      // line and gets its own block. The match survives — because of where the
-      // newline is, which nobody should rely on. 3f is fixed in `lib.rs` or not
-      // at all.
       serve([bytes('needle here\n', 0x00, 'tail')]);
       await expect(NG.search('d', 'needle')).resolves.toMatchObject({
         result: true,

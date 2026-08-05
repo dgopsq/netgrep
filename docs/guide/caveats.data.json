@@ -8,12 +8,12 @@
     "backlog": "3g"
   },
   {
-    "id": "nul-byte",
-    "title": "A file containing a NUL byte reports no match",
-    "short": "A NUL byte discards the block of lines containing it, even when the match came earlier.",
-    "body": "The block of lines containing the NUL reports no match, even when the match came earlier. ripgrep's binary detection abandons what it is given rather than stopping at the NUL, and a boolean cannot distinguish “binary, not searched” from “no match”. Plain text, the intended use, is unaffected.",
-    "kind": "defect",
-    "backlog": "3f"
+    "id": "no-binary-detection",
+    "title": "netgrep does not detect binary files",
+    "short": "A pattern that occurs inside a `.png` is reported like any other match.",
+    "body": "netgrep searches every byte it is given as text. It does not sniff for binary content and does not decline to search it, so pointing it at an image, an archive or an executable produces matches wherever the pattern's bytes occur, and a captured line is whatever the surrounding bytes decode to — lossily, so anything that is not valid UTF-8 becomes `U+FFFD`. This is deliberate: the alternative ripgrep offers is to abandon the whole block of lines on the first NUL byte, which discarded matches that came *before* it and made a file's answer depend on a byte the caller never looked for. Deciding what a url points at is the caller's job, and it is the one thing the caller can actually do.",
+    "kind": "by-design",
+    "backlog": null
   },
   {
     "id": "crlf-dollar",

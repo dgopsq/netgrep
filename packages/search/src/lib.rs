@@ -194,17 +194,23 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
         .map_err(|error| error.to_string())
 }
 
-/// Build a searcher with netgrep's fixed reading semantics: quit on a NUL, and
-/// do not count lines.
+/// Build a searcher with netgrep's fixed reading semantics: search every byte
+/// as text, and do not count lines.
 ///
 /// Shared by all three entry points rather than spelled out in each. They must
 /// agree — a caller who adds `capture: 'line-ranges'` to an existing search is
 /// entitled to the same answer — and binary detection in particular decides
 /// whether a whole block is abandoned, so a divergence here would be a
 /// difference in `result`, not merely in what is returned alongside it.
+///
+/// `BinaryDetection::none()` rather than `quit(b'\x00')`, which abandoned the
+/// entire block on the first NUL and so dropped matches that preceded it. The
+/// trade is that netgrep no longer declines to search binary input at all: a
+/// pattern occurring inside a `.png` is reported like any other match, and the
+/// line handed back is whatever those bytes decode to.
 fn build_searcher() -> Searcher {
     SearcherBuilder::new()
-        .binary_detection(BinaryDetection::quit(b'\x00'))
+        .binary_detection(BinaryDetection::none())
         .line_number(false)
         .build()
 }

@@ -58,7 +58,6 @@ unnoticed, and each is explained in full in the
 
 <!-- BEGIN GENERATED CAVEATS -->
 - **[Inside a line longer than 64 KB, results are approximate](https://netgrep.diegopasquali.com/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.
-- **[A file containing a NUL byte reports no match](https://netgrep.diegopasquali.com/docs/#nul-byte)** — A NUL byte discards the block of lines containing it, even when the match came earlier.
 - **[`$` does not match on CRLF files](https://netgrep.diegopasquali.com/docs/#crlf-dollar)** — On Windows-authored text the `\r` sits between your text and the anchor, so `needle$` misses what `needle` finds.
 <!-- END GENERATED CAVEATS -->
 
