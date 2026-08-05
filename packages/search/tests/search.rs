@@ -787,6 +787,118 @@ mod block {
     }
 }
 
+#[cfg(test)]
+mod encoding {
+    /// Decode the flat form back into `(line_number, line, ranges)` triples.
+    ///
+    /// This is the Rust mirror of the walker PR 5 writes in TypeScript. Having
+    /// it here means the encoding is pinned by a decoder that was written
+    /// against the format's description rather than against the encoder's
+    /// implementation.
+    fn decode(hits: &::search::BlockHits) -> (u32, Vec<(u32, String, Vec<u32>)>) {
+        let table = &hits.table;
+        let hit_count = table[0];
+        let lines_in_block = table[1];
+
+        let mut out = Vec::new();
+        let mut cursor = 2;
+        let mut lines = hits.text.split('\n');
+
+        for _ in 0..hit_count {
+            let line_number = table[cursor];
+            let n_ranges = table[cursor + 1] as usize;
+            let ranges = table[cursor + 2..cursor + 2 + n_ranges * 2].to_vec();
+
+            cursor += 2 + n_ranges * 2;
+
+            out.push((
+                line_number,
+                lines.next().expect("one text segment per hit").to_string(),
+                ranges,
+            ));
+        }
+
+        (lines_in_block, out)
+    }
+
+    #[test]
+    fn the_flat_form_round_trips_to_the_same_hits() {
+        let encoded = ::search::try_encode_block(
+            b"needle one\nmiss\nneedle two and needle\n",
+            "needle",
+            4096,
+        )
+        .expect("the pattern should compile");
+
+        let (lines_in_block, decoded) = decode(&encoded);
+
+        assert_eq!(lines_in_block, 3);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], (1, "needle one".to_string(), vec![0, 6]));
+        assert_eq!(
+            decoded[1],
+            (3, "needle two and needle".to_string(), vec![0, 6, 15, 21])
+        );
+    }
+
+    #[test]
+    fn a_block_with_no_hits_encodes_an_empty_text_and_a_two_word_table() {
+        let encoded = ::search::try_encode_block(b"alpha\nbeta\n", "needle", 4096)
+            .expect("the pattern should compile");
+
+        assert_eq!(encoded.table, vec![0, 2]);
+        assert_eq!(encoded.text, "");
+    }
+
+    #[test]
+    fn an_empty_matching_line_survives_the_join() {
+        // The join is by '\n' and an empty line contributes an empty segment.
+        // If the walker ever loses one, hits and text desynchronise for every
+        // hit after it — so this pins the case that would cause that.
+        let encoded = ::search::try_encode_block(b"a\n\n\nb\n", "^$", 4096)
+            .expect("the pattern should compile");
+
+        let (lines_in_block, decoded) = decode(&encoded);
+
+        assert_eq!(lines_in_block, 4);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], (2, "".to_string(), vec![0, 0]));
+        assert_eq!(decoded[1], (3, "".to_string(), vec![0, 0]));
+    }
+
+    #[test]
+    fn no_matched_line_can_contain_the_join_byte() {
+        // The format's whole safety argument: lines are terminator-stripped and
+        // a match can never span a '\n', so '\n' is an unambiguous separator.
+        // If this ever fails, the encoding is unsound, not merely wrong.
+        let encoded =
+            ::search::try_encode_block(b"one\ntwo\nthree\n", ".", 4096)
+                .expect("the pattern should compile");
+
+        let (_, decoded) = decode(&encoded);
+
+        for (_, line, _) in &decoded {
+            assert!(!line.contains('\n'), "a matched line contained the separator: {line:?}");
+        }
+    }
+
+    #[test]
+    fn a_line_past_the_cap_is_truncated_and_its_ranges_drop_or_clamp() {
+        // block()'s test helper (above) hardcodes max_line_bytes = 4096, so no
+        // block-path test exercises truncation — the drop/clamp branches were
+        // pinned only through `search_bytes_line_ranges`. This threads a small
+        // cap through the encoder instead, so a match fully past the cap is
+        // dropped and the survivor is clamped to the cut.
+        let encoded = ::search::try_encode_block(b"needle and needle\n", "needle", 8)
+            .expect("the pattern should compile");
+
+        let (_, decoded) = decode(&encoded);
+
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0], (1, "needle a".to_string(), vec![0, 6]));
+    }
+}
+
 /// ---------------------------------------------------------------------
 /// DOCUMENTED DEFECTS — these assertions pin behaviour that is WRONG.
 /// ---------------------------------------------------------------------

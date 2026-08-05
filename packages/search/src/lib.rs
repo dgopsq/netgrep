@@ -111,6 +111,81 @@ pub fn search_bytes_line_ranges(
         .map_err(|error| JsError::new(&error))
 }
 
+/// The value `search_block` hands to JavaScript.
+///
+/// Two fields rather than a vector of structs, and the choice is load-bearing.
+/// A `serde-wasm-bindgen` `Vec<BlockHit>` builds every JavaScript object
+/// eagerly at marshalling time; searching a common token across a 240 MB log
+/// produces hundreds of thousands of them, live at once, which is exactly the
+/// allocation pressure the project's constant-memory claim cannot afford. Here
+/// the crossing is one string and one integer array per block whatever the hit
+/// count, and the consumer builds each object at the moment it yields it.
+///
+/// `getter_with_clone` for the same reason `LineWithRanges` uses it: both
+/// fields are heap types, so the getters return copies and the caller frees the
+/// carrier after reading them.
+#[wasm_bindgen(getter_with_clone)]
+pub struct BlockHits {
+    /// The matching lines in hit order, joined by `\n`.
+    ///
+    /// Unambiguous by construction: lines are terminator-stripped, and a match
+    /// can never span a `\n`, so no segment can contain the separator.
+    pub text: String,
+    /// `[hitCount, linesInBlock]`, then per hit
+    /// `[lineNumber, nRanges, start, end, …]`, where `nRanges` counts **pairs**
+    /// — so a hit's record is `2 + nRanges * 2` words long.
+    pub table: Vec<u32>,
+}
+
+/// Flatten a `BlockOutcome` into the wire format.
+fn encode_block(outcome: BlockOutcome) -> BlockHits {
+    let mut table = Vec::with_capacity(2 + outcome.hits.len() * 4);
+    table.push(outcome.hits.len() as u32);
+    table.push(outcome.lines_in_block);
+
+    let mut text = String::new();
+
+    for (index, hit) in outcome.hits.iter().enumerate() {
+        if index > 0 {
+            text.push('\n');
+        }
+        text.push_str(&hit.line);
+
+        table.push(hit.line_number);
+        table.push((hit.ranges.len() / 2) as u32);
+        table.extend_from_slice(&hit.ranges);
+    }
+
+    BlockHits { text, table }
+}
+
+/// The native half of `search_block`, for the Rust suite.
+pub fn try_encode_block(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<BlockHits, String> {
+    try_search_block(chunk, pattern, max_line_bytes).map(encode_block)
+}
+
+/// Search a block and return every matching line, flattened.
+///
+/// The streaming counterpart to `search_bytes_line_ranges`, which returns only
+/// the first match and stops there. Two values cross the boundary per block
+/// however many lines matched; see `BlockHits` for the layout and why it is not
+/// a vector of structs.
+///
+/// Throws a JavaScript `Error` when the pattern will not compile, exactly as
+/// the other exports do.
+#[wasm_bindgen]
+pub fn search_block(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<BlockHits, JsError> {
+    try_encode_block(chunk, pattern, max_line_bytes).map_err(|error| JsError::new(&error))
+}
+
 /// The engine, as plain Rust.
 ///
 /// `search_bytes` above is a two-line wrapper around this, and the split is
