@@ -1110,5 +1110,50 @@ describe('Netgrep integration (real WASM)', () => {
         result: true,
       });
     });
+
+    it('BACKLOG 17 (FIXED): `$` matches on CRLF input, through the whole path', async () => {
+      // Pinned here as well as in Rust because the defect was invisible to a
+      // consumer for a reason the engine tests cannot show: it depends on who
+      // authored the file, not on anything the caller did. A `capture` result
+      // is asserted too, since the returned line has its `\r` stripped and a
+      // reader will compare it against what they searched for.
+      const NG = new Netgrep();
+
+      serve([bytes('needle\r\nnext\r\n')]);
+      await expect(NG.search('a', 'needle$')).resolves.toMatchObject({
+        result: true,
+      });
+
+      serve([bytes('needle\r\nnext\r\n')]);
+      await expect(
+        NG.search('b', 'needle$', undefined, { capture: 'line' }),
+      ).resolves.toMatchObject({ result: true, line: 'needle' });
+
+      // The LF-only case, which is what could regress.
+      serve([bytes('needle\nnext\n')]);
+      await expect(NG.search('c', 'needle$')).resolves.toMatchObject({
+        result: true,
+      });
+    });
+
+    it('BACKLOG 25: `^`/`$` also anchor to a bare `\\r`, disagreeing with the returned line', async () => {
+      // The CRLF-aware anchors that fixed BACKLOG 17 treat a lone `\r` as a
+      // line boundary too, not only `\r\n`. `result` is correct — the anchor
+      // did match — but the line splitter never split here, so `capture`
+      // hands back the whole unsplit text rather than what `$`/`^` anchored
+      // against. That disagreement, not just the extra match, is what a
+      // consumer sees.
+      const NG = new Netgrep();
+
+      serve([bytes('foo\rbar\n')]);
+      await expect(NG.search('a', 'foo$')).resolves.toMatchObject({
+        result: true,
+      });
+
+      serve([bytes('foo\rbar\n')]);
+      await expect(
+        NG.search('b', 'foo$', undefined, { capture: 'line' }),
+      ).resolves.toMatchObject({ result: true, line: 'foo\rbar' });
+    });
   });
 });

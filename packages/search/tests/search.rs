@@ -159,10 +159,13 @@ mod search {
     // ---------------------------------------------------------------
     // Line semantics
     //
-    // The searcher is given `line_terminator(Some(b'\n'))`, which makes `^`,
-    // `$` and `.` line-scoped rather than chunk-scoped. `^` used to anchor to
-    // the chunk instead whenever smart case left the pattern case-sensitive —
-    // see BACKLOG 3e, fixed upstream — so this is guarded from both sides.
+    // The searcher is given `line_terminator(Some(b'\n'))`, which scopes `.`
+    // to a line. `^` and `$` are not decided by this setting alone: the
+    // matcher's `crlf(true)` and `multi_line(true)` (BACKLOG 17) are what make
+    // them CRLF-aware, and `line_terminator` here does not touch that. `^`
+    // used to anchor to the chunk instead whenever smart case left the
+    // pattern case-sensitive — see BACKLOG 3e, fixed upstream — so this is
+    // guarded from both sides.
     // ---------------------------------------------------------------
 
     #[test]
@@ -395,9 +398,10 @@ mod matching_line {
     fn test_a_carriage_return_before_the_newline_is_stripped_too() {
         // On CRLF input the `\r` is the last byte of the line under netgrep's
         // `\n`-terminator semantics, so without this it would render as a
-        // control character in whatever the caller displays. Note BACKLOG 17
-        // is untouched by this: `$` still cannot match here, because the
-        // stripping happens after matching, not before.
+        // control character in whatever the caller displays. BACKLOG 17 fixed
+        // `$` matching here; this strip is unrelated to that fix — it runs on
+        // the captured line for display, after the match already happened
+        // against the raw bytes.
         assert_eq!(
             first_line(b"alpha\r\nbeta\r\n", "alpha", NO_CAP).as_deref(),
             Some("alpha")
@@ -407,8 +411,11 @@ mod matching_line {
     #[test]
     fn test_a_lone_carriage_return_is_content() {
         // Not a terminator here, so not structure: only the `\r\n` PAIR is
-        // dropped. A file with bare CR endings is one line to this engine, and
-        // pretending otherwise would silently truncate it.
+        // dropped. A file with bare CR endings is one line to the line
+        // SPLITTER — it still only ever breaks on `\n` — and pretending
+        // otherwise here would silently truncate it. The anchors disagree
+        // since `crlf(true)`: they treat a bare `\r` as a line boundary too,
+        // which is BACKLOG 25, pinned below.
         assert_eq!(
             first_line(b"alpha\rbeta\n", "alpha", NO_CAP).as_deref(),
             Some("alpha\rbeta")
@@ -721,8 +728,13 @@ mod line_ranges_tests {
 /// not evidence of it either way, so do the deletion here.
 #[cfg(test)]
 mod documented_defects {
-    use super::matches;
+    use super::{first_line, matches};
     use ::search::try_search_bytes;
+
+    /// Comfortably above every line used here, so a test only exercises the
+    /// cap when it says so — same rationale as `matching_line`'s constant of
+    /// the same name.
+    const NO_CAP: usize = 4096;
 
     #[test]
     fn backlog_3c_fixed_an_invalid_pattern_is_an_error() {
@@ -781,18 +793,44 @@ mod documented_defects {
     }
 
     #[test]
-    fn backlog_17_dollar_does_not_match_before_a_carriage_return() {
-        // On CRLF input the line terminator is `\n`, so `\r` is the last
-        // character of the line and `$` sits behind it. A `$`-anchored pattern
-        // therefore misses silently on any Windows-authored file, while the
-        // same pattern unanchored matches fine.
+    fn backlog_17_fixed_dollar_matches_before_a_carriage_return() {
+        // The searcher's line terminator is `\n`, so on Windows-authored text
+        // the `\r` was the last character of the line and `$` sat behind it. A
+        // `$`-anchored pattern therefore missed silently on any CRLF file while
+        // the same pattern unanchored matched. `crlf(true)` on the matcher makes
+        // the anchors treat `\r\n` as the ending.
         assert!(matches(b"needle\r\nnext\r\n", "needle"));
-        assert!(!matches(b"needle\r\nnext\r\n", "needle$"));
+        assert!(matches(b"needle\r\nnext\r\n", "needle$"));
 
-        // `^` is unaffected — the CR is at the other end of the line.
+        // `^` was never affected — the CR is at the other end of the line — and
+        // must not become affected.
         assert!(matches(b"a\r\nneedle\r\n", "^needle"));
 
-        // And the LF-only case, to show the anchor itself works.
+        // The LF-only case still works, which is the half that could regress:
+        // `crlf(true)` sets the matcher's line terminator, and this asserts it
+        // was not moved off `\n`.
         assert!(matches(b"needle\nnext\n", "needle$"));
+        assert!(matches(b"a\nneedle\n", "^needle"));
+    }
+
+    #[test]
+    fn backlog_17_widened_bare_cr_is_also_a_line_boundary_to_the_anchors() {
+        // The price of `crlf(true)`, not an accident: `Look::EndCRLF` /
+        // `Look::StartCRLF` treat a bare `\r` as a line boundary too, not just
+        // `\r\n`. A file with old-Mac or progress-bar `\r` endings now gets
+        // anchor matches on either side of one, none of which fired before
+        // this PR.
+        assert!(matches(b"foo\rbar\n", "foo$"));
+        assert!(matches(b"foo\rbar\n", "^bar"));
+
+        // The line splitter disagrees: it only ever breaks on `\n`
+        // (`test_a_lone_carriage_return_is_content`, above), so the anchors
+        // and the returned line now describe different boundaries for the
+        // same bytes — the captured line is the whole un-split text, not
+        // "foo" or "bar" alone.
+        assert_eq!(
+            first_line(b"foo\rbar\n", "foo$", NO_CAP).as_deref(),
+            Some("foo\rbar")
+        );
     }
 }

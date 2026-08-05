@@ -119,11 +119,13 @@ truncated string, since a byte offset into the input would be wrong wherever los
 Per call it:
 
 1. Reuses the **last compiled matcher** if the pattern is unchanged, and otherwise compiles a new one with
-   `line_terminator(b'\n')` and **`case_smart(true)`** — smart case is hardcoded on and not configurable. A
-   lowercase pattern matches case-insensitively; a pattern containing an uppercase character matches
-   case-sensitively. netgrep calls this once per network chunk with the same pattern every time, so the cache
-   hits on every chunk after the first; compilation was 97–99% of the cost before it existed. Failed compiles
-   are cached alongside successful ones. See [decision 0016](decisions/0016-compiled-matcher-memo.md).
+   `crlf(true)`, `multi_line(true)`, `line_terminator(b'\n')` and **`case_smart(true)`** — smart case is
+   hardcoded on and not configurable, and `crlf`/`multi_line` make `^`/`$` CRLF-aware without moving the line
+   terminator off `\n` (item 6, below). A lowercase pattern matches case-insensitively; a pattern containing an
+   uppercase character matches case-sensitively. netgrep calls this once per network chunk with the same
+   pattern every time, so the cache hits on every chunk after the first; compilation was 97–99% of the cost
+   before it existed. Failed compiles are cached alongside successful ones. See
+   [decision 0016](decisions/0016-compiled-matcher-memo.md).
 2. Builds a `Searcher` with `BinaryDetection::none()` and `line_number(false)`.
 3. Runs `search_slice` into `MemSink`, a minimal `Sink` implementation that does nothing but record that a
    match happened and stop — chosen because ripgrep's real sinks write to stdout, which does not exist in
@@ -239,8 +241,10 @@ overtaken entirely on 2026-08-01 by [decision 0024](decisions/0024-remove-the-in
 deleted the cache both of them described; their headings are kept because the numbering is referenced from
 this file's own text and from [decision 0002](decisions/0002-search-while-downloading.md), which cites both by
 number. Caveat 7 stopped being a defect on the same day, for the same reason, and is now a design consequence.
-Caveat 5 was fixed on 2026-08-05, and what replaced it is described below rather than removed, because the
-trade it made is a caveat worth publishing rather than a closed matter.
+Caveats 5 and 6 were both fixed on 2026-08-05, and what replaced each is described below rather than removed,
+because the trade each made is a caveat worth publishing rather than a closed matter. Caveat 6's fix left a new
+one behind — reviewed, not designed — so caveat **8** is new rather than renumbered: it gets its own heading
+because it is still open, unlike the fix it was found alongside.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 
@@ -314,15 +318,23 @@ earlier match survive by accident, rather than by design — stopped being incid
 for the ordinary reason, and that case is still pinned so the two are not told apart by chance. Closed as
 BACKLOG 3f; see the `# Done` table in [`BACKLOG.md`](BACKLOG.md).
 
-### 6. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
+### 6. `$` did not match on CRLF input — FIXED
 
-The searcher is given `line_terminator(Some(b'\n'))`, so on a Windows-authored file the `\r` is the last
-character of the line and `$` sits behind it. `needle$` matches `"needle\n"` and does **not** match
-`"needle\r\n"`, while plain `needle` matches both. `^` is unaffected — the CR is at the other end.
+The searcher was given `line_terminator(Some(b'\n'))` with no `.crlf(true)` on the matcher, so on a
+Windows-authored file the `\r` was the last character of the line and `$` sat behind it. `needle$` matched
+`"needle\n"` and did **not** match `"needle\r\n"`, while plain `needle` matched both. `^` was unaffected — the
+CR is at the other end.
 
-Silent, and it depends on who wrote the file rather than on anything the caller did.
-`RegexMatcherBuilder::crlf(true)` is the one-line fix; it is a matching-semantics change, so it is a
-deliberate task rather than a drive-by.
+Silent, and it depended on who wrote the file rather than on anything the caller did. It was not the one-line
+fix this entry expected: `RegexMatcherBuilder::crlf(true)` alone leaves a bare `$` compiling unchanged, because
+`$` parses to the same AST node as `(?m)$` and `regex-syntax` only picks the CRLF-aware anchor over the
+absolute end-of-haystack one when multi-line mode is on — `.multi_line(true)` had to go alongside it. Neither
+call touches the matcher's line terminator, which stays `\n`, so the invariant `test_a_match_cannot_span_a_line_terminator`
+pins is undisturbed.
+
+The fix widened the anchors further than the entry anticipated, which is caveat 8, below — that side effect is
+still open, unlike this one. Item 6 itself is closed as BACKLOG 17; see the `# Done` table in
+[`BACKLOG.md`](BACKLOG.md).
 
 ### 7. Concurrent searches of one url each download it — BY DESIGN
 
@@ -341,6 +353,33 @@ nobody asked to keep, or teeing the response stream and with it the first caller
 wasted request into a wrong answer. So both callers fetch, deliberately, and the browser's own HTTP cache
 decides what the repeat actually costs. Pinned by *fetches once per concurrent search of one url, by design*
 in `Netgrep.integration.spec.ts` — an ordinary assertion, not a defect one.
+
+### 8. `^`/`$` anchor to a bare `\r`, but the line splitter does not
+
+A side effect of fixing caveat 6, found by review rather than by design. `crlf(true)` — the fix for `$` on CRLF
+input — enables the regex engine's CRLF-aware anchors, and those treat a lone `\r` as a line boundary too, not
+only a `\r\n` pair. The line splitter (`grep-searcher`'s own line-finding, unrelated to the matcher's anchor
+config) disagrees: it still only ever breaks a chunk into lines on `\n`. So on input using bare CR line
+endings — old Mac text, or log output using `\r` to overwrite a progress line in place — the anchors and the
+returned line describe different boundaries for the same bytes:
+
+```
+"foo\rbar\n" ~ "foo$"              -> true    # was false before caveat 6 was fixed
+"foo\rbar\n" ~ "^bar"              -> true    # was false before caveat 6 was fixed
+"foo\rbar\n" ~ capture: 'line'     -> "foo\rbar"   # NOT "foo", even though "foo$" just matched
+```
+
+`result` is correct either way — the anchors did match. What is surprising is `capture`: a caller whose pattern
+matched on the strength of `$` reasonably expects the returned line to end where `$` matched, and it does not.
+
+A fix would mean either making the line splitter agree with the anchors — teaching it to also break on a bare
+`\r`, which `grep-searcher` does not expose as a configuration and would mean patching it, reopening the fork
+[decision 0001](decisions/0001-fork-ripgrep-for-wasm.md) removed — or making the anchors agree with the
+splitter, which is not a knob `crlf(true)` offers separately from its CRLF behaviour. Bare-CR line endings are
+decades obsolete for text files; the progress-bar case is real but the "line" a caller would want back from it
+is not obviously well-defined either. Not obviously worth fixing. Published as `bare-cr-anchors` in
+[`guide/caveats.data.json`](guide/caveats.data.json), `kind: "defect"`, tracked as backlog item **25**. Pinned
+in the `documented_defects` module of `packages/search/tests/search.rs` and in `Netgrep.integration.spec.ts`.
 
 ---
 
@@ -444,8 +483,8 @@ components straight out of `rust-toolchain.toml`.
 |---|---|---|
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
 | `Netgrep.spec.ts` | Vitest in **Node**, 48 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, and all three public methods including `searchBatchWithCallback`. |
-| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 47 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 57 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
+| `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 49 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 58 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin

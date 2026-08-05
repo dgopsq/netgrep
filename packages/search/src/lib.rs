@@ -185,9 +185,40 @@ fn with_matcher<T>(
 }
 
 /// Compile a pattern with netgrep's fixed matching semantics: `\n` terminates a
-/// line, and smart case is on.
+/// line, `^` and `$` treat a `\r\n` ending as the line ending, and smart case is
+/// on.
+///
+/// `.multi_line(true)` is required alongside `.crlf(true)`: a bare `$` parses
+/// to the same AST node as `(?m)$`, and `regex-syntax` only picks the
+/// CRLF-aware `Look::EndCRLF` over the absolute-end `Look::End` when multi-line
+/// mode is on — `crlf(true)` alone leaves an unqualified `$` untouched, so it
+/// still misses before `\r\n` exactly as before. Verified empirically against
+/// `grep-regex-0.1.14`, since the crate's own doc comment on `crlf` does not
+/// say this.
+///
+/// ⚠️ `.crlf(true)` MUST come before `.line_terminator(…)`. `crlf` sets the line
+/// terminator as well as the anchor behaviour — to `\r\n` — while
+/// `line_terminator` leaves the anchor behaviour alone. Called the other way
+/// round the terminator ends up `\r\n`, and the whole streaming loop rests on it
+/// being `\n`: `splitAtLastLine` carries the incomplete trailing *line* between
+/// chunks because a match can never span a `\n`, which is what
+/// `test_a_match_cannot_span_a_line_terminator` pins. `multi_line` does not
+/// interact with this: it only chooses which `Look` a line anchor compiles to,
+/// and does not touch the line terminator field.
+///
+/// Reversed, this does not fail silently in the sense of shipping a wrong
+/// answer unnoticed: `build_searcher`'s own line terminator stays `\n`, so
+/// `grep-searcher`'s internal `check_config` rejects the mismatch against the
+/// matcher's `\r\n` on every call — though that `Result` is discarded below
+/// (`let _ = searcher.search_slice(…)`), so the rejection itself never
+/// surfaces anywhere. What is loud is the symptom: measured, not assumed — 49
+/// of this crate's 58 tests fail immediately when the two lines above are
+/// swapped, because nearly every search comes back with no match. CI catches
+/// that before it reaches anything downstream.
 fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
     RegexMatcherBuilder::new()
+        .crlf(true)
+        .multi_line(true)
         .line_terminator(Some(b'\n'))
         .case_smart(true)
         .build(pattern)
@@ -410,7 +441,11 @@ fn decode_line(line: &[u8], max_line_bytes: usize) -> String {
 ///
 /// Only as a pair: a lone `\r` in the middle of a line under netgrep's
 /// `\n`-terminator semantics is ordinary content, and a file using bare CR line
-/// endings is one line as far as this engine is concerned.
+/// endings is one line as far as the line SPLITTER is concerned — it still
+/// only ever breaks on `\n`. `^`/`$` disagree since `crlf(true)`: they treat a
+/// bare `\r` as a line boundary too, so the anchors and the returned line can
+/// now describe different boundaries for the same bytes. Published as
+/// `bare-cr-anchors` in `docs/guide/caveats.data.json`.
 fn strip_terminator(line: &[u8]) -> &[u8] {
     match line.strip_suffix(b"\n") {
         Some(rest) => rest.strip_suffix(b"\r").unwrap_or(rest),
