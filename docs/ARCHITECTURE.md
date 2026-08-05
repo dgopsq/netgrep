@@ -124,7 +124,7 @@ Per call it:
    case-sensitively. netgrep calls this once per network chunk with the same pattern every time, so the cache
    hits on every chunk after the first; compilation was 97–99% of the cost before it existed. Failed compiles
    are cached alongside successful ones. See [decision 0016](decisions/0016-compiled-matcher-memo.md).
-2. Builds a `Searcher` with `BinaryDetection::quit(b'\x00')` and `line_number(false)`.
+2. Builds a `Searcher` with `BinaryDetection::none()` and `line_number(false)`.
 3. Runs `search_slice` into `MemSink`, a minimal `Sink` implementation that does nothing but record that a
    match happened and stop — chosen because ripgrep's real sinks write to stdout, which does not exist in
    WASM.
@@ -239,6 +239,8 @@ overtaken entirely on 2026-08-01 by [decision 0024](decisions/0024-remove-the-in
 deleted the cache both of them described; their headings are kept because the numbering is referenced from
 this file's own text and from [decision 0002](decisions/0002-search-while-downloading.md), which cites both by
 number. Caveat 7 stopped being a defect on the same day, for the same reason, and is now a design consequence.
+Caveat 5 was fixed on 2026-08-05, and what replaced it is described below rather than removed, because the
+trade it made is a caveat worth publishing rather than a closed matter.
 
 ### 1. Chunk-boundary false negatives — FIXED, with a residual
 
@@ -294,21 +296,23 @@ cache's, and netgrep now retains nothing between searches, so there is no growth
 It returns `void` and starts every search eagerly with no concurrency limit. Callers cannot await it, cannot
 detect completion, and a batch of N URLs opens N simultaneous connections.
 
-### 5. One NUL byte discards the whole searched block — `lib.rs`, `BinaryDetection::quit`
+### 5. One NUL byte discarded the whole searched block — FIXED
 
-`BinaryDetection::quit(b'\x00')` does not stop *at* the NUL — it abandons everything it was handed. A match is
-dropped even when it occurs before the NUL, and even on an earlier line. Any remote file containing a stray
-NUL therefore reports "no match" for content that is demonstrably present.
+`BinaryDetection::quit(b'\x00')` did not stop *at* the NUL — it abandoned everything it was handed, so a match
+was dropped even when it occurred before the NUL, and even on an earlier line. `build_searcher` now uses
+`BinaryDetection::none()`, which searches every byte as text instead.
 
-Quitting on binary input is a reasonable ripgrep default; the surprise is that the API cannot distinguish
-"binary, not searched" from "no match" — `capture` does not help, since a discarded block reports no match and
-therefore no line.
+Quitting on binary input was a reasonable ripgrep default; the defect was that a boolean API could not
+distinguish "binary, not searched" from "no match" — `capture` did not help, since a discarded block reported
+no match and therefore no line.
 
-Decision 0018 changed the *shape* of this without fixing it. What the engine is handed is no longer the network
-chunk but the block of complete lines within it, so how far a NUL reaches now depends on where the last `\n`
-falls rather than on where the network split the response — and a match on an earlier line survives *if* the
-NUL happens to land in the held-back partial line. Both behaviours are pinned, so that accident is not mistaken
-for a fix.
+The trade is real and is published rather than hidden: nothing now declines to search binary input, so a
+pattern occurring inside a `.png` is reported like any other match, and a captured line is whatever those bytes
+decode to. Listed in [`guide/caveats.data.json`](guide/caveats.data.json) as `no-binary-detection`,
+`kind: "by-design"`. Decision 0018's incidental narrowing — a NUL landing in the held-back partial line let an
+earlier match survive by accident, rather than by design — stopped being incidental: every match now survives,
+for the ordinary reason, and that case is still pinned so the two are not told apart by chance. Closed as
+BACKLOG 3f; see the `# Done` table in [`BACKLOG.md`](BACKLOG.md).
 
 ### 6. `$` does not match on CRLF input — `lib.rs`, no `.crlf(true)` on the matcher
 

@@ -61,9 +61,9 @@ Three things will mislead you if you do not know them.
 ### 2.1 Some tests assert behaviour that is WRONG, on purpose
 
 `packages/netgrep/src/lib/Netgrep.integration.spec.ts` ends with a block titled
-**`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a NUL byte
-discarding a block of lines, a match longer than the 64 KB tail ceiling still spanning a chunk boundary, and so
-on. `packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
+**`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a match
+longer than the 64 KB tail ceiling still spanning a chunk boundary, `$` missing on CRLF input, and so on.
+`packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
 the engine, where a failure names `lib.rs` without a browser and a stream in the way.
 
 They are not mistakes and they are not out of date. Their job is to detect *unintended* change during
@@ -561,13 +561,12 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 ## 7. Known correctness caveats
 
 Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test that
-asserts the wrong behaviour — in `Netgrep.integration.spec.ts`, and for the two that live in the engine also
+asserts the wrong behaviour — in `Netgrep.integration.spec.ts`, and for the one that lives in the engine also
 in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|
 | Anchors and long matches inside a >64 KB line | `Netgrep.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window. Inside such a line a match longer than 64 KB is lost, **and** `^` can match at the window's first byte. Needs a line over 64 KB — unreachable in prose. |
-| One NUL discards the searched block | `lib.rs`, `BinaryDetection::quit` | A match is dropped even when it precedes the NUL. |
 | `$` misses on CRLF input | `lib.rs`, no `.crlf(true)` | The line terminator is `\n`, so `\r` sits between the text and `$`. A `$`-anchored pattern silently misses on Windows-authored files. |
 
 The last was found while broadening the test suite on 2026-07-29 and is backlog item 17.
@@ -588,8 +587,11 @@ hand over and two concurrent searches of one url each download it. That is now a
 than a defect — pinned by an ordinary assertion, and published under *By design* rather than in the README's
 defect list.
 
-Decision 0018 also narrowed the row that remains: what the engine is handed is now a block of complete lines
-rather than a network chunk, which changed the shape of the NUL defect's blast radius. See
+**A fourth left on 2026-08-05: the NUL row.** `BinaryDetection::quit(b'\x00')` did not stop *at* the NUL — it
+abandoned the whole block it was handed, so a match was dropped even when it preceded the NUL. `lib.rs` now
+builds its searcher with `BinaryDetection::none()`, which searches every byte as text instead. Nothing now
+declines to search binary input, so a pattern occurring inside a `.png` is reported like any other match — a
+real trade, published under *By design* as `no-binary-detection` rather than dropped silently. See
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#known-limitations--correctness-caveats) and
 [decision 0002](docs/decisions/0002-search-while-downloading.md).
 
