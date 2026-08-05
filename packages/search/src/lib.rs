@@ -244,7 +244,7 @@ pub fn try_search_block(
 /// Run `use_matcher` against the compiled form of `pattern`, compiling it only
 /// if the memo is not already holding it.
 ///
-/// Generic over the return type so all three entry points share one memo: the
+/// Generic over the return type so all four entry points share one memo: the
 /// slot caches the *matcher*, which is the expensive part, and is indifferent
 /// to what the caller then does with it.
 fn with_matcher<T>(
