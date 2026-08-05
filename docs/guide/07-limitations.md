@@ -13,12 +13,6 @@ Each defect is pinned by a test, so it cannot change unnoticed.
 
 netgrep holds back the incomplete last *line* of each chunk and prepends it to the next. That is exact, since a match can never cross a newline, so ordinary text is unaffected no matter how the network splits the response. The exception is a line with no terminator in 64 KB, such as minified JavaScript or a one-line data dump. Past that ceiling the retained bytes become a plain 64 KB window, so a match longer than the window is lost, `^` can match at a window edge where no line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line. That fragment need not contain the match, so `ranges` can come back empty even though `result` is still correct. Newline-free input is also answered more slowly, because nothing can be searched until the ceiling fills or the download ends.
 
-<a id="crlf-dollar"></a>
-
-### `$` does not match on CRLF files
-
-The line terminator is `\n`, so on Windows-authored text the `\r` sits between your text and the anchor: `needle$` misses what `needle` finds. `^` is unaffected.
-
 ## By design
 
 These are not bugs and will not be fixed.

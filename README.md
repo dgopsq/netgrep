@@ -58,7 +58,6 @@ unnoticed, and each is explained in full in the
 
 <!-- BEGIN GENERATED CAVEATS -->
 - **[Inside a line longer than 64 KB, results are approximate](https://netgrep.diegopasquali.com/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.
-- **[`$` does not match on CRLF files](https://netgrep.diegopasquali.com/docs/#crlf-dollar)** — On Windows-authored text the `\r` sits between your text and the anchor, so `needle$` misses what `needle` finds.
 <!-- END GENERATED CAVEATS -->
 
 Fixes land on `main` before they reach npm; [`CHANGELOG.md`](https://github.com/dgopsq/netgrep/blob/main/packages/netgrep/CHANGELOG.md)
