@@ -421,6 +421,20 @@ mod block {
     // ---------------------------------------------------------------
 
     #[test]
+    fn the_cap_measures_content_not_content_plus_terminator() {
+        // The terminator is stripped before the cap is measured, so a line
+        // whose content is exactly `max_line_bytes` survives whole. Were the
+        // `\n` counted, five bytes of content under a cap of five would come
+        // back one character short — and the character lost would be the one
+        // the caller is least able to guess is missing, at the very end.
+        let out = block_capped(b"abcde\n", "abc", 5);
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "abcde");
+        assert_eq!(out.hits[0].ranges, vec![0, 3]);
+    }
+
+    #[test]
     fn truncation_does_not_split_a_utf8_character() {
         // Five two-byte characters, cut at an odd offset. Splitting the third
         // would produce a replacement character at the end of the line — the
@@ -707,12 +721,12 @@ mod encoding {
 
     #[test]
     fn a_line_past_the_cap_is_truncated_and_its_ranges_drop_or_clamp() {
-        // block()'s test helper (above) hardcodes max_line_bytes = 4096, so no
-        // block-path test exercised truncation before this — the drop/clamp
-        // branches were pinned only through `search_bytes_line_ranges`. This
-        // threads a small cap through the encoder instead: the first match
-        // straddles the cut and is clamped, the second sits entirely past it
-        // and is dropped.
+        // What a truncated hit looks like ON THE WIRE. `mod block` pins the
+        // decoder's own drop and clamp rules; this threads a small cap through
+        // the encoder to pin that the table and the joined text still agree
+        // afterwards — the first match straddles the cut and is clamped, the
+        // second sits entirely past it and is dropped, and the record has to
+        // report the one range that survived rather than the two that matched.
         let encoded = ::search::try_encode_block(b"needle and needle\n", "needle", 4)
             .expect("the pattern should compile");
 
