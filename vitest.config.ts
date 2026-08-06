@@ -1,5 +1,6 @@
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
+import { dripServer } from './vitest.drip-server.js';
 
 export default defineConfig({
   test: {
@@ -51,6 +52,9 @@ export default defineConfig({
         optimizeDeps: {
           exclude: ['@netgrep/search'],
         },
+        // Serves the half-sent response that `streaming-transport.integration
+        // .spec.ts` uses to prove bytes are searched before the response ends.
+        plugins: [dripServer()],
       },
       {
         // Build-time tooling and the example's pure modules: the docs

@@ -571,6 +571,7 @@ components straight out of `rust-toolchain.toml`.
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
 | `Netgrep.spec.ts` | Vitest in **Node**, 48 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, and all three public methods including `searchBatchWithCallback`. |
 | `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 49 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
+| `streaming-transport.integration.spec.ts` | Vitest in **headless Chromium**, 3 tests | **The one suite that does not fake `fetch`.** It proves bytes are delivered and searched *before* the response ends — see below. |
 | `packages/search/tests/search.rs` | `cargo test`, native, 73 tests | The four `try_*` entry points as pure Rust — bytes in, bool/line/ranges/block-hits out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, block-hit collection and line numbering, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
@@ -587,6 +588,26 @@ is precisely the part that failed silently under Vite in [decision 0005](decisio
 
 Why a browser at all, and why Playwright rather than ChromeDriver:
 [decision 0013](decisions/0013-playwright-for-browser-tests.md).
+
+**Faking `fetch` costs the suite the one thing the project claims, so one suite does not.** Every other
+integration test replaces `fetch` to make chunk boundaries deterministic — which means none of them can say
+anything about the network. They establish that netgrep consumes an already-progressive stream
+progressively, and assume the stream is progressive in the first place. That assumption is the project's
+defining property ([decision 0002](decisions/0002-search-while-downloading.md)) and until now nothing
+enforced it.
+
+`streaming-transport.integration.spec.ts` closes that gap with a server that will not finish.
+`vitest.drip-server.ts` registers a Vite middleware serving 64 KB, then holding the connection open and
+sending nothing more until a release URL is hit. A test reads a match out of those first bytes and only then
+releases the rest, so the read can only have succeeded while the response was unfinished — had the browser
+buffered the body, the bytes completing it would not yet exist. **Nothing is timed.** There is no sleep and
+no threshold to tune: the ordering is enforced by the server refusing to end, which is what makes this a
+proof rather than an observation. The 64 KB head is sized past any plausible socket-buffering threshold, so
+a failure means what it says; the deadline in the test exists only to turn a hang into a sentence.
+
+The three cases hold each other honest, and both directions were confirmed by mutating the server: make it
+withhold the head until release — a buffering transport — and the first two fail with their explanation;
+make it send the whole body at once and the third fails, since it asserts the tail is *not* visible early.
 
 Its last block deliberately asserts **incorrect** behaviour, pinning the caveats above so that an unintended
 change is caught. Read
