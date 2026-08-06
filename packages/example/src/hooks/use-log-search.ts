@@ -92,9 +92,12 @@ export type SearchState = {
   /** Milliseconds until every source had an answer. */
   allAnsweredMs: number | null;
   /**
-   * The engine's own diagnostic when the pattern will not compile. Since
-   * `search_bytes` returns a `Result`, an unbalanced `(` arrives here as
-   * regex-crate prose rather than as `RuntimeError: unreachable`.
+   * Whatever failed the search, in its own words. `grep` throws from the
+   * iteration rather than folding a failure into a result, so a bad url and a
+   * dead host land here alongside a pattern that will not compile — and the
+   * last of those arrives as regex-crate prose rather than as
+   * `RuntimeError: unreachable`, because the engine returns an error instead
+   * of trapping.
    */
   error: string | null;
   running: boolean;

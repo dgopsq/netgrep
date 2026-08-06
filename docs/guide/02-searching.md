@@ -80,3 +80,22 @@ await matches(url, pattern, {
 netgrep owns the request because it needs the response body to stream, so this is the only way in. It is
 passed through whole, so `method` and `body` come with it and are neither honoured specially nor rejected:
 netgrep searches whatever body comes back.
+
+## `onProgress`
+
+Both functions also take `onProgress`, called after each network chunk with the cumulative bytes read:
+
+```ts
+await matches(url, pattern, {
+  onProgress: (bytesRead) => setRead(bytesRead),
+});
+```
+
+It fires whether or not anything has matched, which makes it the only sign of life during a long hitless
+stretch — and the place to call `controller.abort()` from when you decide the search has run long enough
+(see [Cancelling](05-cancelling.md)).
+
+**These are decompressed bytes delivered to the page, not bytes on the wire**: a gzipped response moves far
+fewer. No total comes with them, deliberately — `Content-Length` on a compressed response is the compressed
+size, so comparing the two would drive a progress bar that finishes at a few per cent. Show the number
+climbing, not a fraction of a file.

@@ -16,17 +16,27 @@
 //! WHAT BELONGS HERE, AND WHAT DOES NOT
 //! ------------------------------------
 //! `search_bytes` is bytes in, bool out; `search_block` is bytes in, every
-//! matching line out. Everything that depends only on those bytes — regex
-//! syntax, smart case, line semantics, encoding, binary detection, and what a
-//! returned line contains — is cheapest to pin here: no browser to boot, and a
-//! failure names the engine rather than the streaming loop wrapped around it.
+//! matching line out, flattened into the wire format by `try_encode_block`.
+//! Everything that depends only on those bytes — regex syntax, smart case,
+//! line semantics, encoding, binary detection, what a returned line contains
+//! and how a block of them is laid out for the crossing — is cheapest to pin
+//! here: no browser to boot, and a failure names the engine rather than the
+//! streaming loop wrapped around it.
 //!
 //! Anything involving `fetch`, chunking, aborting or the WASM boundary belongs
 //! in `grep.integration.spec.ts` and `matches.integration.spec.ts` instead —
-//! one per entry point the engine has. The three suites overlap on purpose
-//! at exactly one point — smart case — because that is the behaviour most
-//! likely to change silently under a dependency bump, and knowing *which*
-//! layer moved is worth one duplicated assertion.
+//! one per entry point the engine has.
+//!
+//! SOME ASSERTIONS ARE DUPLICATED ACROSS THE LANGUAGES ON PURPOSE. Smart case
+//! is one, verdict and ranges both, because it is the behaviour most likely to
+//! change silently under a dependency bump and knowing *which* layer moved is
+//! worth the duplication. The BACKLOG 3c, 3f and 17 pins are the others, 17
+//! including its widening to a bare `\r` — which the TypeScript side files
+//! under 25, since what a consumer sees there is a yielded line disagreeing
+//! with the anchor. Each is a defect whose symptom in a browser is not its
+//! symptom here: a trap, for one, poisons the whole WebAssembly module, so
+//! only the browser can show that the next call still answers. **Do not delete
+//! one side of such a pair because the other exists.**
 
 /// Assert-friendly wrapper: bytes in, bool out, exactly as the module comment
 /// above describes.

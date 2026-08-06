@@ -64,7 +64,7 @@ smaller after it than before.
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
 │ packages/netgrep  — @netgrep/netgrep (TypeScript, ESM)          │
-│   streaming, abort, error shaping — retains nothing             │
+│   streaming, abort — retains nothing, reshapes no error         │
 │   awaits init() once, then searches each block of whole lines   │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
@@ -563,16 +563,26 @@ components straight out of `rust-toolchain.toml`.
 | `grep.spec.ts` | Vitest in **Node**, 11 tests | `grep`'s bookkeeping with `fetch` **and** `@netgrep/search` mocked: the running line base, freeing the carrier, the cap, and that nothing runs before the first `next()`. |
 | `matches.spec.ts` | Vitest in **Node**, 10 tests | `matches`' loop with `fetch` **and** `@netgrep/search` mocked: the early return, the full read that proves an absence, pre-flight compilation, and the errors. |
 | `resolveMaxLineBytes.spec.ts` | Vitest in **Node**, 6 tests | The per-line cap's default and clamping, in isolation. A pure function, so no mocks. |
-| `grep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 37 tests | **The real engine through `grep`, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream` and still arrive chunked. Chunk-size invariance, absolute line numbers, UTF-16 ranges, truncation, cancellation, and the `documented defects` block. |
+| `grep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 39 tests | **The real engine through `grep`, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream` and still arrive chunked. Chunk-size invariance, absolute line numbers, UTF-16 ranges, truncation, cancellation, and the `documented defects` block. |
 | `matches.integration.spec.ts` | Vitest in **headless Chromium**, 22 tests | The real engine through `matches`: chunk-size invariance for the boolean, anchors and smart case, that the first hit stops the reads, that concurrent searches of one url each fetch, and the `documented defects` block. |
 | `streaming-transport.integration.spec.ts` | Vitest in **headless Chromium**, 5 tests | **The one suite that does not fake `fetch`.** It proves bytes are delivered and searched *before* the response ends, and that an `AbortSignal` stops a real transfer that neither `grep`'s `break` nor anything `matches` offers can reach — see below. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 55 tests | The two `try_*` entry points as pure Rust — bytes in, bool or block-hits out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, block-hit collection and line numbering, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 56 tests | The two entry points as pure Rust — bytes in, bool or block-hits out — plus `try_encode_block`, the wire format `search_block` flattens a block's hits into, which `mod encoding` asserts against hand-read tables. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, block-hit collection and line numbering, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin
 in Rust, where a failure names the engine; anything about streaming, chunking or aborting belongs in the
-TypeScript suites. They overlap at exactly one point — smart case — because it is the behaviour most likely
-to move silently under a dependency bump, and knowing *which* layer moved is worth one duplicated assertion.
+TypeScript suites.
+
+**They overlap in several places, and every overlap is deliberate.** Smart case is one — the verdict in
+`mod search` and in both integration suites, the ranges it produces in `mod block` and in
+`grep.integration.spec.ts` — because it is the behaviour most likely to move silently under a dependency
+bump, and knowing *which* layer moved is worth the duplicated assertion. The defect pins for BACKLOG 3c, 3f
+and 17 are the others, 17 including its widening to a bare `\r`, which the TypeScript side files under 25
+(caveat 8 below). Each of those names a defect whose symptom in a browser is not its symptom in the engine:
+a wasm trap poisons the whole module, so only a browser can show that the next call still answers, and only
+the browser suite can show a yielded line disagreeing with the anchor that matched it. **A Rust/TypeScript
+pair is not a duplicate to be tidied away — and three of these four are defect pins, which nothing may
+remove while the behaviour they name could still change silently.**
 
 The integration suite loads **the artefact that actually ships** (`packages/search/pkg`) and instantiates it
 through its own real, fetch-based `init()` — the same loader a consumer gets, resolving `index_bg.wasm`

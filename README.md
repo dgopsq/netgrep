@@ -46,7 +46,7 @@ for await (const hit of grep('https://example.com/app.log', 'ECONNREFUSED')) {
 
 `matches` answers whether a pattern occurs; `grep` yields every matching line, with each match's
 position within it and the line's number in the file. That is the whole answer: no ranking, no match
-counts, no context lines. Cancellation, request options, caching and the regex dialect are all in the
+counts, no context lines, no byte offsets into the file. Cancellation, request options, caching and the regex dialect are all in the
 [documentation](https://netgrep.diegopasquali.com/docs/).
 
 ## Known limitations

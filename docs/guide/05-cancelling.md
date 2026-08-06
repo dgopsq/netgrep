@@ -16,7 +16,8 @@ for await (const hit of grep(url, pattern)) {
 
 **But a loop that is finding nothing has no body to break from.** Across a hitless stretch of a 240 MB
 file, `grep` yields nothing to react to, so there is nothing to cancel from. For that, and for `matches`,
-which exposes no loop at all, you need a signal.
+which exposes no loop at all, you need a signal — and `onProgress`, which fires per chunk whether anything
+matched or not, is where the decision to abort a search that is finding nothing gets made.
 
 ## Pass a signal
 
