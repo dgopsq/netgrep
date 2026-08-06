@@ -1,7 +1,10 @@
 export type * from './lib/data/BatchNetgrepResult.js';
+export type * from './lib/data/GrepOptions.js';
 export type * from './lib/data/NetgrepCapture.js';
+export type * from './lib/data/NetgrepHit.js';
 export type * from './lib/data/NetgrepInput.js';
 export type * from './lib/data/NetgrepMatchRange.js';
 export type * from './lib/data/NetgrepResult.js';
 export type * from './lib/data/NetgrepSearchConfig.js';
+export * from './lib/grep.js';
 export * from './lib/Netgrep.js';

@@ -142,8 +142,9 @@ terminator-stripped, joined by `\n` in hit order — unambiguous by construction
 `\n` — and `table` is `[hitCount, linesInBlock]` followed by one record per hit, `[lineNumber, nRanges, start,
 end, …]`. `nRanges` counts **pairs**, so a hit's record is `2 + nRanges * 2` words long.
 
-**Nothing in TypeScript calls `search_block` yet.** The streaming loop that will — reading blocks, tracking a
-running file-absolute line base, and turning each `BlockHits` back into per-match results — is a later PR.
+**`grep` in `packages/netgrep` is the only caller.** It advances a running file-absolute line base by
+each block's `linesInBlock` rather than counting terminators itself — that count would mean walking
+every byte of the file again, in the slowest language on the path.
 
 Per call it:
 
@@ -182,10 +183,11 @@ third is `regex-automata`'s DFA and Unicode tables.
 
 ## The TypeScript wrapper — `packages/netgrep`
 
-`src/lib/Netgrep.ts` is the entire public surface. `src/lib/data/` holds six types, one per file.
+The public surface is `Netgrep` and `grep`. `src/lib/data/` holds eight types, one per file.
 
-`src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` is
-`export * from './lib/Netgrep.js'`, so anything exported from that file would become public API. It is a
+`src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` star-exports
+`./lib/grep.js` and `./lib/Netgrep.js` and nothing else, so anything exported from either file would become
+public API, and the two entry points share enough plumbing for that to matter more than it used to. It is a
 separate module rather than a private function so that its edge cases can be unit-tested directly, with a
 tiny cap, instead of only through a >64 KB fixture in a browser.
 
@@ -196,6 +198,7 @@ tiny cap, instead of only through a >64 KB fixture in a browser.
 | `search(url, pattern, metadata?, config?)` | `Promise<NetgrepResult<T>>` | One URL. |
 | `searchBatch(inputs, pattern, config?)` | `Promise<BatchNetgrepResult<T>[]>` | `Promise.all` — resolves only when **all** searches settle. Per-item errors are captured into `error`, never rejected. |
 | `searchBatchWithCallback(inputs, pattern, cb, config?)` | `void` | Fires `cb` per completed search. **No completion signal** — the caller cannot know when the batch is done. |
+| `grep(url, pattern, options?)` | `AsyncIterable<NetgrepHit>` | Every matching line, as it is found, with a file-absolute line number. |
 
 The constructor takes no arguments — the library retains nothing between searches, so there is nothing to
 configure ([0024](decisions/0024-remove-the-in-memory-cache.md)).
@@ -205,6 +208,13 @@ boolean ([0020](decisions/0020-the-matching-line.md), [0022](decisions/0022-capt
 
 `metadata` is an opaque generic `T` carried through untouched and returned on the result — the mechanism by
 which a caller correlates results back to domain objects (a blog post, a document record).
+
+`Netgrep` and `grep` coexist — neither replaces the other. `grep` takes `GrepOptions { maxLineBytes,
+onProgress }` and carries no `signal`. Breaking out of the `for await` loop cancels the transfer, which
+covers cancelling **from a hit** — but `grep` yields only on a hit, so over a stretch of file that matches
+nothing the loop body never runs and there is no `break` to take. A stream that yields nothing therefore
+runs to completion and cannot be stopped: [backlog item 29](BACKLOG.md), which per-call `fetch` options
+([item 22](BACKLOG.md)) close, and those are not plumbed through yet.
 
 ### The search loop
 
@@ -251,13 +261,51 @@ non-`Error` throws. The recursive `handleReader` call carries a `.catch(reject)`
 chained to the one the executor was handed, so without it a rejection from any chunk after the first would be
 an unhandled rejection and the search would never settle.
 
+### The streaming loop
+
+```
+grep(url, pattern)
+  │
+  ├─ await wasmReady            ← init() started once at module load
+  ├─ search_bytes([], pattern)  ← compiles the pattern before the connection
+  │
+  └─ for await (block of streamBlocks(url))
+       │
+       ├─ streamBlocks: fetch(url) → res.body.getReader()
+       │    ├─ read() → { value, done }
+       │    ├─ done → yield the held-back tail, if it has not gone out already
+       │    ├─ splitAtLastLine(tail ++ value, 64 KB) → whole lines, tail held back
+       │    └─ finally → reader.cancel()   ← break, throw and return all land
+       │                                     here — but a break only exists to
+       │                                     take once a hit has been yielded
+       │
+       └─ search_block(block, pattern, maxLineBytes)
+            ├─ { text, table } ── two crossings per block, whatever the hit count
+            ├─ free the carrier
+            ├─ decodeBlock walks it with a cursor → yield one hit at a time
+            └─ linesBefore += table[1]
+```
+
+Three things about that shape are load-bearing, matching the search loop's own:
+
+- **The running line base comes from the engine, not from counting `\n` in JavaScript.** `search_block`
+  already counts terminators to answer with a line number per hit; walking the block again in TypeScript
+  to arrive at the same number would double the cost for no more correctness.
+- **The walk is lazy.** `decodeBlock` is a generator over `table`, so a block with half a million hits does
+  not materialise half a million `NetgrepHit` objects before the caller sees the first one — the same
+  allocation pressure `BlockHits` crossing the WASM boundary as two flat values, rather than one per hit,
+  is built to avoid.
+- **The generator suspends at `yield`.** A consumer that is slow to resume `grep`'s `for await` leaves the
+  loop parked there, which leaves `streamBlocks`' `read()` uncalled — backpressure on the socket with no
+  pause logic anywhere in this code.
+
 ---
 
 ## Known limitations & correctness caveats
 
 All verified against the source in this repository, and every one still open is **pinned by a test** — in
-`Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the `documented_defects` module
-of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
+`Netgrep.integration.spec.ts` and, for what item 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
+that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
 `(FIXED)` there were inverted in place when the defect was closed. Two left the block on 2026-08-01 rather
 than being inverted in it, because the code they described was deleted rather than corrected — the rule is in
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose), which is worth
@@ -304,6 +352,15 @@ a seam.
 > are unreachable in hand-written text, and in the demo's log files too: 408.6 MB of real log lines whose
 > longest, across all four sources, is 387 bytes. Size is not what reaches this — line length is.
 > Pinned by the three `BACKLOG 3g` tests in `Netgrep.integration.spec.ts`, each alongside its control case.
+>
+> **`grep` inherits the same window and adds two consequences of its own**, pinned as `documented defects`
+> in `grep.integration.spec.ts` rather than fixed. A hit inside such a line is **yielded more than once** —
+> the windowed tail is searched as the whole of one block and again as the head of the next, and each pass
+> reports it. And the running line base **gains a line at every window slide**, drifting every line number
+> reported after the over-long line, not only its own. Both are deliberate: suppressing the repeat would
+> mean not yielding it at all if the stream happened to end inside the window, and a lost hit is worse for
+> a grep than a repeated one; and the windowed tail, once it has been searched, is never re-searched at
+> EOF, so there is no later pass that could correct the count.
 
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
 the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.
