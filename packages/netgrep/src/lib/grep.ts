@@ -29,7 +29,9 @@ import { wasmReady } from './wasmReady.js';
  * smart case: lowercase is case-insensitive, any uppercase character makes it
  * case-sensitive.
  * @param options
- * Optional `GrepOptions` — the per-line byte cap and a progress callback.
+ * Optional `GrepOptions` — request options, the per-line byte cap and a
+ * progress callback. A `signal` in the request options is the only way to stop
+ * a search that is finding nothing, there being no loop body to break from.
  * @returns
  * An async iterable of `NetgrepHit`, in file order.
  */

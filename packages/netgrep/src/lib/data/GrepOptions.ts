@@ -9,8 +9,9 @@ export type GrepOptions = {
    * (`credentials: 'include'`) is reached at all — netgrep owns the request
    * because it needs the response body to stream, so there is no other way in.
    *
-   * It is also the only way to stop a search that is finding nothing: `signal`
-   * lives here, and leaving the loop needs a hit to leave from.
+   * It is also the only way to stop a search in flight: `signal` lives here,
+   * and nothing else reaches a call that is finding nothing — `matches` exposes
+   * no loop at all, and `grep`'s runs only on a hit.
    *
    * Passed through whole, so `method` and `body` come with it and are neither
    * honoured specially nor rejected. netgrep searches whatever body comes back

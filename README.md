@@ -18,7 +18,7 @@ works on files you don't control and can't preprocess, and the query never leave
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
   the regex engine's Unicode tables, and it is the main cost of the approach.
-- **A URL the browser can fetch anonymously.** A cross-origin file needs `Access-Control-Allow-Origin`
+- **A URL the browser is allowed to fetch.** A cross-origin file needs `Access-Control-Allow-Origin`
   from its host, and `Netgrep.search` sets nothing on the request — no headers, no API key, and no cookies
   cross-origin — so a file behind a login is out of its reach whatever its CORS policy says.
 

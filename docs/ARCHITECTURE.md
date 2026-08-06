@@ -217,10 +217,12 @@ maxLineBytes, onProgress }`; `matches` takes the same without `maxLineBytes`, ha
 is no top-level `signal` on either: it lives in `fetch`, where it is already a standard `RequestInit` key, and
 a second one would need a documented precedence rule against it to save eight characters.
 
-That option is what makes both cancellable in every case rather than most. Breaking out of `grep`'s `for
+That option is what makes either cancellable at all past the easy case. Breaking out of `grep`'s `for
 await` cancels the transfer, but `grep` yields only on a hit — so over a stretch of file that matches nothing
 the loop body never runs and there is no `break` to take, and `.return()` on a generator parked in an `await`
-waits for a `yield` that never comes. An `AbortSignal` in `options.fetch` needs neither.
+waits for a `yield` that never comes. `matches` does not even offer that much: it returns one `Promise` and
+exposes no loop, so a signal is not its fallback but its only mechanism. An `AbortSignal` in `options.fetch`
+needs neither a loop nor a hit.
 
 ### The search loop
 
@@ -329,7 +331,8 @@ WebAssembly and no terminator is counted; that is why it is cheaper than `grep` 
 ## Known limitations & correctness caveats
 
 All verified against the source in this repository, and every one still open is **pinned by a test** — in
-`Netgrep.integration.spec.ts` and, for what item 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
+`Netgrep.integration.spec.ts` and, for what item 3g does to `grep` and to `matches`, in
+`grep.integration.spec.ts` and `matches.integration.spec.ts`; for the ones
 that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
 `(FIXED)` there were inverted in place when the defect was closed. Two left the block on 2026-08-01 rather
 than being inverted in it, because the code they described was deleted rather than corrected — the rule is in
@@ -386,6 +389,13 @@ a seam.
 > mean not yielding it at all if the stream happened to end inside the window, and a lost hit is worse for
 > a grep than a repeated one; and the windowed tail, once it has been searched, is never re-searched at
 > EOF, so there is no later pass that could correct the count.
+>
+> **`matches` inherits the same window and adds nothing**, which is exactly why it is worth naming: the two
+> failures above arrive as a plain `true` or `false`, with nothing beside them a caller could inspect. A
+> match spanning more than 64 KB of one line answers `false`, and `^` answers `true` over a file no line of
+> which begins that way — a claimed match that is not in the file, reported identically to a real one.
+> Pinned as `documented defects` in `matches.integration.spec.ts`, each beside a control that keeps the line
+> under the ceiling.
 
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
 the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.
@@ -601,8 +611,8 @@ components straight out of `rust-toolchain.toml`.
 | `matches.spec.ts` | Vitest in **Node**, 10 tests | `matches`' loop with `fetch` **and** `@netgrep/search` mocked: the early return, the full read that proves an absence, pre-flight compilation, and the errors. |
 | `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 49 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
 | `grep.integration.spec.ts` | Vitest in **headless Chromium**, 33 tests | The real engine through `grep`: chunk-size invariance, absolute line numbers, UTF-16 ranges, truncation, and the `BACKLOG 3g` defect pins. |
-| `matches.integration.spec.ts` | Vitest in **headless Chromium**, 19 tests | The real engine through `matches`: chunk-size invariance for the boolean, anchors and smart case, and that the first hit stops the reads. |
-| `streaming-transport.integration.spec.ts` | Vitest in **headless Chromium**, 4 tests | **The one suite that does not fake `fetch`.** It proves bytes are delivered and searched *before* the response ends, and that an `AbortSignal` stops a transfer no `break` can reach — see below. |
+| `matches.integration.spec.ts` | Vitest in **headless Chromium**, 21 tests | The real engine through `matches`: chunk-size invariance for the boolean, anchors and smart case, that the first hit stops the reads, and the `BACKLOG 3g` defect pins. |
+| `streaming-transport.integration.spec.ts` | Vitest in **headless Chromium**, 5 tests | **The one suite that does not fake `fetch`.** It proves bytes are delivered and searched *before* the response ends, and that an `AbortSignal` stops a real transfer that neither `grep`'s `break` nor anything `matches` offers can reach — see below. |
 | `packages/search/tests/search.rs` | `cargo test`, native, 73 tests | The four `try_*` entry points as pure Rust — bytes in, bool/line/ranges/block-hits out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, block-hit collection and line numbering, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 

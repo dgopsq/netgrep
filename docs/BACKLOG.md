@@ -41,7 +41,8 @@ Verified against the repository on **2026-07-30** (macOS arm64, Node 24.18.0, Ru
 Full analysis in [`ARCHITECTURE.md`](ARCHITECTURE.md#known-limitations--correctness-caveats).
 
 Every item below is **pinned by a test that asserts the current, wrong behaviour** — in
-`Netgrep.integration.spec.ts` and, for what 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
+`Netgrep.integration.spec.ts` and, for what 3g does to `grep` and to `matches`, in
+`grep.integration.spec.ts` and `matches.integration.spec.ts`; for the ones
 that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Read
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose)
 and [decision 0011](decisions/0011-tests-that-assert-known-bugs.md) before touching any of them: **fixing one
@@ -70,7 +71,7 @@ means inverting its assertion in the same PR.**
 resolution, so fixing it alone would have made 3b fire more often, in the default configuration. 3a left a
 residual, recorded as **3g** below.
 
-### 3g. Anchors and long matches are unreliable inside a line longer than 64 KB — `packages/netgrep/src/lib/Netgrep.ts`
+### 3g. Anchors and long matches are unreliable inside a line longer than 64 KB — `packages/netgrep/src/lib/Netgrep.ts`, `grep.ts`, `matches.ts`
 
 What 3a's fix does not cover. `splitAtLastLine` retains the incomplete trailing *line* between chunks, which is
 exact — a match cannot span a `\n`. But a line with no terminator in it would buffer an entire response, so
@@ -109,7 +110,16 @@ once searched, is never re-searched at EOF, so there is no later pass that could
 `BACKLOG 3g: a hit inside an over-long line is yielded three times` and
 `BACKLOG 3g: the line number drifts after an over-long line` in `grep.integration.spec.ts`. Not yet in
 [`guide/caveats.data.json`](guide/caveats.data.json) below — the published list still describes only
-`Netgrep`, deliberately, until `grep`'s own consumer documentation lands.
+`Netgrep`, deliberately, until `grep` and `matches` get their own consumer documentation.
+
+**`matches` hits the same window whole**, since it consumes the same block stream, and both directions of the
+defect survive the reduction to one bit. A match spanning more than 64 KB of an over-long line answers
+`false`; and `^` answers `true` over a file no line of which begins that way — the false positive above, now
+indistinguishable from a real hit, because a boolean carries nothing a caller could inspect to tell them
+apart. Neither adds a consequence of its own: they are the first two bullets above, seen through a boolean.
+Pinned by `BACKLOG 3g: a match longer than 64 KB across a chunk boundary answers false` and
+`BACKLOG 3g: ^ answers true when no line in the file begins that way` in `matches.integration.spec.ts`, each
+with a control that keeps the line under the ceiling and gets the right answer.
 
 **Published anyway**, in [`guide/caveats.data.json`](guide/caveats.data.json) and so in the guide and the
 README, alongside item 25 below. The demo used to filter its own list down to what its own files could reach;
