@@ -390,7 +390,7 @@ packages/
     → published as @netgrep/search
 
   netgrep/           TypeScript wrapper. Streaming + batching + a streaming grep.
-    src/lib/Netgrep.ts               the class API (~470 lines); no longer the
+    src/lib/Netgrep.ts               the class API (~390 lines); no longer the
                                      whole public API — see grep.ts below
     src/lib/grep.ts                  async generator: every matching line, with a
                                      file-absolute line number, as it is found
@@ -586,8 +586,9 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 ## 7. Known correctness caveats
 
 Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test that
-asserts the wrong behaviour — in `Netgrep.integration.spec.ts`, and for the ones that live in the engine also
-in `packages/search/tests/search.rs`. Read §2.1 before touching any of them.
+asserts the wrong behaviour — in `Netgrep.integration.spec.ts` and, for what **3g** does to `grep`, in
+`grep.integration.spec.ts`; for the ones that live in the engine also in `packages/search/tests/search.rs`.
+Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|

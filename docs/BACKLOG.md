@@ -41,8 +41,10 @@ Verified against the repository on **2026-07-30** (macOS arm64, Node 24.18.0, Ru
 Full analysis in [`ARCHITECTURE.md`](ARCHITECTURE.md#known-limitations--correctness-caveats).
 
 Every item below is **pinned by a test that asserts the current, wrong behaviour** — in
-`Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the `documented_defects`
-module of `packages/search/tests/search.rs`. Read
+`Netgrep.integration.spec.ts` and, for what 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
+that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Item
+**29** is the exception and has no test: a transfer that cannot be stopped produces no wrong answer to pin.
+Read
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose)
 and [decision 0011](decisions/0011-tests-that-assert-known-bugs.md) before touching any of them: **fixing one
 means inverting its assertion in the same PR.**
@@ -53,8 +55,9 @@ means inverting its assertion in the same PR.**
 > every one of them lives once in [`guide/caveats.data.json`](guide/caveats.data.json). Delete the entry and
 > run `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
 >
-> **The two lists are not mirrors of each other.** Every P1 item still open here has an entry there today,
-> but that file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
+> **The two lists are not mirrors of each other.** Every P1 item still open here has an entry there today
+> except **29**, which is `grep`-only and waits on `grep`'s own consumer documentation like the `grep` half of
+> 3g; and that file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
 > which has never been a backlog item at all, and *concurrent downloads of one url*, which is item **18** —
 > in *Done*, and staying there. An entry earns its place there by affecting a visitor, which is a judgement
 > call rather than a lookup. `pnpm docs:sync --check` keeps the two rendered surfaces honest
@@ -99,8 +102,9 @@ single chunk starts where the line starts.
 **`grep` hits the same window and adds two more consequences**, confirmed against the real engine. A hit
 inside an over-long line is **yielded more than once** — the windowed tail is searched as the whole of one
 block and again as the head of the next, so each pass reports the hit again. And the running file-absolute
-line base **gains a line at every window slide**: on the tested fixture the true line number was 2 and `grep`
-reported 3, and the drift carries forward into every line number after the over-long line, not only its own.
+line base **gains a line at every window slide**: on the tested fixture the two lines following the over-long
+one are truly 2 and 3, and `grep` reports 3 and 4 — the drift carries forward into every line number after it
+rather than being spent on the first of them, which is why the fixture has two lines and not one.
 Both are pinned rather than fixed, and deliberately: suppressing the repeat would drop the hit outright if the
 stream ended inside the window, and a lost hit is worse for a grep than a repeated one; the windowed tail,
 once searched, is never re-searched at EOF, so there is no later pass that could correct the count. Pinned by
@@ -147,6 +151,26 @@ well-defined either. Not obviously worth fixing. Pinned in the `documented_defec
 [`guide/caveats.data.json`](guide/caveats.data.json) as `bare-cr-anchors`.
 
 Found on 2026-08-05 during review of item 17's fix.
+
+### 29. `grep` cannot be cancelled while it is finding nothing — `packages/netgrep/src/lib/grep.ts`
+
+`grep` yields only on a hit, so across a stretch of file that matches nothing the consumer's loop body never
+runs — and a `break` only exists to take once a hit has been yielded. Calling `.return()` on the iterator does
+not help either: an async generator suspended inside an `await` queues the return request and honours it only
+when the body next reaches a `yield`, which for a hitless stream is never. A file with no match therefore
+downloads in full, and nothing the caller can write stops it.
+
+Not a workaround away, which is why this is P1 rather than a nicety: the caller does not own the request.
+The workload that reaches it is the demo's own — a debounced search box over 408.6 MB, issuing a fresh
+`grep` every 300 ms of typing, each abandoned one still reading to the end of its file.
+
+`GrepOptions` deliberately carries no `signal`: a top-level one would need a documented precedence rule
+against the `signal` inside per-call `fetch` options, and those are **item 22** above, unsettled and deferred.
+Item 22 is what closes this — an `AbortSignal` reaching `fetch` cancels a transfer no `break` can reach.
+Not in [`guide/caveats.data.json`](guide/caveats.data.json), like the `grep` half of 3g: the published list
+describes `Netgrep` only, until `grep`'s own consumer documentation lands.
+
+Found on 2026-08-06 during review of the `grep` branch.
 
 ---
 
@@ -309,9 +333,15 @@ until the mock's implementation has a side effect: in `grep.integration.spec.ts`
 implementation that returned a rejected promise, producing an unhandled rejection that failed an unrelated test
 with a bare `Error: offline`. Fixed there with a block body.
 
-`Netgrep.spec.ts:745` still has the shape — `beforeEach(() => mockSearchLine.mockReturnValue('x'));` — and is
+**This entry shipped with an inventory that was already false.** It named `Netgrep.spec.ts:745` as the one
+remaining instance, while `streamBlocks.spec.ts:88` carried the exact `mockFetch.mockReset()` shape — in a file
+added two commits before the entry was written, and harmless there only because that suite never leaves a
+rejecting implementation in place for the teardown to invoke. Fixed with a block body on 2026-08-06.
+
+`Netgrep.spec.ts:745` — `beforeEach(() => mockSearchLine.mockReturnValue('x'));` — is now the last, and is
 harmless today only because calling that mock has no side effect. The rule: hook bodies in this repository use
-braces.
+braces. A count of instances in an entry like this one goes stale the moment a spec file is added, so the rule
+is the durable half and the list is not.
 
 ---
 

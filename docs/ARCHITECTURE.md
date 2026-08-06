@@ -185,8 +185,9 @@ third is `regex-automata`'s DFA and Unicode tables.
 
 The public surface is `Netgrep` and `grep`. `src/lib/data/` holds eight types, one per file.
 
-`src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` is
-`export * from './lib/Netgrep.js'`, so anything exported from that file would become public API. It is a
+`src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` star-exports
+`./lib/grep.js` and `./lib/Netgrep.js` and nothing else, so anything exported from either file would become
+public API, and the two entry points share enough plumbing for that to matter more than it used to. It is a
 separate module rather than a private function so that its edge cases can be unit-tested directly, with a
 tiny cap, instead of only through a >64 KB fixture in a browser.
 
@@ -209,8 +210,11 @@ boolean ([0020](decisions/0020-the-matching-line.md), [0022](decisions/0022-capt
 which a caller correlates results back to domain objects (a blog post, a document record).
 
 `Netgrep` and `grep` coexist — neither replaces the other. `grep` takes `GrepOptions { maxLineBytes,
-onProgress }` and carries no `signal`: leaving the `for await` loop cancels the transfer, so there is
-nothing an `AbortSignal` would do that breaking out of the loop does not already do.
+onProgress }` and carries no `signal`. Breaking out of the `for await` loop cancels the transfer, which
+covers cancelling **from a hit** — but `grep` yields only on a hit, so over a stretch of file that matches
+nothing the loop body never runs and there is no `break` to take. A stream that yields nothing therefore
+runs to completion and cannot be stopped: [backlog item 29](BACKLOG.md), which per-call `fetch` options
+([item 22](BACKLOG.md)) close, and those are not plumbed through yet.
 
 ### The search loop
 
@@ -266,18 +270,20 @@ grep(url, pattern)
   ├─ search_bytes([], pattern)  ← compiles the pattern before the connection
   │
   └─ for await (block of streamBlocks(url))
-       ├─ fetch(url) → res.body.getReader()
-       ├─ read() → { value, done }
-       ├─ splitAtLastLine(tail ++ value, 64 KB) → whole lines, tail held back
-       ├─ done → yield the held-back tail, if it has not gone out already
+       │
+       ├─ streamBlocks: fetch(url) → res.body.getReader()
+       │    ├─ read() → { value, done }
+       │    ├─ done → yield the held-back tail, if it has not gone out already
+       │    ├─ splitAtLastLine(tail ++ value, 64 KB) → whole lines, tail held back
+       │    └─ finally → reader.cancel()   ← break, throw and return all land
+       │                                     here — but a break only exists to
+       │                                     take once a hit has been yielded
        │
        └─ search_block(block, pattern, maxLineBytes)
             ├─ { text, table } ── two crossings per block, whatever the hit count
             ├─ free the carrier
             ├─ decodeBlock walks it with a cursor → yield one hit at a time
             └─ linesBefore += table[1]
-  │
-  └─ finally → reader.cancel()   ← break, throw and return all land here
 ```
 
 Three things about that shape are load-bearing, matching the search loop's own:
@@ -298,8 +304,8 @@ Three things about that shape are load-bearing, matching the search loop's own:
 ## Known limitations & correctness caveats
 
 All verified against the source in this repository, and every one still open is **pinned by a test** — in
-`Netgrep.integration.spec.ts`, and for the ones that live in the engine also in the `documented_defects` module
-of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
+`Netgrep.integration.spec.ts` and, for what item 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
+that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
 `(FIXED)` there were inverted in place when the defect was closed. Two left the block on 2026-08-01 rather
 than being inverted in it, because the code they described was deleted rather than corrected — the rule is in
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose), which is worth
