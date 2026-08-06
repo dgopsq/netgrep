@@ -211,6 +211,31 @@ Fusing also has a real cost beyond the code: `try_search_block` returning a plai
 lets the sink and the encoding be reviewed and tested separately, and eight tests assert against that
 shape. Weigh that against whatever the measurement shows.
 
+### 27. The streaming loop never overlaps the network with the search — `packages/netgrep/src/lib/Netgrep.ts`
+
+`handleReader` awaits `reader.read()`, searches what came back, then recurses (`Netgrep.ts:295-354`). The two
+never run at the same time: the network sits idle while WebAssembly works, and WebAssembly sits idle while
+the next chunk arrives. Issuing the next `read()` *before* searching the current block would overlap them.
+
+Today the cost is small, because a search stops at the first match and most searches end early. It grows
+once every block is searched to completion rather than short-circuited, which is the direction
+[decision 0027](decisions/0027-streaming-matching-lines.md) takes the API.
+
+**Do not do this without measuring.** The saving is bounded by however long the search actually takes
+against however long a read takes, and nobody has measured either. If the network dominates — likely on the
+files netgrep is aimed at — overlapping buys nothing. [Decision 0016](decisions/0016-compiled-matcher-memo.md)
+is the precedent: it profiled this engine and found the cost was somewhere nobody expected.
+
+**A property to preserve, and a reason this must stay bounded.** An async generator suspends at `yield` and
+does not resume until the consumer asks for the next value, so a consumer that stops consuming stops the
+reads, the response body's queue fills, and the browser stops draining the socket — backpressure reaches the
+wire without any pause logic being written. That is a property of the shape rather than of any code here, and
+it is worth not breaking: a lookahead of one block costs exactly one block of slack, while an unbounded
+read-ahead queue would discard the property entirely and let a slow consumer buffer the file.
+
+Backpressure has one thing it cannot do — hold a pause long enough that the connection times out. That wants
+resuming by `Range` request instead, which is a feature and belongs in an issue rather than here.
+
 ---
 
 ## P3 — Papercuts
