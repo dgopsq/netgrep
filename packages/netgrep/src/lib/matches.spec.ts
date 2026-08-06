@@ -110,6 +110,10 @@ describe('matches', () => {
 
     await matches('/f', 'yes');
 
+    // Both halves are needed: the `finally` cancels on a natural drain too, so
+    // the call alone proves nothing — it is the call with the rest of the file
+    // still unread that says the transfer was terminated rather than finished.
+    expect(state.reads).toBe(1);
     expect(state.cancelCalls).toBe(1);
   });
 
