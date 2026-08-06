@@ -74,10 +74,16 @@ function serve(chunks: Array<Uint8Array>) {
 }
 
 /** Collect every block a stream yields, as text. */
-async function collect(url: string): Promise<Array<string>> {
+async function collect(
+  url: string,
+  options?: {
+    fetch?: RequestInit;
+    onProgress?: (bytesRead: number) => void;
+  },
+): Promise<Array<string>> {
   const out: Array<string> = [];
 
-  for await (const block of streamBlocks(url)) {
+  for await (const block of streamBlocks(url, options)) {
     out.push(decoder.decode(block));
   }
 
@@ -190,5 +196,23 @@ describe('streamBlocks', () => {
     expect(state.reads).toBe(2);
 
     await blocks.return(undefined);
+  });
+
+  it('hands the caller request options to fetch, unchanged', async () => {
+    serve([encoder.encode('a\n')]);
+
+    const init: RequestInit = { headers: { Authorization: 'Bearer t' } };
+
+    await collect('/f', { fetch: init });
+
+    expect(mockFetch).toHaveBeenCalledWith('/f', init);
+  });
+
+  it('calls fetch with no options at all when the caller gives none', async () => {
+    serve([encoder.encode('a\n')]);
+
+    await collect('/f');
+
+    expect(mockFetch).toHaveBeenCalledWith('/f', undefined);
   });
 });

@@ -149,6 +149,17 @@ describe('grep', () => {
     expect(mockSearchBlock).toHaveBeenCalledWith(expect.anything(), 'a', 12);
   });
 
+  it('passes request options through to fetch', async () => {
+    serve(['a\n']);
+    mockSearchBlock.mockReturnValue(blockHits('', [0, 1]));
+
+    const init: RequestInit = { credentials: 'include' };
+
+    await collect('/f', 'a', { fetch: init });
+
+    expect(mockFetch).toHaveBeenCalledWith('/f', init);
+  });
+
   it('yields nothing for a file with no match, having read all of it', async () => {
     serve(['a\n', 'b\n']);
     mockSearchBlock.mockReturnValue(blockHits('', [0, 1]));

@@ -17,14 +17,19 @@ import { MAX_TAIL_BYTES, splitAtLastLine } from './splitAtLastLine.js';
  *
  * @param url
  * The url to read.
+ * @param options.fetch
+ * Request options, handed to `fetch` unchanged.
  * @param options.onProgress
  * Called after each chunk with the cumulative decompressed bytes delivered.
  */
 export async function* streamBlocks(
   url: string,
-  options?: { onProgress?: (bytesRead: number) => void },
+  options?: {
+    fetch?: RequestInit;
+    onProgress?: (bytesRead: number) => void;
+  },
 ): AsyncGenerator<Uint8Array> {
-  const response = await fetch(url);
+  const response = await fetch(url, options?.fetch);
 
   if (!response.body) {
     throw new Error("The response doesn't contain a body");
