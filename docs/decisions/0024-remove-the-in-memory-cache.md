@@ -52,8 +52,10 @@ const NG = new Netgrep();
 
 `concatBytes` stays. It has a second caller and always did — joining the held-back incomplete line to the
 incoming chunk, which is [0018](0018-line-oriented-tail-buffer.md)'s tail and has nothing to do with caching.
-`NetgrepSearchConfig` — `signal`, `capture`, `maxLineBytes` — is untouched: per-call configuration was never
-the thing at issue.
+~~`NetgrepSearchConfig` — `signal`, `capture`, `maxLineBytes` — is untouched~~ **(2026-08-07: that type went
+with the class, and `capture` with it; the per-call options are now `GrepOptions` — `fetch`, which is where
+`signal` lives, plus `maxLineBytes` and `onProgress` — and `MatchesOptions`, the same without the line
+cap)**: per-call configuration was never the thing at issue.
 
 **Why removal rather than a flipped default.** Keeping the cache opt-in and defaulted off would fix the
 memory growth and none of the rest: the machinery stays in the loop, the two defect mechanisms stay reachable
@@ -88,8 +90,9 @@ The corpus URLs are built client-side and could not be read off the page, so thi
 cost and not a measurement of it. **Worth checking against the real corpus before the release that ships
 this.**
 
-**Two entries leave the `documented defects` block** of `Netgrep.integration.spec.ts`, which is otherwise
-never edited. `BACKLOG 3b (FIXED)` goes because the mechanism it pinned is deleted — there is no partial
+**Two entries leave the `documented defects` block** of ~~`Netgrep.integration.spec.ts`~~ **(2026-08-07: split
+into `grep.integration.spec.ts` and `matches.integration.spec.ts`, one per entry point, each with a block of
+its own)**, which is otherwise never edited. `BACKLOG 3b (FIXED)` goes because the mechanism it pinned is deleted — there is no partial
 entry to poison, so there is nothing left that could regress. `BACKLOG 18 (FIXED)` goes because its
 assertion is now an ordinary one: it moved, inverted, into a `retaining nothing` block as *fetches once per
 concurrent search of one url, by design*, beside the design boundary it merges with. The rule that sets, and

@@ -6,8 +6,7 @@
 The WASM porting of [ripgrep](https://github.com/BurntSushi/ripgrep). See the [main README](https://github.com/dgopsq/netgrep) for more information.
 
 This is the low-level core of [`@netgrep/netgrep`](https://www.npmjs.com/package/@netgrep/netgrep), which is
-probably the package you want — it adds the streaming and batching that make the engine useful over
-HTTP. Used directly, this one exposes two functions, and its default export is an `init` you must await
+probably the package you want — it adds the streaming that makes the engine useful over HTTP. Used directly, this one exposes two functions, and its default export is an `init` you must await
 before calling either of them:
 
 ```ts

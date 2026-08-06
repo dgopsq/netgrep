@@ -97,7 +97,9 @@ largest cap the engine can hold, and `NaN` as no request at all.
 
 - **An empty string is a match.** A pattern matching an empty line returns `""`, which is falsy. `undefined` is
   the only no-match signal at the boundary, and `runEngine` in `Netgrep.ts` tests for it explicitly. Pinned
-  from both sides: `test_a_match_on_an_empty_line_is_an_empty_string` in `packages/search/tests/search.rs` and
+  from both sides: ~~`test_a_match_on_an_empty_line_is_an_empty_string`~~ **(2026-08-07:
+  `a_match_on_an_empty_line_is_an_empty_string_with_a_range`, which now pins the `[0, 0]` range too)** in
+  `packages/search/tests/search.rs` and
   "treats an EMPTY line as a match, not a miss" in `Netgrep.spec.ts`. This is the sharpest edge in the feature.
 - **Lossy decoding.** A latin-1 file, or any invalid UTF-8, yields `U+FFFD` in the line. Acceptable for a
   snippet, and a new class of wrong output that a boolean API could not produce. Documented in the README.

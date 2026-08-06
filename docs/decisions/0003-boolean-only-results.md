@@ -35,7 +35,11 @@ a remote file."*
 - ~~No snippets, no highlighting, no ranking, no match counts — so netgrep cannot back a results UI that shows
   *where* or *how often* a term appears without a second pass in JavaScript.~~ **Amended 2026-07-30** by
   [0020](0020-the-matching-line.md): the first matching line is available on request, which removes the second
-  pass for the snippet case. Highlighting, ranking and match counts are still refused, and 0020 says why.
+  pass for the snippet case. ~~Highlighting, ranking and match counts are still refused, and 0020 says why.~~
+  **(2026-08-07: highlighting is no longer refused. [0022](0022-capture-ranges.md) shipped each match's
+  position within the line on request, and [0027](0027-streaming-matching-lines.md) made those positions
+  unconditional — a caller highlights by slicing the line at the offsets the engine gives them. Ranking and
+  match counts are still refused.)**
 - Because only membership is needed, the searcher can stop at the first match. Combined with
   [0002](0002-search-while-downloading.md), that is what makes early resolution possible at all.
 - ~~`MemSink` counting rather than short-circuiting is slightly wasteful — `Sink::matched` returns `Ok(true)`

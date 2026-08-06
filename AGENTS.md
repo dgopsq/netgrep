@@ -225,10 +225,10 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **195 tests**: 60 unit in Node, 64 integration in headless Chromium, 71 tooling in Node |
+| Test TS | `pnpm test` | Vitest — **197 tests**: 60 unit in Node, 66 integration in headless Chromium, 71 tooling in Node |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
 | Test the tooling | `pnpm test:tools` | **71 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **55 tests** |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **56 tests** |
 | Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide and the README. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |

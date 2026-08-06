@@ -53,8 +53,9 @@ struct Compiled { pattern: String, matcher: Result<RegexMatcher, String> }
 static LAST_COMPILED: RefCell<Option<Compiled>>
 ```
 
-- **One entry.** Every url in a single `searchBatch` shares one pattern, so a single slot hits on every chunk
-  after the first. Two patterns interleaving — a search-as-you-type box whose previous keystroke has not
+- **One entry.** ~~Every url in a single `searchBatch` shares one pattern~~ **(2026-08-07: `searchBatch` is
+  deleted; every chunk of a single `grep()` or `matches()` call shares one pattern, and so does every call a
+  caller runs one pattern over)**, so a single slot hits on every chunk after the first. Two patterns interleaving — a search-as-you-type box whose previous keystroke has not
   finished — thrashes the slot back to the old behaviour plus one string comparison, which is why an LRU
   would be machinery defending a case whose fallback is *no worse than today*.
 - **Failures are cached too.** An invalid pattern is what a search box emits on the way to a valid one;
@@ -145,7 +146,8 @@ library can least afford. Not worth 0.5µs. Recorded here so it is not rediscove
 ## Note (2026-08-02) — reason 3's cache-hit path is gone
 
 [Decision 0024](0024-remove-the-in-memory-cache.md) deleted `memoryCache` and the cache-hit path reason 3
-above describes; `Netgrep.search` no longer answers from anything but a fetch. Reasons 1 and 2 are untouched,
+above describes; ~~`Netgrep.search` no longer answers from anything but a fetch.~~ **(2026-08-07: the class
+is deleted; `grep()` and `matches()` are what answer, and neither answers from anything but a fetch.)** Reasons 1 and 2 are untouched,
 and so is the decision they support — a `Matcher` handle would still owe `.free()` discipline and still be a
 breaking change to buy nothing a caller asked for. The paragraph above is left as written; this note exists so
 a reader re-opening the question does not weigh an argument against a path that no longer exists.
