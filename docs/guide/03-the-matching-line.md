@@ -1,52 +1,71 @@
-# The matching line, and where the matches are in it
+# The matching line
 
-Pass `capture` and the result also carries the first matching line of the file. In `'line-ranges'` mode it
-carries every match's position within that line too. A search without `capture` costs exactly what it always
-did: each mode has its own engine entry point, so the boolean path allocates nothing and copies no string out
-of WebAssembly.
+Every hit `grep` yields is the same shape:
 
 ```ts
-const output = await NG.search(url, 'Sherlock', undefined, { capture: 'line-ranges' });
-
-if (output.result) {
-  console.log(output.line); // `string` — no null check needed
-
-  // output.ranges: [{ start, end }] — UTF-16 offsets into output.line,
-  // so this is the matched text:
-  output.ranges.map((r) => output.line.slice(r.start, r.end));
-}
+type NetgrepHit = {
+  line: string;                            // terminator stripped
+  ranges: Array<{ start: number; end: number }>; // UTF-16 offsets into `line`
+  lineNumber: number;                      // 1-based, counted from the file
+};
 ```
 
-The option's effect is in the type, so TypeScript tells you which shape you have:
+There is nothing to opt into. A streamed hit with no line would be meaningless, so the line, its ranges
+and its number are unconditional — `matches` is what you call when you want none of them.
 
-| Called with | Type of the result |
-|---|---|
-| no config, or no `capture` | `{ url, pattern, result: boolean, metadata? }`. There is no `line` key and no `ranges` key, and reading either is a compile error |
-| `{ capture: 'line' }` | `result` becomes a discriminant: `{ result: true, line: string }` or `{ result: false, line: null }` |
-| `{ capture: 'line-ranges' }` | the same, plus ranges: `{ result: true, line: string, ranges: { start, end }[] }` or `{ result: false, line: null, ranges: null }` |
+## `line`
 
-The ranges come from the engine's own matcher run over the line, not from re-running your pattern in
-JavaScript, which could not reproduce smart case or the Rust regex syntax and would highlight differently than
-netgrep matched. Two limits:
+The whole line, not the matched fragment, with its terminator stripped — `\n` and a `\r\n` alike.
 
-- **Only the first matching line.** They cover every match in that line, and the search still stops there.
-- **`ranges` can be empty on a match.** If every match falls past `maxLineBytes` the returned line cannot show
-  any of them, and `ranges` is `[]` while `result` stays `true`. Do not branch on `ranges.length`.
+A match on an empty line is a hit with `line: ""`. Branch on whether a hit was yielded at all, never on
+`line` being truthy or on `ranges.length`.
 
-`maxLineBytes` caps the line, defaulting to 4096. The truncation happens inside WebAssembly, before the copy,
-so pointing netgrep at minified JavaScript costs you a snippet rather than a megabyte per file. The cut lands
-on a UTF-8 character boundary, and on a range boundary too: a range past the cut is dropped, one straddling it
-is clamped. Setting the cap without `capture` is a compile error.
+Bytes that are not valid UTF-8 are decoded lossily rather than rejected, so a line from a mixed-encoding
+log arrives with replacement characters rather than throwing.
 
-The string itself:
+## `ranges`
 
-- **The line terminator is stripped**: a trailing `\n`, and a `\r` immediately before it. You can render the
-  line directly.
-- **An empty line is a match.** `line` can be `""` when the pattern matches a blank line, and `""` is falsy.
-  Branch on `result`, never on `line`.
-- **Decoding is lossy.** Bytes that are not valid UTF-8 (a latin-1 file, say) become `U+FFFD`. The match
-  itself is unaffected; the engine works on bytes.
+Where the pattern matched *within* `line`, in order, as UTF-16 code-unit offsets — JavaScript's own string
+indexing, so `line.slice(start, end)` is the matched text with no conversion. They are not byte offsets,
+and they are relative to the returned line, never to the file.
 
-Line numbers, file-wide byte offsets, match counts, every matching line, context lines and ranking are all
-absent by choice. [Decision 0020](../decisions/0020-the-matching-line.md) and
-[decision 0022](../decisions/0022-capture-ranges.md) say why for each. If you need them, you need an index.
+They come from the engine rather than from a second pass in JavaScript, which is the only way they can be
+right: a JS re-match cannot reproduce smart case or the regex crate's syntax, so it would disagree with
+the verdict it was meant to explain.
+
+`ranges` can be empty on a real hit — see the cap below.
+
+## `lineNumber`
+
+The line's 1-based position in the file, not in the network chunk it arrived in, and it counts
+non-matching lines too. Exact until a single line outgrows 64 KB, past which it gains a line each time the
+window slides ([Limitations](07-limitations.md#long-lines)).
+
+## `maxLineBytes`
+
+Lines are truncated to 4096 bytes by default. Pass `maxLineBytes` to change it:
+
+```ts
+grep(url, pattern, { maxLineBytes: 512 });
+```
+
+The cut happens inside WebAssembly, before the copy, so a minified bundle or a one-line data dump cannot
+move megabytes per file into JavaScript. It is taken on a UTF-8 character boundary, and it applies to the
+line's content — the terminator is stripped first.
+
+The pattern is matched against the **full** line and then the ranges are cut to fit: one straddling the
+cut is clamped, and one starting past it is dropped. So a hit whose every match sits past the cut arrives
+with `ranges: []`. It is still a hit — the line matched — and the string simply cannot show a position it
+does not hold. Matching the truncated slice instead would let `$` match at the cut and report a match the
+real line does not contain.
+
+## What is absent, and by choice
+
+No byte offsets into the file, no match counts, no ranking. Each is refused for its own stated reason
+rather than by blanket policy — see [decision 0020](../decisions/0020-the-matching-line.md),
+[0022](../decisions/0022-capture-ranges.md) and
+[0027](../decisions/0027-streaming-matching-lines.md), which restates all three while withdrawing the two
+refusals either side of them: every matching line, and its number, are now unconditional.
+
+Surrounding context lines are the one thing deferred rather than refused. 0027 records the design and
+nothing here forecloses it.

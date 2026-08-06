@@ -19,8 +19,9 @@ works on files you don't control and can't preprocess, and the query never leave
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
   the regex engine's Unicode tables, and it is the main cost of the approach.
 - **A URL the browser is allowed to fetch.** A cross-origin file needs `Access-Control-Allow-Origin`
-  from its host, and `Netgrep.search` sets nothing on the request — no headers, no API key, and no cookies
-  cross-origin — so a file behind a login is out of its reach whatever its CORS policy says.
+  from its host, and nothing is set on the request by default — no headers, no API key, and no cookies
+  cross-origin. `grep` and `matches` take per-call `fetch` options, so a file behind a header, an API key
+  or a cookie is reachable — but the host still has to answer the cross-origin request.
 
 ## Install
 
@@ -32,22 +33,20 @@ No bundler configuration is required. The WebAssembly is fetched as soon as the 
 and the first search waits for it.
 
 ```ts
-import { Netgrep } from '@netgrep/netgrep';
+import { grep, matches } from '@netgrep/netgrep';
 
-const NG = new Netgrep();
+// Does this file mention it? Stops reading at the first hit.
+const found = await matches('https://example.com/app.log', 'ECONNREFUSED');
 
-const output = await NG.search('/posts/hello.md', 'sherlock', undefined, {
-  capture: 'line',
-});
-
-if (output.result) {
-  console.log(output.line); // the first matching line
+// Which lines? Yielded as they are found, while the file is still arriving.
+for await (const hit of grep('https://example.com/app.log', 'ECONNREFUSED')) {
+  console.log(hit.lineNumber, hit.line);
 }
 ```
 
-A result is a boolean per URL, plus — if you ask for it — the first matching line and each match's
-position within it. That is the whole answer: no ranking, no match counts, no line numbers. Batches,
-cancellation, caching and the regex dialect are all in the
+`matches` answers whether a pattern occurs; `grep` yields every matching line, with each match's
+position within it and the line's number in the file. That is the whole answer: no ranking, no match
+counts, no context lines. Cancellation, request options, caching and the regex dialect are all in the
 [documentation](https://netgrep.diegopasquali.com/docs/).
 
 ## Known limitations
