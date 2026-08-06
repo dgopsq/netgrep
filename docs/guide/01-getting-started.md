@@ -15,10 +15,10 @@ memory. There is no index to build and no backend to run.
   the regex engine's Unicode tables. It is the main cost of the approach.
 - **A URL the browser can fetch anonymously.** A cross-origin file needs `Access-Control-Allow-Origin`
   from its host, or the fetch fails before the search starts, as an opaque network error rather than
-  as anything netgrep can explain. That header is necessary and not sufficient: netgrep sets nothing
-  on the request — no `Authorization`, no API key, and no cookies, since a cross-origin request sends
-  none by default — so a file behind a login comes back as the host's 401 or sign-in page however
-  permissive its CORS policy. Supplying your own request options is deferred rather than refused.
+  as anything netgrep can explain. That header is necessary and not sufficient: `Netgrep.search` sets
+  nothing on the request — no `Authorization`, no API key, and no cookies, since a cross-origin request
+  sends none by default — so a file behind a login comes back as the host's 401 or sign-in page however
+  permissive its CORS policy. Supplying your own request options is not available on this API.
 
 ## Install
 

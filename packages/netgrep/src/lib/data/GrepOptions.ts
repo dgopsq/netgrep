@@ -3,6 +3,24 @@
  */
 export type GrepOptions = {
   /**
+   * Request options handed to `fetch` unchanged.
+   *
+   * How a file that needs an `Authorization` header, an API key or a cookie
+   * (`credentials: 'include'`) is reached at all — netgrep owns the request
+   * because it needs the response body to stream, so there is no other way in.
+   *
+   * It is also the only way to stop a search in flight: `signal` lives here,
+   * and nothing else reaches a call that is finding nothing — `matches` exposes
+   * no loop at all, and `grep`'s runs only on a hit.
+   *
+   * Passed through whole, so `method` and `body` come with it and are neither
+   * honoured specially nor rejected. netgrep searches whatever body comes back
+   * and validates nothing about the request first, so a request that returns
+   * something other than the file is the caller's to get right.
+   */
+  fetch?: RequestInit;
+
+  /**
    * Ceiling on the bytes of each yielded line. Defaults to 4096.
    *
    * Truncation happens inside WebAssembly, before the copy, so a minified

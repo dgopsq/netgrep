@@ -3,6 +3,8 @@ import {
   DRIP_HEAD_LINE,
   DRIP_TAIL_LINE,
 } from '../../../../vitest.drip-server.js';
+import { grep } from './grep.js';
+import { matches } from './matches.js';
 import { Netgrep } from './Netgrep.js';
 
 /**
@@ -129,5 +131,62 @@ describe('the transport delivers bytes while the response is still open', () => 
     const result = await beforeTheResponseEnds(search, 'the released result');
 
     expect(result.result).toBe(true);
+  }, 20_000);
+
+  it('aborts a search that is finding nothing, before the response ends', async () => {
+    // BACKLOG 29 was this shape: `grep` yields only on a hit, so across a
+    // stretch that matches nothing there is no loop body to break from, and
+    // `.return()` on a generator parked in an `await` waits for a `yield` that
+    // never comes. A signal reaching `fetch` needs neither.
+    const id = dripId();
+    const controller = new AbortController();
+
+    const search = (async () => {
+      for await (const _hit of grep(
+        `/__drip?id=${id}`,
+        'NOTHING-IN-THIS-BODY-MATCHES',
+        {
+          fetch: { signal: controller.signal },
+          onProgress: () => controller.abort(),
+        },
+      )) {
+        // Unreachable: the pattern is absent from the head, and the tail has
+        // not been sent.
+      }
+    })();
+
+    // Settling at all is the assertion. The response is still open and its
+    // remaining bytes do not exist yet, so nothing but the abort can end this.
+    const outcome = await beforeTheResponseEnds(
+      search.then(() => 'finished').catch((error: Error) => error.name),
+      'the aborted search',
+    );
+
+    expect(outcome).toBe('AbortError');
+
+    await release(id);
+  }, 20_000);
+
+  it('aborts a matches() call that is finding nothing, before the response ends', async () => {
+    // `matches` needs the signal more than `grep` does: it exposes no loop at
+    // all, so a caller who wants out of a hitless search has nothing else to
+    // reach for. A real transfer is stopped here — the response is open and its
+    // remaining bytes have not been written.
+    const id = dripId();
+    const controller = new AbortController();
+
+    const search = matches(`/__drip?id=${id}`, 'NOTHING-IN-THIS-BODY-MATCHES', {
+      fetch: { signal: controller.signal },
+      onProgress: () => controller.abort(),
+    });
+
+    const outcome = await beforeTheResponseEnds(
+      search.then((found) => `resolved ${found}`).catch((e: Error) => e.name),
+      'the aborted matches',
+    );
+
+    expect(outcome).toBe('AbortError');
+
+    await release(id);
   }, 20_000);
 });

@@ -41,10 +41,9 @@ Verified against the repository on **2026-07-30** (macOS arm64, Node 24.18.0, Ru
 Full analysis in [`ARCHITECTURE.md`](ARCHITECTURE.md#known-limitations--correctness-caveats).
 
 Every item below is **pinned by a test that asserts the current, wrong behaviour** — in
-`Netgrep.integration.spec.ts` and, for what 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
-that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Item
-**29** is the exception and has no test: a transfer that cannot be stopped produces no wrong answer to pin.
-Read
+`Netgrep.integration.spec.ts` and, for what 3g does to `grep` and to `matches`, in
+`grep.integration.spec.ts` and `matches.integration.spec.ts`; for the ones
+that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Read
 [`../AGENTS.md` §2.1](../AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose)
 and [decision 0011](decisions/0011-tests-that-assert-known-bugs.md) before touching any of them: **fixing one
 means inverting its assertion in the same PR.**
@@ -55,9 +54,9 @@ means inverting its assertion in the same PR.**
 > every one of them lives once in [`guide/caveats.data.json`](guide/caveats.data.json). Delete the entry and
 > run `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
 >
-> **The two lists are not mirrors of each other.** Every P1 item still open here has an entry there today
-> except **29**, which is `grep`-only and waits on `grep`'s own consumer documentation like the `grep` half of
-> 3g; and that file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
+> **The two lists are not mirrors of each other.** Every P1 item still open here has an entry there today,
+> though not every *consequence* does — the `grep` half of 3g waits on `grep`'s own consumer documentation;
+> and that file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
 > which has never been a backlog item at all, and *concurrent downloads of one url*, which is item **18** —
 > in *Done*, and staying there. An entry earns its place there by affecting a visitor, which is a judgement
 > call rather than a lookup. `pnpm docs:sync --check` keeps the two rendered surfaces honest
@@ -72,7 +71,7 @@ means inverting its assertion in the same PR.**
 resolution, so fixing it alone would have made 3b fire more often, in the default configuration. 3a left a
 residual, recorded as **3g** below.
 
-### 3g. Anchors and long matches are unreliable inside a line longer than 64 KB — `packages/netgrep/src/lib/Netgrep.ts`
+### 3g. Anchors and long matches are unreliable inside a line longer than 64 KB — `packages/netgrep/src/lib/Netgrep.ts`, `grep.ts`, `matches.ts`
 
 What 3a's fix does not cover. `splitAtLastLine` retains the incomplete trailing *line* between chunks, which is
 exact — a match cannot span a `\n`. But a line with no terminator in it would buffer an entire response, so
@@ -111,7 +110,16 @@ once searched, is never re-searched at EOF, so there is no later pass that could
 `BACKLOG 3g: a hit inside an over-long line is yielded three times` and
 `BACKLOG 3g: the line number drifts after an over-long line` in `grep.integration.spec.ts`. Not yet in
 [`guide/caveats.data.json`](guide/caveats.data.json) below — the published list still describes only
-`Netgrep`, deliberately, until `grep`'s own consumer documentation lands.
+`Netgrep`, deliberately, until `grep` and `matches` get their own consumer documentation.
+
+**`matches` hits the same window whole**, since it consumes the same block stream, and both directions of the
+defect survive the reduction to one bit. A match spanning more than 64 KB of an over-long line answers
+`false`; and `^` answers `true` over a file no line of which begins that way — the false positive above, now
+indistinguishable from a real hit, because a boolean carries nothing a caller could inspect to tell them
+apart. Neither adds a consequence of its own: they are the first two bullets above, seen through a boolean.
+Pinned by `BACKLOG 3g: a match longer than 64 KB across a chunk boundary answers false` and
+`BACKLOG 3g: ^ answers true when no line in the file begins that way` in `matches.integration.spec.ts`, each
+with a control that keeps the line under the ceiling and gets the right answer.
 
 **Published anyway**, in [`guide/caveats.data.json`](guide/caveats.data.json) and so in the guide and the
 README, alongside item 25 below. The demo used to filter its own list down to what its own files could reach;
@@ -151,26 +159,6 @@ well-defined either. Not obviously worth fixing. Pinned in the `documented_defec
 [`guide/caveats.data.json`](guide/caveats.data.json) as `bare-cr-anchors`.
 
 Found on 2026-08-05 during review of item 17's fix.
-
-### 29. `grep` cannot be cancelled while it is finding nothing — `packages/netgrep/src/lib/grep.ts`
-
-`grep` yields only on a hit, so across a stretch of file that matches nothing the consumer's loop body never
-runs — and a `break` only exists to take once a hit has been yielded. Calling `.return()` on the iterator does
-not help either: an async generator suspended inside an `await` queues the return request and honours it only
-when the body next reaches a `yield`, which for a hitless stream is never. A file with no match therefore
-downloads in full, and nothing the caller can write stops it.
-
-Not a workaround away, which is why this is P1 rather than a nicety: the caller does not own the request.
-The workload that reaches it is the demo's own — a debounced search box over 408.6 MB, issuing a fresh
-`grep` every 300 ms of typing, each abandoned one still reading to the end of its file.
-
-`GrepOptions` deliberately carries no `signal`: a top-level one would need a documented precedence rule
-against the `signal` inside per-call `fetch` options, and those are **item 22** above, unsettled and deferred.
-Item 22 is what closes this — an `AbortSignal` reaching `fetch` cancels a transfer no `break` can reach.
-Not in [`guide/caveats.data.json`](guide/caveats.data.json), like the `grep` half of 3g: the published list
-describes `Netgrep` only, until `grep`'s own consumer documentation lands.
-
-Found on 2026-08-06 during review of the `grep` branch.
 
 ---
 
@@ -296,21 +284,6 @@ whether the publish action performs the OIDC exchange at all. The answer to the 
 `workflow_dispatch` retry path for npm**, which exists precisely because a failed publish cannot be retried
 by re-running `release.yml`.
 
-### 22. `fetch` options are not passed through — `packages/netgrep/src/lib/Netgrep.ts`
-
-`search` builds its own request and forwards only `signal` (`fetch(url, { signal: config?.signal })`), so a
-URL needing an `Authorization` header, a cookie, or a non-default `mode` cannot be searched at all. It is not
-a workaround away either: netgrep owns the fetch because it needs `res.body` to stream, so a caller cannot
-hand it a `Request` or a response it made itself.
-
-Named in [0025](decisions/0025-streaming-grep-over-http.md)'s *Rejected alongside* as a real ask deferred
-rather than refused — and it bites hardest on exactly the files that record positions the project around,
-which are the ones somebody else hosts. The design question is unsettled: accepting a `RequestInit` wholesale
-is one line and hands callers `method` and `body`, neither of which means anything here and both of which
-would then have to be documented as ignored or rejected; naming the fields netgrep supports keeps the surface
-honest and makes every future field a change. Per
-[`../AGENTS.md` §1](../AGENTS.md#1-what-this-project-is) it starts as an issue.
-
 ### 23. Chunk searching runs on the main thread — `packages/netgrep/src/lib/Netgrep.ts`
 
 Every chunk is handed to the WASM matcher between paints, so a large file's search competes with rendering on
@@ -352,6 +325,8 @@ analysis was wrong.
 
 | # | Item | Outcome |
 |---|---|---|
+| 22 | `fetch` options are not passed through | **Closed for the streaming surface, 2026-08-06.** `GrepOptions.fetch?: RequestInit`, handed to `fetch(url, init)` unchanged by `streamBlocks`, so `grep` and `matches` reach a file needing an `Authorization` header, an API key or `credentials: 'include'`. The entry called the design question unsettled between a wholesale `RequestInit` and a named subset, and this took the wholesale one — the subset advertises a policy the runtime does not enforce, since the object still goes to `fetch` whole. The consequence the entry predicted is real and is documented rather than prevented: `method` and `body` come through with everything else, unvalidated, so a request that returns something other than the file is the caller's to get right. **`Netgrep.search` was not extended** — it still forwards only `signal`, and it is deleted in the API rewrite rather than widened, which is why this is *closed for the streaming surface* rather than closed outright. Closes item **29**, which had no other fix. |
+| 29 | `grep` cannot be cancelled while it is finding nothing | **Fixed, 2026-08-06, by item 22 — exactly as this entry predicted.** An `AbortSignal` in `options.fetch` terminates the transfer without needing a `yield` to break from, which is why no top-level `signal` was added and no precedence rule had to be written. Opened and closed on the same day. Pinned by *aborts a search that is finding nothing, before the response ends* in `streaming-transport.integration.spec.ts`, against a server that writes 64 KB and then holds the response open: the search is aborted from `onProgress`, and *settling at all* is the assertion, because the remaining bytes have not been sent and nothing else could end it. Not a defect pin under [0011](decisions/0011-tests-that-assert-known-bugs.md) — an unstoppable transfer produced no wrong answer to invert. |
 | 3f | A single NUL byte discards the whole searched block | **Fixed, 2026-08-05.** `BinaryDetection::quit(b'\x00')` never stopped *at* the NUL — it abandoned the entire block the searcher was handed, so a match was dropped even when it preceded the NUL and even when it sat on an earlier line, and a boolean cannot tell "binary, not searched" from "no match". `BinaryDetection::none()`. The entry's own analysis offered two options and this took the first; the second — surfacing the distinction — remains an API change and stays out of scope. The incidental narrowing [0018](decisions/0018-line-oriented-tail-buffer.md) introduced, where a NUL landing in the held-back partial line let the match survive, is no longer load-bearing but its assertion is kept: it now passes for the ordinary reason rather than the accidental one, and the two must not be told apart by chance. **The trade is real and is published as a caveat:** nothing now declines to search binary input, so a pattern occurring inside a `.png` is reported like any other match. Pinned in both `search.rs` and `Netgrep.integration.spec.ts` under decision [0011](decisions/0011-tests-that-assert-known-bugs.md)'s rule — inverted and renamed, not deleted. |
 | 17 | `$` never matches on CRLF input | **Fixed, 2026-08-05.** `RegexMatcherBuilder::crlf(true)`, which the entry already named as the fix and correctly said wanted its own tested commit. **The ordering is the part the entry did not know:** `crlf` sets the matcher's line terminator to `\r\n` as well as enabling CRLF anchors, while `line_terminator` does not touch the anchor setting — so `.crlf(true)` must precede `.line_terminator(Some(b'\n'))` or the terminator moves off `\n` and takes the chunk splitter's invariant with it, since [0018](decisions/0018-line-oriented-tail-buffer.md) carries the incomplete trailing line between chunks precisely because a match can never span a `\n`. Reversed, this is not a silent wrong answer that ships unnoticed — the searcher's own line terminator stays `\n`, `grep-searcher` rejects that mismatch against the matcher's `\r\n` internally on every call, and although that rejection is itself discarded (`let _ = searcher.search_slice(…)`) rather than surfaced, its effect is not: measured directly, 49 of the crate's 58 tests fail immediately, because nearly every search comes back with no match. Loud enough for CI to catch before it reaches anything downstream, just not loud in the sense of naming its own cause. **`.multi_line(true)` turned out to be required too, and the entry did not anticipate it either:** a bare `$` parses to the same AST node as `(?m)$`, and the underlying `regex-syntax` crate only picks the CRLF-aware anchor over the absolute end-of-haystack one when multi-line mode is on, so `crlf(true)` alone left `$` compiling unchanged — the first attempt at this fix still failed its own inverted test. Pinned in `search.rs`, and newly pinned in `Netgrep.integration.spec.ts` — there was no TypeScript assertion, and decision [0011](decisions/0011-tests-that-assert-known-bugs.md) wants one, because what made this defect hard to notice is that it depends on who authored the file rather than on anything the caller did. |
 | 24 | The demo could not demonstrate what the project claims | **Shipped, 2026-08-02** — see [0026](decisions/0026-demo-as-log-dashboard.md). Never an Open item: it was recorded in [0025](decisions/0025-streaming-grep-over-http.md)'s *Consequences* as a gap that record could not close itself, and it is here so the closure is on the list rather than only in a decision. The demo searched 56 files averaging 46 KB under a hero reading *on files your tab could never hold*, so the demo's own files were a standing counterexample to the claim above it, and an answer-before-the-last-byte on a file that arrives in two chunks is invisible. Four generated logs — 8.3, 40.0, 120.1 and 240.2 MB, 408.6 MB together — tiled from four committed ~512 KB CC BY 4.0 loghub-2.0 seeds into a gitignored `public/logs/`, served as `.txt` so Pages compresses them. Measured in a browser: an early match answers at ~16 ms while the 240 MB source still streams, all four settle at ~1.8 s, and a marker a quarter of the way into that source answers at ~467 ms against ~1.8 s for a full read of it. **Half the gap only.** Constant memory is still not demonstrated on the page and is not scheduled to be: no browser API gives an honest per-stream memory figure, so a number there would be a fabrication. — **Extended, 2026-08-03.** The clause that read *the page reports elapsed time and nothing else, because nothing else is honestly measurable from inside a tab* was wrong in its second half and is retracted. The page now also reports **bytes read per source and in total**, counted by wrapping the demo's own `window.fetch` and piping each log response through a counting `TransformStream` — a measurement at the page's own boundary, needing nothing from the library. Measured against the built site: a match near the head of Apache answers after **8.9%** of that file while the other three read 100%, `NETGREP-MARKER-25` lands at 25.0–32.3% across the four, `-75` at 75.0–78.1%, and a miss reads 100% of all of them. ⚠️ The figure is **decompressed file content, not wire bytes** — the logs are served gzipped at ~16× — so it is labelled *Scanned* and the stats bar says which it is; do not let that sentence be shortened away. Resource Timing was probed and cannot do this: an aborted fetch reports `encodedBodySize: 0` in Chromium, which is exactly the case worth showing. Two costs accepted: `pnpm dev` and `pnpm build:example` now depend on a ~0.8 s generation step, and the generated logs are repetitive by construction, so the four `NETGREP-MARKER-*` lines are their only deep needles. Made item **23** visible — see above. |

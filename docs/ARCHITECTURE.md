@@ -27,12 +27,13 @@ network error rather than anything netgrep can explain. That is the first gate a
 it is a requirement rather than a caveat — and it bounds the *file you do not control* claim below to files
 whose **host** cooperates.
 
-It is not the only gate. netgrep builds its own request and sets nothing on it beyond `signal`, so no
-`Authorization` header and no API key go out, and `Request.credentials` defaults to `same-origin`, so no
-cookies go cross-origin either. A file behind a login is therefore fetched as an anonymous stranger and
-cannot be searched, however permissive its CORS policy — a host can answer `Access-Control-Allow-Origin: *`
-and still refuse the reader. That bound bites hardest on exactly the files this project positions itself
-around, and lifting it is [`BACKLOG`](BACKLOG.md) item **22**.
+It is not the only gate, and how far that second gate binds now depends on which entry point you use. `grep`
+and `matches` take a `fetch` option handed to the request unchanged, so an `Authorization` header, an API key
+or `credentials: 'include'` are all reachable — and a file behind a login is searchable when its host
+cooperates, which for credentials means `Access-Control-Allow-Credentials` and a named origin rather than
+`*`. `Netgrep.search` still sets nothing beyond `signal` and is fetched as an anonymous stranger, so a
+login-protected file stays out of *its* reach however permissive the CORS policy: a host can answer
+`Access-Control-Allow-Origin: *` and still refuse the reader.
 
 **Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
 (Positions within the returned line are in scope since 0022; nothing else about locating a match is.)
@@ -107,10 +108,11 @@ third returning a `LineWithRanges | undefined` carrying the same `line` plus a f
 max_line_bytes: number): BlockHits`, described below — all four simply **throw** on a pattern the regex engine
 will not accept, rather than trapping the instance as they did until 2026.
 
-The first three exist so the cheapest one stays free. `Netgrep.ts` calls one of them depending on `capture`, so
-a caller who wants only membership allocates nothing, decodes nothing and copies no string out of WebAssembly —
-the same call it has always made, and the line path pays for no ranges it did not ask for. `undefined` is the
-only no-match signal any of the three returns: a pattern matching an empty line yields `""`, which is falsy.
+The first three exist so the cheapest one stays free. `Netgrep.ts` picks among them by `capture` and
+`matches.ts` calls `search_bytes` outright, so a caller who wants only membership allocates nothing, decodes
+nothing and copies no string out of WebAssembly — the same call `Netgrep` has always made, and the line path
+pays for no ranges it did not ask for. `undefined` is the only no-match signal any of the three returns: a
+pattern matching an empty line yields `""`, which is falsy.
 
 All four share one compiled-matcher memo and one searcher-building function, `build_searcher`. Its **binary
 detection is fixed for every caller**, deliberately: `BinaryDetection::none()` decides whether a block is
@@ -130,8 +132,8 @@ into the input would be wrong wherever lossy decoding substituted `U+FFFD`. See
 `search_block` is the streaming counterpart to `search_bytes_line_ranges`: where `MemSink` and `LineSink` both
 return `Ok(false)` from `matched` to stop at the first hit, `search_block`'s `BlockSink` returns `Ok(true)` and
 keeps going, collecting every matching line in the block rather than just the first. Each hit carries a
-**1-based, block-relative** line number — turning that into a file-absolute one is the streaming loop's job, in
-a later PR — plus the same ranges `search_bytes_line_ranges` computes.
+**1-based, block-relative** line number — turning that into a file-absolute one is `grep`'s job, by advancing a
+running base per block — plus the same ranges `search_bytes_line_ranges` computes.
 
 The result crosses the WASM boundary as `BlockHits { text: String, table: Vec<u32> }` rather than a vector of
 per-hit structs. `serde-wasm-bindgen` would build every JavaScript object eagerly at marshalling time, and a
@@ -183,13 +185,13 @@ third is `regex-automata`'s DFA and Unicode tables.
 
 ## The TypeScript wrapper — `packages/netgrep`
 
-The public surface is `Netgrep` and `grep`. `src/lib/data/` holds eight types, one per file.
+The public surface is `Netgrep`, `grep` and `matches`. `src/lib/data/` holds nine types, one per file.
 
 `src/lib/splitAtLastLine.ts` sits beside it and is **not** re-exported by `index.ts` — `index.ts` star-exports
-`./lib/grep.js` and `./lib/Netgrep.js` and nothing else, so anything exported from either file would become
-public API, and the two entry points share enough plumbing for that to matter more than it used to. It is a
-separate module rather than a private function so that its edge cases can be unit-tested directly, with a
-tiny cap, instead of only through a >64 KB fixture in a browser.
+`./lib/grep.js`, `./lib/matches.js` and `./lib/Netgrep.js` and nothing else, so anything exported from any of
+those files would become public API, and the three entry points share enough plumbing for that to matter more
+than it used to. It is a separate module rather than a private function so that its edge cases can be
+unit-tested directly, with a tiny cap, instead of only through a >64 KB fixture in a browser.
 
 ### Public API
 
@@ -199,6 +201,7 @@ tiny cap, instead of only through a >64 KB fixture in a browser.
 | `searchBatch(inputs, pattern, config?)` | `Promise<BatchNetgrepResult<T>[]>` | `Promise.all` — resolves only when **all** searches settle. Per-item errors are captured into `error`, never rejected. |
 | `searchBatchWithCallback(inputs, pattern, cb, config?)` | `void` | Fires `cb` per completed search. **No completion signal** — the caller cannot know when the batch is done. |
 | `grep(url, pattern, options?)` | `AsyncIterable<NetgrepHit>` | Every matching line, as it is found, with a file-absolute line number. |
+| `matches(url, pattern, options?)` | `Promise<boolean>` | Whether the file contains a match. The first hit ends the transfer; an absence costs the whole file. |
 
 The constructor takes no arguments — the library retains nothing between searches, so there is nothing to
 configure ([0024](decisions/0024-remove-the-in-memory-cache.md)).
@@ -209,12 +212,17 @@ boolean ([0020](decisions/0020-the-matching-line.md), [0022](decisions/0022-capt
 `metadata` is an opaque generic `T` carried through untouched and returned on the result — the mechanism by
 which a caller correlates results back to domain objects (a blog post, a document record).
 
-`Netgrep` and `grep` coexist — neither replaces the other. `grep` takes `GrepOptions { maxLineBytes,
-onProgress }` and carries no `signal`. Breaking out of the `for await` loop cancels the transfer, which
-covers cancelling **from a hit** — but `grep` yields only on a hit, so over a stretch of file that matches
-nothing the loop body never runs and there is no `break` to take. A stream that yields nothing therefore
-runs to completion and cannot be stopped: [backlog item 29](BACKLOG.md), which per-call `fetch` options
-([item 22](BACKLOG.md)) close, and those are not plumbed through yet.
+`Netgrep`, `grep` and `matches` coexist — none replaces another. `grep` takes `GrepOptions { fetch,
+maxLineBytes, onProgress }`; `matches` takes the same without `maxLineBytes`, having no line to bound. There
+is no top-level `signal` on either: it lives in `fetch`, where it is already a standard `RequestInit` key, and
+a second one would need a documented precedence rule against it to save eight characters.
+
+That option is what makes either cancellable at all past the easy case. Breaking out of `grep`'s `for
+await` cancels the transfer, but `grep` yields only on a hit — so over a stretch of file that matches nothing
+the loop body never runs and there is no `break` to take, and `.return()` on a generator parked in an `await`
+waits for a `yield` that never comes. `matches` does not even offer that much: it returns one `Promise` and
+exposes no loop, so a signal is not its fallback but its only mechanism. An `AbortSignal` in `options.fetch`
+needs neither a loop nor a hit.
 
 ### The search loop
 
@@ -269,9 +277,9 @@ grep(url, pattern)
   ├─ await wasmReady            ← init() started once at module load
   ├─ search_bytes([], pattern)  ← compiles the pattern before the connection
   │
-  └─ for await (block of streamBlocks(url))
+  └─ for await (block of streamBlocks(url, options))
        │
-       ├─ streamBlocks: fetch(url) → res.body.getReader()
+       ├─ streamBlocks: fetch(url, options?.fetch) → res.body.getReader()
        │    ├─ read() → { value, done }
        │    ├─ done → yield the held-back tail, if it has not gone out already
        │    ├─ splitAtLastLine(tail ++ value, 64 KB) → whole lines, tail held back
@@ -299,12 +307,32 @@ Three things about that shape are load-bearing, matching the search loop's own:
   loop parked there, which leaves `streamBlocks`' `read()` uncalled — backpressure on the socket with no
   pause logic anywhere in this code.
 
+`matches` is the same loop with the block step replaced:
+
+```
+matches(url, pattern)
+  │
+  ├─ await wasmReady
+  ├─ search_bytes([], pattern)   ← compiles the pattern before the connection
+  │
+  └─ for await (block of streamBlocks(url, options))
+       └─ search_bytes(block, pattern)
+            └─ true → return    ← leaves the loop, so streamBlocks' finally
+                                  cancels the reader and ends the transfer
+```
+
+It shares `streamBlocks` verbatim, which is the point of that file: the correctness-critical part — the tail,
+the whole-line invariant, the cancel — has one implementation and one test suite, and the two entry points
+differ only in what they do per block. `matches` never calls `search_block`, so no line is copied out of
+WebAssembly and no terminator is counted; that is why it is cheaper than `grep` rather than merely narrower.
+
 ---
 
 ## Known limitations & correctness caveats
 
 All verified against the source in this repository, and every one still open is **pinned by a test** — in
-`Netgrep.integration.spec.ts` and, for what item 3g does to `grep`, in `grep.integration.spec.ts`; for the ones
+`Netgrep.integration.spec.ts` and, for what item 3g does to `grep` and to `matches`, in
+`grep.integration.spec.ts` and `matches.integration.spec.ts`; for the ones
 that live in the engine also in the `documented_defects` module of `packages/search/tests/search.rs`. Those tests assert the current, wrong behaviour; the ones marked
 `(FIXED)` there were inverted in place when the defect was closed. Two left the block on 2026-08-01 rather
 than being inverted in it, because the code they described was deleted rather than corrected — the rule is in
@@ -361,6 +389,13 @@ a seam.
 > mean not yielding it at all if the stream happened to end inside the window, and a lost hit is worse for
 > a grep than a repeated one; and the windowed tail, once it has been searched, is never re-searched at
 > EOF, so there is no later pass that could correct the count.
+>
+> **`matches` inherits the same window and adds nothing**, which is exactly why it is worth naming: the two
+> failures above arrive as a plain `true` or `false`, with nothing beside them a caller could inspect. A
+> match spanning more than 64 KB of one line answers `false`, and `^` answers `true` over a file no line of
+> which begins that way — a claimed match that is not in the file, reported identically to a real one.
+> Pinned as `documented defects` in `matches.integration.spec.ts`, each beside a control that keeps the line
+> under the ceiling.
 
 Newline-free input is answered more slowly than before, since nothing is searched until the ceiling fills or
 the stream ends. Correct either way — the end-of-stream flush catches a file smaller than the ceiling.
@@ -570,8 +605,14 @@ components straight out of `rust-toolchain.toml`.
 |---|---|---|
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
 | `Netgrep.spec.ts` | Vitest in **Node**, 48 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, and all three public methods including `searchBatchWithCallback`. |
+| `streamBlocks.spec.ts` | Vitest in **Node**, 13 tests | The transport in isolation: whole-line blocks, the held-back tail, `onProgress`, request-option passthrough, and that `cancel()` is called on `break` and on `throw`. Mocks `fetch`; no engine at all. |
+| `decodeBlock.spec.ts` | Vitest in **Node**, 8 tests | The `text` + `table` walk, against hand-written tables. A pure generator, so no mocks. |
+| `grep.spec.ts` | Vitest in **Node**, 11 tests | `grep`'s bookkeeping with `fetch` **and** `@netgrep/search` mocked: the running line base, freeing the carrier, the cap, and that nothing runs before the first `next()`. |
+| `matches.spec.ts` | Vitest in **Node**, 10 tests | `matches`' loop with `fetch` **and** `@netgrep/search` mocked: the early return, the full read that proves an absence, pre-flight compilation, and the errors. |
 | `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 49 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `streaming-transport.integration.spec.ts` | Vitest in **headless Chromium**, 3 tests | **The one suite that does not fake `fetch`.** It proves bytes are delivered and searched *before* the response ends — see below. |
+| `grep.integration.spec.ts` | Vitest in **headless Chromium**, 33 tests | The real engine through `grep`: chunk-size invariance, absolute line numbers, UTF-16 ranges, truncation, and the `BACKLOG 3g` defect pins. |
+| `matches.integration.spec.ts` | Vitest in **headless Chromium**, 21 tests | The real engine through `matches`: chunk-size invariance for the boolean, anchors and smart case, that the first hit stops the reads, and the `BACKLOG 3g` defect pins. |
+| `streaming-transport.integration.spec.ts` | Vitest in **headless Chromium**, 5 tests | **The one suite that does not fake `fetch`.** It proves bytes are delivered and searched *before* the response ends, and that an `AbortSignal` stops a real transfer that neither `grep`'s `break` nor anything `matches` offers can reach — see below. |
 | `packages/search/tests/search.rs` | `cargo test`, native, 73 tests | The four `try_*` entry points as pure Rust — bytes in, bool/line/ranges/block-hits out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, block-hit collection and line numbering, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
@@ -605,9 +646,12 @@ no threshold to tune: the ordering is enforced by the server refusing to end, wh
 proof rather than an observation. The 64 KB head is sized past any plausible socket-buffering threshold, so
 a failure means what it says; the deadline in the test exists only to turn a hang into a sentence.
 
-The three cases hold each other honest, and both directions were confirmed by mutating the server: make it
-withhold the head until release — a buffering transport — and the first two fail with their explanation;
-make it send the whole body at once and the third fails, since it asserts the tail is *not* visible early.
+The three progressiveness cases hold each other honest, and both directions were confirmed by mutating the
+server: make it withhold the head until release — a buffering transport — and the first two fail with their
+explanation; make it send the whole body at once and the third fails, since it asserts the tail is *not*
+visible early. The fourth case uses the same server for the opposite property: a `grep` over a body that
+matches nothing is aborted from `onProgress`, and *settling at all* is the assertion, because the remaining
+bytes have not been sent and nothing else could end it.
 
 Its last block deliberately asserts **incorrect** behaviour, pinning the caveats above so that an unintended
 change is caught. Read
