@@ -105,9 +105,11 @@ function rewriteHrefs(
     // A sibling guide file: `07-limitations.md`, `02-searching.md#batches`.
     if (/^\d{2}-[a-z-]+\.md$/.test(path)) {
       // A bare link resolves to the target file's H1 id, which is not the slug
-      // of its filename whenever the title says more than the name does:
-      // `03-the-matching-line.md` is titled "The matching line, and where the
-      // matches are in it". Slugifying the name produced a dead anchor.
+      // of its filename whenever the title says more than the name does.
+      // Today every guide title happens to coincide with its filename, so the
+      // two agree — but "The matching line, and where the matches are in it"
+      // was one of them until recently, and slugifying the name produced a
+      // dead anchor. The map is what keeps the next such title resolving.
       // A file with no H1 has no id to aim at, so it keeps the filename slug —
       // wrong, but a link the reader can see is broken beats a silent one.
       const anchor =

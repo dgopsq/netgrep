@@ -25,10 +25,16 @@ which exposes no loop at all, you need a signal.
 ```ts
 const controller = new AbortController();
 
-const found = matches(url, pattern, { fetch: { signal: controller.signal } });
+const pending = matches(url, pattern, { fetch: { signal: controller.signal } });
 
 // A keystroke later:
 controller.abort();
+
+try {
+  const found = await pending;
+} catch (cause) {
+  // The abort lands here. Nothing was answered.
+}
 ```
 
 An aborted request rejects — `grep` throws from the iteration, `matches` rejects its promise — and stops

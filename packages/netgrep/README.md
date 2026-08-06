@@ -16,6 +16,6 @@ options you hand it, so anything behind a login needs its credential passed in e
 
 `matches` answers whether a pattern occurs; `grep` yields every matching line, with each match's
 position within it and the line's number in the file. That is the whole result: no ranking, no match
-counts, no context lines, no positions in the file. It costs a **~1.17 MB WebAssembly download**
+counts, no context lines, no byte offsets into the file. It costs a **~1.17 MB WebAssembly download**
 (~500 KB gzipped) once per page load, and it has
 [known limitations](https://github.com/dgopsq/netgrep#known-limitations) worth reading first.

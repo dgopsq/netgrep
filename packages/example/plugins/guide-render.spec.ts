@@ -77,9 +77,11 @@ describe('rewriteRepoLinks', () => {
   });
 
   it("anchors a bare sibling link to that file's H1 id", () => {
-    // Not a slug of the filename: `03-the-matching-line.md` is titled "The
-    // matching line, and where the matches are in it", so the two differ and
-    // the filename version pointed at nothing.
+    // Not a slug of the filename. Every guide title coincides with its
+    // filename today, so this case is held open by a fixture rather than by
+    // the real guide: `03-the-matching-line.md` was titled "The matching line,
+    // and where the matches are in it" until the API rewrite shortened it, and
+    // the filename version pointed at nothing for as long as it was.
     const html = '<a href="03-the-matching-line.md">The matching line</a>';
     const h1Ids = new Map([
       [
