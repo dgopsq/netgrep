@@ -1,33 +1,18 @@
-import init, {
+import {
   search_bytes,
   search_bytes_line,
   search_bytes_line_ranges,
 } from '@netgrep/search';
+import { concatBytes } from './concatBytes.js';
 import type { BatchNetgrepResult } from './data/BatchNetgrepResult.js';
 import type { NetgrepCapture } from './data/NetgrepCapture.js';
 import type { NetgrepInput } from './data/NetgrepInput.js';
 import type { NetgrepMatchRange } from './data/NetgrepMatchRange.js';
 import type { NetgrepResult } from './data/NetgrepResult.js';
 import type { NetgrepSearchConfig } from './data/NetgrepSearchConfig.js';
-import { splitAtLastLine } from './splitAtLastLine.js';
-
-/**
- * Ceiling on the bytes retained between two `fetch` chunks.
- *
- * Only terminator-free input reaches it — the tail is normally the incomplete
- * trailing line, 387 bytes at worst in the demo's log files. Past it the
- * guarantee weakens to "a boundary never hides a match shorter than 64 KB".
- *
- * A safety valve for input netgrep is not aimed at, so not configurable.
- */
-const MAX_TAIL_BYTES = 64 * 1024;
-
-/**
- * Ceiling on the returned line when `capture` is set and the caller names no
- * other. Far past any line of prose, and small enough that a minified bundle
- * costs a snippet rather than a copy of itself.
- */
-const DEFAULT_MAX_LINE_BYTES = 4096;
+import { resolveMaxLineBytes } from './resolveMaxLineBytes.js';
+import { MAX_TAIL_BYTES, splitAtLastLine } from './splitAtLastLine.js';
+import { wasmReady } from './wasmReady.js';
 
 /**
  * What one call into the engine produced.
@@ -94,37 +79,6 @@ function runEngine(
 }
 
 /**
- * The largest cap a Rust `usize` receives intact on wasm32.
- */
-const MAX_LINE_BYTES_CEILING = 0xffffffff;
-
-/**
- * Clamp a caller-supplied `maxLineBytes` into something the engine can hold.
- *
- * Clamped rather than validated: throwing would be a new failure mode for a
- * cosmetic setting, and wasm-bindgen checks nothing.
- *
- * ⚠️ THE UPPER BOUND MATTERS AS MUCH AS THE LOWER ONE. The number crosses the
- * boundary through ToUint32, which WRAPS rather than saturates, so `Infinity`,
- * `NaN` and 2³² all arrive as **0** — and a cap of 0 returns an empty string
- * for every match, which is exactly how a match on an empty line is reported.
- * Unbounded, the obvious way to ask for no cap silently produced the one result
- * this API cannot afford to be ambiguous about.
- */
-function resolveMaxLineBytes(requested: number | undefined): number {
-  // Not a request for anything.
-  if (requested === undefined || Number.isNaN(requested)) {
-    return DEFAULT_MAX_LINE_BYTES;
-  }
-
-  // `Infinity` is how a caller spells "no cap", so it becomes the largest cap
-  // rather than falling back to the default and quietly ignoring them.
-  if (requested >= MAX_LINE_BYTES_CEILING) return MAX_LINE_BYTES_CEILING;
-
-  return Math.max(1, Math.floor(requested));
-}
-
-/**
  * Assemble a resolved result.
  *
  * The `line` and `ranges` keys are OMITTED, not set to `null`, when nothing
@@ -179,35 +133,6 @@ function withError<T extends object, C extends NetgrepCapture>(
 ): BatchNetgrepResult<T, C> {
   return { ...result, error } as BatchNetgrepResult<T, C>;
 }
-
-/**
- * Join a list of byte chunks into one buffer.
- */
-function concatBytes(chunks: Array<Uint8Array>): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-  const joined = new Uint8Array(total);
-
-  let offset = 0;
-
-  for (const chunk of chunks) {
-    joined.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return joined;
-}
-
-/**
- * The WASM module has to be instantiated before `search_bytes` can be called.
- *
- * Started once at module load and shared by every `Netgrep` instance: the
- * download begins as soon as the library is imported rather than on the first
- * search, and awaiting an already-settled promise costs nothing.
- *
- * Kept module-private on purpose — callers should not have to know the engine
- * needs booting.
- */
-const wasmReady = init();
 
 /**
  * The `netgrep` library allows to search remote files

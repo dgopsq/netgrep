@@ -1,4 +1,15 @@
 /**
+ * Ceiling on the bytes retained between two `fetch` chunks.
+ *
+ * Only terminator-free input reaches it — the tail is normally the incomplete
+ * trailing line, 387 bytes at worst in the demo's log files. Past it the
+ * guarantee weakens to "a boundary never hides a match shorter than 64 KB".
+ *
+ * A safety valve for input netgrep is not aimed at, so not configurable.
+ */
+export const MAX_TAIL_BYTES = 64 * 1024;
+
+/**
  * The only byte that ends a line here: `packages/search` builds its matcher with
  * `line_terminator(Some(b'\n'))` and no multi-line mode.
  */
