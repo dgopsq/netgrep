@@ -11,18 +11,18 @@ Everything below was verified end-to-end on **2026-07-30** (macOS arm64, Node 24
 
 netgrep is a port of [ripgrep](https://github.com/BurntSushi/ripgrep) to WebAssembly that searches remote
 files **over HTTP while they are still downloading**. It started from one question — *does this pattern occur
-in the file at this URL?* — which `Netgrep.search` and `matches` still answer with a boolean, the first of
-them alongside the matching line ([decision 0020](docs/decisions/0020-the-matching-line.md)) and each match's
-position within it ([decision 0022](docs/decisions/0022-capture-ranges.md)) if the caller asks. `grep` widens
-the answer to **every** matching line as it is found, each carrying its file-absolute line number
-([decision 0027](docs/decisions/0027-streaming-matching-lines.md)). Nothing more: no file offsets, no match
-counts, no context lines, no ranking.
+in the file at this URL?* — which `matches` still answers with a boolean. `grep` widens the answer to **every**
+matching line as it is found, each carrying its file-absolute line number
+([decision 0020](docs/decisions/0020-the-matching-line.md) added the line,
+[0022](docs/decisions/0022-capture-ranges.md) each match's position within it, and
+[0027](docs/decisions/0027-streaming-matching-lines.md) the enumeration and the number). Nothing more: no
+file-wide byte offsets, no match counts, no context lines, no ranking.
 
 The case it is built for is being handed a URL with no shell on the machine that holds the file: an
 artefact on a CI platform, a published dataset, a log a support agent can open but not download. The
-file still has to be one the host is willing to serve cross-origin — `Netgrep.search` sends no headers and
-no cookies, so anything behind a login is out of *its* reach, while `grep` and `matches` take per-call
-`fetch` options and can carry a credential the host accepts. It also works for a
+file still has to be one the host is willing to serve cross-origin — `grep` and `matches` both take per-call
+`fetch` options, so a credential the host accepts can be carried and a file behind a login is reachable when
+its CORS policy allows a named origin with credentials. It also works for a
 small set of static files you own — a blog's raw post files, searched with nothing new deployed — but
 that is an example, not the definition.
 
@@ -48,15 +48,16 @@ friction is the point and it is kept. So:
 - **The record ships with the change**, in the same PR — including a *Rejected alongside* section naming what
   the feature does **not** open the door to. Every widening makes the next ask more reasonable; writing the
   refusals down at the moment of acceptance is the only brake this repository has.
-- **The API is still deliberately small.** A boolean per URL, plus, on request, the matching line and each
-  match's position within it — and every matching line, with its file-absolute line number, from `grep`.
+- **The API is still deliberately small — two functions.** A boolean per URL from `matches`, and from `grep`
+  every matching line, each with its file-absolute line number and each match's position within the line.
   Line numbers and all-matches were both refused until
   [0027](docs/decisions/0027-streaming-matching-lines.md) shipped them: each refusal rested on early exit,
   and under enumeration every byte is read from offset 0, so a line count is the file's. 0027 pays that
-  reading cost deliberately rather than claiming the old reasons were wrong. File-absolute byte offsets,
-  match counts, context lines and ranking are still refused — see
-  [0022](docs/decisions/0022-capture-ranges.md)'s table, which carries 0020's forward, before re-opening any
-  of them. Node support is untouched by this and remains a design conversation.
+  reading cost deliberately rather than claiming the old reasons were wrong — and it *narrowed* while it
+  widened, taking the class, its two batch methods and the `capture` option with it. **File-absolute byte
+  offsets, match counts, context lines and ranking are still refused** — see
+  [0022](docs/decisions/0022-capture-ranges.md)'s table, which carries 0020's forward and which 0027 amends,
+  before re-opening any of them. Node support is untouched by this and remains a design conversation.
 - **If it changes what a result contains or costs, §2.3 applies**: the published demo has to agree with it.
 
 ---
@@ -67,19 +68,20 @@ Three things will mislead you if you do not know them.
 
 ### 2.1 Some tests assert behaviour that is WRONG, on purpose
 
-`packages/netgrep/src/lib/Netgrep.integration.spec.ts` ends with a block titled
-**`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a match
-longer than the 64 KB tail ceiling still spanning a chunk boundary, `^`/`$` also anchoring to a bare `\r`, and so
-on. `packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that live in
-the engine, where a failure names `lib.rs` without a browser and a stream in the way.
+`packages/netgrep/src/lib/grep.integration.spec.ts` and `matches.integration.spec.ts` each end with a block
+titled **`documented defects (asserting current, incorrect behaviour)`**. Those assertions pin known bugs — a
+match longer than the 64 KB tail ceiling still spanning a chunk boundary, `^`/`$` also anchoring to a bare `\r`,
+and so on. `packages/search/tests/search.rs` has a `documented_defects` module doing the same for the ones that
+live in the engine, where a failure names `lib.rs` without a browser and a stream in the way.
 
 They are not mistakes and they are not out of date. Their job is to detect *unintended* change during
 dependency work: a test asserting the correct-but-unimplemented behaviour would fail today and tell us
 nothing.
 
-**Several assertions in that block are labelled `(FIXED)` and assert CORRECT behaviour.** They stay, inverted
-in place, with a note saying what they used to claim — that is what the rule below requires, and it is how the
-block records its own history. Do not tidy them out into the suites above.
+**Several assertions in those blocks are labelled `(FIXED)` and assert CORRECT behaviour.** They stay, inverted
+in place, with a note saying what they used to claim — that is what the rule below requires, and it is how a
+block records its own history. Do not tidy them out into the suites above, and do not rename the heading to
+suit them.
 
 **If one of them fails, that is a signal, not a nuisance.** Something changed the engine's behaviour. Find out
 what, decide whether the new behaviour is right, and if it is, **invert the assertion in the same PR** with a
@@ -223,10 +225,10 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **281 tests**: 102 unit in Node, 108 integration in headless Chromium, 71 tooling in Node |
+| Test TS | `pnpm test` | Vitest — **195 tests**: 60 unit in Node, 64 integration in headless Chromium, 71 tooling in Node |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
 | Test the tooling | `pnpm test:tools` | **71 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
-| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **73 tests** |
+| Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **55 tests** |
 | Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide and the README. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
 | Run the demo | `pnpm dev` | Vite, at <http://localhost:5173/>. **Needs `pnpm build` first** — see below |
@@ -367,28 +369,29 @@ again.
 
 ## 5. Repository map
 
-Three packages, ~530 lines of first-party source. pnpm workspaces link them; there is no task runner.
+Three packages. The library itself is ~1,060 lines of first-party source — `packages/search/src/lib.rs` 520
+and `packages/netgrep/src` 538, tests excluded — and the demo is larger than both together. pnpm workspaces
+link them; there is no task runner.
 
 ```
 packages/
   search/            Rust → WASM core. The actual search engine.
-    src/lib.rs         ~670 lines, mostly comment. Exports four functions,
+    src/lib.rs         ~520 lines, mostly comment. Exports two functions,
                        sharing one compiled-matcher memo (decision 0016) and one
                        searcher, so a caller pays only for the mode it names.
-                       Binary detection is fixed for all four; line-number
-                       counting is the one thing that varies by caller:
+                       Binary detection is fixed for both; line-number counting
+                       is the one thing that varies by caller:
                          search_bytes(&[u8], &str) -> Result<bool, JsError>
-                         search_bytes_line(&[u8], &str, usize)
-                             -> Result<Option<String>, JsError>   see decision 0020
-                         search_bytes_line_ranges(&[u8], &str, usize)
-                             -> Result<Option<LineWithRanges>, JsError>
-                                                                  see decision 0022
+                                                                  membership only;
+                                                                  stops at the
+                                                                  first hit
                          search_block(&[u8], &str, usize)
-                             -> Result<BlockHits, JsError>        every match in
-                                                                  the block, not
-                                                                  just the first;
-                                                                  the only caller
-                                                                  is grep()
+                             -> Result<BlockHits, JsError>        every matching
+                                                                  line in the
+                                                                  block, with its
+                                                                  number and its
+                                                                  ranges; the only
+                                                                  caller is grep()
     tests/search.rs    plain native `cargo test` — no browser, no WebDriver.
                        Ends with a `documented_defects` module; read §2.1 first
     scripts/post_build.js   fixes up the generated pkg/ (see below)
@@ -396,10 +399,8 @@ packages/
     pkg/               BUILD OUTPUT, gitignored
     → published as @netgrep/search
 
-  netgrep/           TypeScript wrapper. Streaming + batching + a streaming grep
-                     + a boolean membership check.
-    src/lib/Netgrep.ts               the class API (~390 lines); no longer the
-                                     whole public API — see grep.ts below
+  netgrep/           TypeScript wrapper. A streaming grep + a boolean membership
+                     check, and nothing else public.
     src/lib/grep.ts                  async generator: every matching line, with a
                                      file-absolute line number, as it is found
     src/lib/matches.ts               boolean membership; the first hit ends the
@@ -409,25 +410,29 @@ packages/
                                      Shared plumbing, NOT re-exported by index.ts
     src/lib/decodeBlock.ts           lazy text+table walker for one block, plus
                                      linesInBlock(table). NOT re-exported
-    src/lib/wasmReady.ts             the shared init() promise, awaited by Netgrep,
-                                     grep and matches alike. NOT re-exported
+    src/lib/wasmReady.ts             the shared init() promise, awaited by grep and
+                                     matches alike. NOT re-exported
     src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
                                      unit-tested on its own; also exports
                                      MAX_TAIL_BYTES. NOT re-exported by
                                      index.ts — see decision 0018
     src/lib/concatBytes.ts           joins tail + chunk. NOT re-exported
     src/lib/resolveMaxLineBytes.ts   applies GrepOptions' default cap. NOT re-exported
-    src/lib/data/*.ts                9 type definitions, one per file
-    src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
-    src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop,
-                                          in headless Chromium (§4.2)
+    src/lib/data/*.ts                4 type definitions, one per file
     src/lib/decodeBlock.spec.ts      unit suite for the block walker
     src/lib/streamBlocks.spec.ts     unit suite; mocks fetch
+    src/lib/splitAtLastLine.spec.ts  unit suite; a pure function, no mocks
+    src/lib/resolveMaxLineBytes.spec.ts   unit suite for the cap's default and clamp
     src/lib/grep.spec.ts             unit suite; mocks @netgrep/search
     src/lib/grep.integration.spec.ts real WASM through grep, in headless Chromium
+                                     (§4.2). Ends with a `documented defects`
+                                     block; read §2.1 first
     src/lib/matches.spec.ts          unit suite; mocks fetch and the engine
     src/lib/matches.integration.spec.ts   real WASM through matches, in headless
-                                          Chromium
+                                          Chromium. Also ends with one
+    src/lib/streaming-transport.integration.spec.ts   the only suite that does not
+                                          fake fetch — a Vite middleware that will
+                                          not finish the response
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
@@ -512,9 +517,9 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 | Goal | File |
 |---|---|
 | Matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
-| What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md) and [0022](docs/decisions/0022-capture-ranges.md) first — 0022's table is the current list of what has been refused |
-| Streaming, batching, abort behaviour | `Netgrep.search`'s recursive reader lives in `packages/netgrep/src/lib/Netgrep.ts`; the streaming loops and their shared plumbing (`streamBlocks.ts`, `decodeBlock.ts`) live in `packages/netgrep/src/lib/grep.ts`, `matches.ts` and beside them |
-| A config option | `packages/netgrep/src/lib/data/NetgrepSearchConfig.ts` for `Netgrep`, `packages/netgrep/src/lib/data/GrepOptions.ts` for `grep` — and `MatchesOptions.ts`, which is `GrepOptions` without the cap. All per-call, and the only configuration any of them has |
+| What a hit contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepHit.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md), [0022](docs/decisions/0022-capture-ranges.md) and [0027](docs/decisions/0027-streaming-matching-lines.md) first — 0022's table, as 0027 amends it, is the current list of what has been refused |
+| Streaming and abort behaviour | The reader lives in `packages/netgrep/src/lib/streamBlocks.ts`, shared verbatim by both entry points; what each does per block is in `grep.ts` and `matches.ts`, with the block walk in `decodeBlock.ts` |
+| A config option | `packages/netgrep/src/lib/data/GrepOptions.ts` for `grep` — and `MatchesOptions.ts`, which is `GrepOptions` without the cap. Both per-call, and the only configuration either has |
 | Build or release steps | root `package.json` scripts, `packages/*/package.json` scripts, `.github/workflows/` |
 | Binary size / release profile | root `Cargo.toml` — **not** `packages/search/Cargo.toml` |
 
@@ -599,15 +604,14 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 ## 7. Known correctness caveats
 
 Real, present in the published package, and **documented rather than fixed**. Each is pinned by a test that
-asserts the wrong behaviour — in `Netgrep.integration.spec.ts` and, for what **3g** does to `grep` and to
-`matches`, in `grep.integration.spec.ts` and `matches.integration.spec.ts`; for the ones that live in the
-engine also in `packages/search/tests/search.rs`.
+asserts the wrong behaviour — in `grep.integration.spec.ts` and `matches.integration.spec.ts`; for the ones
+that live in the engine also in `packages/search/tests/search.rs`.
 Read §2.1 before touching any of them.
 
 | | Where | Effect |
 |---|---|---|
-| Anchors and long matches inside a >64 KB line | `Netgrep.ts`, `grep.ts`, `matches.ts`, `MAX_TAIL_BYTES` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window. Inside such a line a match longer than 64 KB is lost, **and** `^` can match at the window's first byte; in `grep`, a hit inside such a line is also yielded more than once, and the running line number drifts by one per window slide; `matches` adds nothing of its own but returns both wrong answers as a bare `true` or `false`. Needs a line over 64 KB — unreachable in prose. |
-| `^`/`$` also anchor to a bare `\r` | `lib.rs`, `crlf(true)` | The CRLF-aware anchors that fixed item 17 treat a lone `\r` as a line boundary too, not only a `\r\n` pair, so `foo$` and `^bar` both match `"foo\rbar\n"` on either side of the bare `\r`. The line splitter disagrees: it still only ever breaks on `\n`, so `capture` can return a line that describes a different boundary than the anchor just matched against. |
+| Anchors and long matches inside a >64 KB line | `splitAtLastLine.ts` (`MAX_TAIL_BYTES`), `streamBlocks.ts`, `grep.ts`, `matches.ts` | What remains of the chunk-boundary defect (**3g**). The retained tail is the incomplete trailing *line*, which is exact; past a 64 KB ceiling it degrades to a byte window. Inside such a line a match longer than 64 KB is lost, **and** `^` can match at the window's first byte; in `grep`, a hit inside such a line is also yielded more than once, and the running line number drifts by one per window slide; `matches` adds nothing of its own but returns both wrong answers as a bare `true` or `false`. Needs a line over 64 KB — unreachable in prose. |
+| `^`/`$` also anchor to a bare `\r` | `lib.rs`, `crlf(true)` | The CRLF-aware anchors that fixed item 17 treat a lone `\r` as a line boundary too, not only a `\r\n` pair, so `foo$` and `^bar` both match `"foo\rbar\n"` on either side of the bare `\r`. The line splitter disagrees: it still only ever breaks on `\n`, so the line `grep` yields can describe a different boundary than the anchor just matched against. |
 
 The last was found during code review on 2026-08-05, riding along with item 17's fix, and is backlog item 25.
 
@@ -647,7 +651,7 @@ item **25**.
 ## 8. Conventions
 
 - **ESM only.** `"type": "module"`, and relative imports carry the **`.js` extension**
-  (`./data/NetgrepResult.js`) even though the sources are `.ts`. `moduleResolution` is `nodenext`, which
+  (`./data/NetgrepHit.js`) even though the sources are `.ts`. `moduleResolution` is `nodenext`, which
   requires this. Match it.
 - One type per file under `src/lib/data/`, named after the type.
 - TSDoc on every public method and type. Keep that density.
