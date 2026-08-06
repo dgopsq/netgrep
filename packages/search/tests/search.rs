@@ -332,13 +332,13 @@ fn first_line(haystack: &[u8], pattern: &str, max_line_bytes: usize) -> Option<S
 ///
 /// Everything here is about what `search_bytes_line` returns *given* a match;
 /// whether something matches at all is `mod search` above, and is deliberately
-/// not re-asserted. All three entry points share one compiled matcher and one
+/// not re-asserted. All four entry points share one compiled matcher and one
 /// searcher configuration, so matching semantics cannot diverge between them —
-/// `test_the_three_entry_points_share_one_matcher` is the assertion that keeps
+/// `test_the_four_entry_points_share_one_matcher` is the assertion that keeps
 /// that true.
 #[cfg(test)]
 mod matching_line {
-    use super::{first_line, line_ranges, matches};
+    use super::{block, first_line, line_ranges, matches};
     use ::search::try_search_bytes_line;
 
     /// Comfortably above every line used here, so a test only exercises the cap
@@ -514,8 +514,8 @@ mod matching_line {
     // ---------------------------------------------------------------
 
     #[test]
-    fn test_the_three_entry_points_share_one_searcher_configuration() {
-        // All three go through `build_searcher`, so binary detection cannot
+    fn test_the_four_entry_points_share_one_searcher_configuration() {
+        // All four go through `build_searcher`, so binary detection cannot
         // differ between them. That matters more than it looks: a divergence
         // would change `result` — adding `capture: 'line-ranges'` to a working
         // search would change its ANSWER, not just what came back alongside it.
@@ -533,6 +533,9 @@ mod matching_line {
             line_ranges(b"needle here\x00tail", "needle", NO_CAP),
             Some(("needle here\u{0}tail".to_string(), vec![0, 6]))
         );
+        let block_hit = block(b"needle here\x00tail", "needle");
+        assert_eq!(block_hit.hits[0].line, "needle here\u{0}tail");
+        assert_eq!(block_hit.hits[0].ranges, vec![0, 6]);
 
         // The control, so this is pinning the shared config rather than an
         // input that never matched.
@@ -545,11 +548,14 @@ mod matching_line {
             line_ranges(b"needle here", "needle", NO_CAP),
             Some(("needle here".to_string(), vec![0, 6]))
         );
+        let block_hit = block(b"needle here", "needle");
+        assert_eq!(block_hit.hits[0].line, "needle here");
+        assert_eq!(block_hit.hits[0].ranges, vec![0, 6]);
     }
 
     #[test]
-    fn test_the_three_entry_points_share_one_matcher() {
-        // All three go through `with_matcher`, so a pattern compiled by one is
+    fn test_the_four_entry_points_share_one_matcher() {
+        // All four go through `with_matcher`, so a pattern compiled by one is
         // reused by the others. That is the point — but it also means a stale
         // slot would let one entry point answer with another's matcher, which
         // is the same silent-wrong-answer failure `mod search` guards for
@@ -563,11 +569,16 @@ mod matching_line {
             line_ranges(b"one wiseman", "wiseman", NO_CAP),
             Some(("one wiseman".to_string(), vec![4, 11]))
         );
+        assert_eq!(
+            block(b"one wiseman", "wiseman").hits[0].line,
+            "one wiseman"
+        );
 
         // Smart case is decided at compile time, so these need different
         // matchers despite differing by one bit.
         assert_eq!(first_line(b"one wiseman", "Wiseman", NO_CAP), None);
         assert_eq!(line_ranges(b"one wiseman", "Wiseman", NO_CAP), None);
+        assert!(block(b"one wiseman", "Wiseman").hits.is_empty());
         assert!(matches(b"one wiseman", "wiseman"));
     }
 
@@ -697,6 +708,270 @@ mod line_ranges_tests {
     #[test]
     fn test_invalid_pattern_is_a_domain_error() {
         assert!(::search::try_search_bytes_line_ranges(b"x\n", "a(", 4096).is_err());
+    }
+}
+
+/// Assert-friendly wrapper for the block API, matching `matches` above.
+#[cfg(test)]
+fn block(haystack: &[u8], pattern: &str) -> ::search::BlockOutcome {
+    ::search::try_search_block(haystack, pattern, 4096).expect("the pattern should compile")
+}
+
+#[cfg(test)]
+mod block {
+    use super::block;
+
+    #[test]
+    fn every_matching_line_is_returned_not_just_the_first() {
+        // The whole point of the export: `LineSink` stops at the first match,
+        // this one does not.
+        let out = block(b"needle one\nmiss\nneedle two\nneedle three\n", "needle");
+
+        assert_eq!(out.hits.len(), 3);
+        assert_eq!(out.hits[0].line, "needle one");
+        assert_eq!(out.hits[1].line, "needle two");
+        assert_eq!(out.hits[2].line, "needle three");
+    }
+
+    #[test]
+    fn line_numbers_are_one_based_and_relative_to_the_block() {
+        let out = block(b"a\nb\nneedle\nc\nneedle\n", "needle");
+
+        assert_eq!(out.hits.len(), 2);
+        assert_eq!(out.hits[0].line_number, 3);
+        assert_eq!(out.hits[1].line_number, 5);
+    }
+
+    #[test]
+    fn lines_in_block_counts_the_final_line_without_a_terminator() {
+        // The streaming loop hands over whole lines, but the LAST block of a
+        // file that does not end in a newline has no trailing terminator. The
+        // count has to include that line or the running base in TypeScript
+        // drifts by one for the rest of the file.
+        assert_eq!(block(b"a\nb\nc\n", "zzz").lines_in_block, 3);
+        assert_eq!(block(b"a\nb\nc", "zzz").lines_in_block, 3);
+        assert_eq!(block(b"", "zzz").lines_in_block, 0);
+    }
+
+    #[test]
+    fn ranges_are_utf16_offsets_into_the_returned_line() {
+        // Same contract as `search_bytes_line_ranges`: offsets index the
+        // decoded string, not the bytes.
+        let out = block("café needle\n".as_bytes(), "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "café needle");
+        assert_eq!(out.hits[0].ranges, vec![5, 11]);
+    }
+
+    #[test]
+    fn several_matches_on_one_line_each_get_a_range() {
+        let out = block(b"needle and needle\n", "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].ranges, vec![0, 6, 11, 17]);
+    }
+
+    #[test]
+    fn a_block_with_no_match_returns_no_hits_but_still_counts_lines() {
+        let out = block(b"alpha\nbeta\n", "needle");
+
+        assert!(out.hits.is_empty());
+        assert_eq!(out.lines_in_block, 2);
+    }
+
+    #[test]
+    fn a_match_on_an_empty_line_is_an_empty_string_with_a_range() {
+        // The trap `search_bytes_line` documents: an empty string is falsy, so
+        // a consumer must count hits rather than test the line for truthiness.
+        let out = block(b"a\n\nb\n", "^$");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "");
+        assert_eq!(out.hits[0].line_number, 2);
+        assert_eq!(out.hits[0].ranges, vec![0, 0]);
+    }
+
+    #[test]
+    fn an_invalid_pattern_is_an_error_not_a_panic() {
+        assert!(::search::try_search_block(b"anything", "(", 4096).is_err());
+    }
+}
+
+#[cfg(test)]
+mod encoding {
+    /// Decode the flat form back into `(line_number, line, ranges)` triples.
+    ///
+    /// This is the Rust mirror of the walker PR 5 writes in TypeScript. Having
+    /// it here means the encoding is pinned by a decoder that was written
+    /// against the format's description rather than against the encoder's
+    /// implementation.
+    fn decode(hits: &::search::BlockHits) -> (u32, Vec<(u32, String, Vec<u32>)>) {
+        let table = &hits.table;
+        let hit_count = table[0];
+        let lines_in_block = table[1];
+
+        if hit_count == 0 {
+            // `"".split('\n')` yields ONE empty segment, not zero — splitting
+            // unconditionally would misread a zero-hit block as one empty hit.
+            // A walker that skips this guard has the same bug.
+            assert_eq!(table.len(), 2, "a zero-hit table carries only its header");
+            assert_eq!(hits.text, "", "a zero-hit block has no text to join");
+            return (lines_in_block, Vec::new());
+        }
+
+        let mut out = Vec::new();
+        let mut cursor = 2;
+        let mut lines = hits.text.split('\n');
+
+        for _ in 0..hit_count {
+            let line_number = table[cursor];
+            let n_ranges = table[cursor + 1] as usize;
+            let ranges = table[cursor + 2..cursor + 2 + n_ranges * 2].to_vec();
+
+            cursor += 2 + n_ranges * 2;
+
+            out.push((
+                line_number,
+                lines.next().expect("one text segment per hit").to_string(),
+                ranges,
+            ));
+        }
+
+        // Prove the encoding is exactly consumed, not merely a prefix of it: a
+        // stray trailing table word or an extra joined segment would otherwise
+        // pass every assertion above unnoticed.
+        assert_eq!(cursor, table.len(), "the table has unconsumed words");
+        assert!(lines.next().is_none(), "the text has unconsumed segments");
+
+        (lines_in_block, out)
+    }
+
+    #[test]
+    fn the_flat_form_round_trips_to_the_same_hits() {
+        let encoded = ::search::try_encode_block(
+            b"needle one\nmiss\nneedle two and needle\n",
+            "needle",
+            4096,
+        )
+        .expect("the pattern should compile");
+
+        let (lines_in_block, decoded) = decode(&encoded);
+
+        assert_eq!(lines_in_block, 3);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], (1, "needle one".to_string(), vec![0, 6]));
+        assert_eq!(
+            decoded[1],
+            (3, "needle two and needle".to_string(), vec![0, 6, 15, 21])
+        );
+    }
+
+    #[test]
+    fn a_block_with_no_hits_encodes_an_empty_text_and_a_two_word_table() {
+        let encoded = ::search::try_encode_block(b"alpha\nbeta\n", "needle", 4096)
+            .expect("the pattern should compile");
+
+        assert_eq!(encoded.table, vec![0, 2]);
+        assert_eq!(encoded.text, "");
+
+        // Exercise `decode` itself on the zero-hit case, not just the raw
+        // fields: its own doc calls it the walker's Rust mirror, so its
+        // zero-hit path needs to be run at least once.
+        let (lines_in_block, decoded) = decode(&encoded);
+        assert_eq!(lines_in_block, 2);
+        assert!(decoded.is_empty());
+    }
+
+    #[test]
+    fn an_empty_matching_line_survives_the_join() {
+        // The join is by '\n' and an empty line contributes an empty segment.
+        // If the walker ever loses one, hits and text desynchronise for every
+        // hit after it — so this pins the case that would cause that.
+        let encoded = ::search::try_encode_block(b"a\n\n\nb\n", "^$", 4096)
+            .expect("the pattern should compile");
+
+        let (lines_in_block, decoded) = decode(&encoded);
+
+        assert_eq!(lines_in_block, 4);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], (2, "".to_string(), vec![0, 0]));
+        assert_eq!(decoded[1], (3, "".to_string(), vec![0, 0]));
+    }
+
+    #[test]
+    fn no_matched_line_can_contain_the_join_byte() {
+        // The format's whole safety argument: lines are terminator-stripped and
+        // a match can never span a '\n', so '\n' is an unambiguous separator.
+        // If this ever fails, the encoding is unsound, not merely wrong.
+        //
+        // `(?s).*` is deliberate, not `.`: dot-matches-newline is what would
+        // actually drive a cross-line match through the line reader if
+        // anything here were unsound. A plain `.` can never span a line under
+        // ANY implementation, so it would pass even if this were broken.
+        let encoded =
+            ::search::try_encode_block(b"one\ntwo\nthree\n", "(?s).*", 4096)
+                .expect("the pattern should compile");
+
+        let (_, decoded) = decode(&encoded);
+
+        for (_, line, _) in &decoded {
+            assert!(!line.contains('\n'), "a matched line contained the separator: {line:?}");
+        }
+    }
+
+    #[test]
+    fn a_line_past_the_cap_is_truncated_and_its_ranges_drop_or_clamp() {
+        // block()'s test helper (above) hardcodes max_line_bytes = 4096, so no
+        // block-path test exercised truncation before this — the drop/clamp
+        // branches were pinned only through `search_bytes_line_ranges`. This
+        // threads a small cap through the encoder instead: the first match
+        // straddles the cut and is clamped, the second sits entirely past it
+        // and is dropped.
+        let encoded = ::search::try_encode_block(b"needle and needle\n", "needle", 4)
+            .expect("the pattern should compile");
+
+        let (_, decoded) = decode(&encoded);
+
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0], (1, "need".to_string(), vec![0, 4]));
+    }
+
+    #[test]
+    fn a_hit_whose_match_is_entirely_past_the_cap_is_a_two_word_record() {
+        // The first hit's only match starts past the cap and is dropped, so
+        // its record collapses to its two fixed words — `nRanges` is
+        // legitimately 0 without the hit itself being absent. The second hit
+        // is included alongside it, unmodified, as the control: its match
+        // starts before the cap and is clamped instead, so a walker reading
+        // this table has to size each record from its own `nRanges` rather
+        // than assume a fixed stride.
+        let encoded = ::search::try_encode_block(b"aaaa needle\nzz needle\n", "needle", 4)
+            .expect("the pattern should compile");
+
+        assert_eq!(encoded.table, vec![2, 2, 1, 0, 2, 1, 3, 4]);
+        assert_eq!(encoded.text, "aaaa\nzz n");
+
+        let (_, decoded) = decode(&encoded);
+        assert_eq!(decoded.len(), 2);
+        assert_eq!(decoded[0], (1, "aaaa".to_string(), vec![]));
+        assert_eq!(decoded[1], (2, "zz n".to_string(), vec![3, 4]));
+    }
+
+    #[test]
+    fn a_single_empty_matching_hit_still_reports_hit_count_one() {
+        // The trap for a walker written against this format: `text == ""` is
+        // also what a ZERO-hit block encodes, so a guard like `if (!text)
+        // return` would silently drop this real hit rather than decode it.
+        // `hitCount` is what distinguishes the two, not `text`'s truthiness.
+        let encoded = ::search::try_encode_block(b"a\n\nb\n", "^$", 4096)
+            .expect("the pattern should compile");
+
+        assert_eq!(encoded.text, "");
+
+        let (_, decoded) = decode(&encoded);
+        assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0], (2, "".to_string(), vec![0, 0]));
     }
 }
 

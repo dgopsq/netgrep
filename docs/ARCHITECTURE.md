@@ -87,7 +87,7 @@ never compiled. See [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md).
 
 ## The Rust core — `packages/search`
 
-`src/lib.rs` is ~430 lines, most of them comment, and exposes three `#[wasm_bindgen]` functions:
+`src/lib.rs` is ~670 lines, most of them comment, and exposes four `#[wasm_bindgen]` functions:
 
 ```rust
 pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError>
@@ -95,26 +95,55 @@ pub fn search_bytes_line(chunk: &[u8], pattern: &str, max_line_bytes: usize)
     -> Result<Option<String>, JsError>
 pub fn search_bytes_line_ranges(chunk: &[u8], pattern: &str, max_line_bytes: usize)
     -> Result<Option<LineWithRanges>, JsError>
+pub fn search_block(chunk: &[u8], pattern: &str, max_line_bytes: usize)
+    -> Result<BlockHits, JsError>
 ```
 
 wasm-bindgen unwraps those `Result`s, so the TypeScript a consumer sees is
 `search_bytes(chunk: Uint8Array, pattern: string): boolean`,
-`search_bytes_line(chunk: Uint8Array, pattern: string, max_line_bytes: number): string | undefined`, and a
+`search_bytes_line(chunk: Uint8Array, pattern: string, max_line_bytes: number): string | undefined`, a
 third returning a `LineWithRanges | undefined` carrying the same `line` plus a flat
-`Uint32Array` of `[start, end, …]` — all three simply **throw** on a pattern the regex engine will not accept,
-rather than trapping the instance as they did until 2026.
+`Uint32Array` of `[start, end, …]`, and a fourth, `search_block(chunk: Uint8Array, pattern: string,
+max_line_bytes: number): BlockHits`, described below — all four simply **throw** on a pattern the regex engine
+will not accept, rather than trapping the instance as they did until 2026.
 
-The extra entry points exist so the first stays free. `Netgrep.ts` calls one of the three depending on
-`capture`, so a caller who wants only membership allocates nothing, decodes nothing and copies no string out
-of WebAssembly — the same call it has always made, and the line path pays for no ranges it did not ask for.
-`undefined` is the only no-match signal any of them returns: a pattern matching an empty line yields `""`,
-which is falsy. All three share one compiled-matcher memo and one searcher, so their matching semantics and
-binary detection cannot drift apart.
+The first three exist so the cheapest one stays free. `Netgrep.ts` calls one of them depending on `capture`, so
+a caller who wants only membership allocates nothing, decodes nothing and copies no string out of WebAssembly —
+the same call it has always made, and the line path pays for no ranges it did not ask for. `undefined` is the
+only no-match signal any of the three returns: a pattern matching an empty line yields `""`, which is falsy.
+
+All four share one compiled-matcher memo and one searcher-building function, `build_searcher`. Its **binary
+detection is fixed for every caller**, deliberately: `BinaryDetection::none()` decides whether a block is
+abandoned before a byte of it is searched, so letting that vary by caller would change `result` itself, not
+merely what accompanies it (caveat 5, below). Its **line-number counting is not fixed** —
+`build_searcher(line_numbers: bool)` takes that as a parameter, because counting terminators changes only cost,
+never the answer: `search_bytes`, `search_bytes_line` and `search_bytes_line_ranges` all pass `false`, since
+none of them reports a line number, and `search_block` passes `true`, because the streaming loop that will
+consume it needs one per hit.
 
 The ranges are computed only after the search has ended, by running the same compiled matcher over the kept
-line — bounded by the line, off the hot path. Conversion to UTF-16 code units happens against the decoded,
-truncated string, since a byte offset into the input would be wrong wherever lossy decoding substituted
-`U+FFFD`. See [decision 0022](decisions/0022-capture-ranges.md).
+line — bounded by the line, off the hot path. `search_block` reuses the same routine per hit rather than once
+per call. Conversion to UTF-16 code units happens against the decoded, truncated string, since a byte offset
+into the input would be wrong wherever lossy decoding substituted `U+FFFD`. See
+[decision 0022](decisions/0022-capture-ranges.md).
+
+`search_block` is the streaming counterpart to `search_bytes_line_ranges`: where `MemSink` and `LineSink` both
+return `Ok(false)` from `matched` to stop at the first hit, `search_block`'s `BlockSink` returns `Ok(true)` and
+keeps going, collecting every matching line in the block rather than just the first. Each hit carries a
+**1-based, block-relative** line number — turning that into a file-absolute one is the streaming loop's job, in
+a later PR — plus the same ranges `search_bytes_line_ranges` computes.
+
+The result crosses the WASM boundary as `BlockHits { text: String, table: Vec<u32> }` rather than a vector of
+per-hit structs. `serde-wasm-bindgen` would build every JavaScript object eagerly at marshalling time, and a
+common token in a 240 MB log produces hundreds of thousands of hits live at once — exactly the allocation
+pressure the constant-memory claim ([decision 0025](decisions/0025-streaming-grep-over-http.md)) cannot afford.
+Instead exactly two values cross the boundary per block, whatever the hit count: `text` is every matching line,
+terminator-stripped, joined by `\n` in hit order — unambiguous by construction, since a match can never span a
+`\n` — and `table` is `[hitCount, linesInBlock]` followed by one record per hit, `[lineNumber, nRanges, start,
+end, …]`. `nRanges` counts **pairs**, so a hit's record is `2 + nRanges * 2` words long.
+
+**Nothing in TypeScript calls `search_block` yet.** The streaming loop that will — reading blocks, tracking a
+running file-absolute line base, and turning each `BlockHits` back into per-match results — is a later PR.
 
 Per call it:
 
@@ -126,7 +155,8 @@ Per call it:
    pattern every time, so the cache hits on every chunk after the first; compilation was 97–99% of the cost
    before it existed. Failed compiles are cached alongside successful ones. See
    [decision 0016](decisions/0016-compiled-matcher-memo.md).
-2. Builds a `Searcher` with `BinaryDetection::none()` and `line_number(false)`.
+2. Builds a `Searcher` with `BinaryDetection::none()` and `line_number(false)` — `search_block` is the one
+   caller that passes `true`, since it needs a line number per hit; see above.
 3. Runs `search_slice` into `MemSink`, a minimal `Sink` implementation that does nothing but record that a
    match happened and stop — chosen because ripgrep's real sinks write to stdout, which does not exist in
    WASM.
@@ -484,7 +514,7 @@ components straight out of `rust-toolchain.toml`.
 | `splitAtLastLine.spec.ts` | Vitest in **Node**, 12 tests | The chunk-boundary tail arithmetic in isolation, with `cap = 8` so the over-the-ceiling cases fit on one line. A pure function, so no mocks at all. |
 | `Netgrep.spec.ts` | Vitest in **Node**, 48 tests | Orchestration only — `fetch` **and** `@netgrep/search` are mocked. Result shape, metadata, abort plumbing, error capture and serialisation, and all three public methods including `searchBatchWithCallback`. |
 | `Netgrep.integration.spec.ts` | Vitest in **headless Chromium** (Playwright), 49 tests | **The real engine through the real streaming loop, in a real browser.** Only `fetch` is faked, and only to remove the network: bytes still travel through a real `ReadableStream`, still arrive chunked, still get matched by the compiled `search_bytes`. |
-| `packages/search/tests/search.rs` | `cargo test`, native, 58 tests | The three `try_*` entry points as pure Rust — bytes in, bool/line/ranges out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
+| `packages/search/tests/search.rs` | `cargo test`, native, 73 tests | The four `try_*` entry points as pure Rust — bytes in, bool/line/ranges/block-hits out. Regex features, smart case, line semantics, encoding and BOM handling, binary detection, the compiled-matcher cache, block-hit collection and line numbering, and the UTF-16 offset conversion including its lossy-decoding and truncation edges. No browser involved. |
 | `scripts/verify-pack.mjs` | Node, in CI | The published tarballs: required files present, no `workspace:` range survived packing, no version drift. |
 
 The split between the Rust and TypeScript suites is deliberate: anything that depends only on the bytes is cheapest to pin

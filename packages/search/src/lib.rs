@@ -111,6 +111,81 @@ pub fn search_bytes_line_ranges(
         .map_err(|error| JsError::new(&error))
 }
 
+/// The value `search_block` hands to JavaScript.
+///
+/// Two fields rather than a vector of structs, and the choice is load-bearing.
+/// A `serde-wasm-bindgen` `Vec<BlockHit>` builds every JavaScript object
+/// eagerly at marshalling time; searching a common token across a 240 MB log
+/// produces hundreds of thousands of them, live at once, which is exactly the
+/// allocation pressure the project's constant-memory claim cannot afford. Here
+/// the crossing is one string and one integer array per block whatever the hit
+/// count, and the consumer builds each object at the moment it yields it.
+///
+/// `getter_with_clone` for the same reason `LineWithRanges` uses it: both
+/// fields are heap types, so the getters return copies and the caller frees the
+/// carrier after reading them.
+#[wasm_bindgen(getter_with_clone)]
+pub struct BlockHits {
+    /// The matching lines in hit order, joined by `\n`.
+    ///
+    /// Unambiguous by construction: lines are terminator-stripped, and a match
+    /// can never span a `\n`, so no segment can contain the separator.
+    pub text: String,
+    /// `[hitCount, linesInBlock]`, then per hit
+    /// `[lineNumber, nRanges, start, end, …]`, where `nRanges` counts **pairs**
+    /// — so a hit's record is `2 + nRanges * 2` words long.
+    pub table: Vec<u32>,
+}
+
+/// Flatten a `BlockOutcome` into the wire format.
+fn encode_block(outcome: BlockOutcome) -> BlockHits {
+    let mut table = Vec::with_capacity(2 + outcome.hits.len() * 4);
+    table.push(outcome.hits.len() as u32);
+    table.push(outcome.lines_in_block);
+
+    let mut text = String::new();
+
+    for (index, hit) in outcome.hits.iter().enumerate() {
+        if index > 0 {
+            text.push('\n');
+        }
+        text.push_str(&hit.line);
+
+        table.push(hit.line_number);
+        table.push((hit.ranges.len() / 2) as u32);
+        table.extend_from_slice(&hit.ranges);
+    }
+
+    BlockHits { text, table }
+}
+
+/// The native half of `search_block`, for the Rust suite.
+pub fn try_encode_block(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<BlockHits, String> {
+    try_search_block(chunk, pattern, max_line_bytes).map(encode_block)
+}
+
+/// Search a block and return every matching line, flattened.
+///
+/// The streaming counterpart to `search_bytes_line_ranges`, which returns only
+/// the first match and stops there. Two values cross the boundary per block
+/// however many lines matched; see `BlockHits` for the layout and why it is not
+/// a vector of structs.
+///
+/// Throws a JavaScript `Error` when the pattern will not compile, exactly as
+/// the other exports do.
+#[wasm_bindgen]
+pub fn search_block(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<BlockHits, JsError> {
+    try_encode_block(chunk, pattern, max_line_bytes).map_err(|error| JsError::new(&error))
+}
+
 /// The engine, as plain Rust.
 ///
 /// `search_bytes` above is a two-line wrapper around this, and the split is
@@ -151,10 +226,25 @@ pub fn try_search_bytes_line_ranges(
     })
 }
 
+/// Search a block for every matching line.
+///
+/// The native half of `search_block`, for the reason `try_search_bytes` gives:
+/// `JsError` cannot be constructed on a native target, so the Rust suite calls
+/// this.
+pub fn try_search_block(
+    chunk: &[u8],
+    pattern: &str,
+    max_line_bytes: usize,
+) -> Result<BlockOutcome, String> {
+    with_matcher(pattern, |matcher| {
+        search_block_with(matcher, chunk, max_line_bytes)
+    })
+}
+
 /// Run `use_matcher` against the compiled form of `pattern`, compiling it only
 /// if the memo is not already holding it.
 ///
-/// Generic over the return type so all three entry points share one memo: the
+/// Generic over the return type so all four entry points share one memo: the
 /// slot caches the *matcher*, which is the expensive part, and is indifferent
 /// to what the caller then does with it.
 fn with_matcher<T>(
@@ -226,29 +316,27 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
 }
 
 /// Build a searcher with netgrep's fixed reading semantics: search every byte
-/// as text, and do not count lines.
+/// as text, and count lines only when the caller needs them.
 ///
-/// Shared by all three entry points rather than spelled out in each. They must
-/// agree — a caller who adds `capture: 'line-ranges'` to an existing search is
-/// entitled to the same answer — and binary detection in particular decides
-/// whether a whole block is abandoned, so a divergence here would be a
-/// difference in `result`, not merely in what is returned alongside it.
+/// Shared by every entry point rather than spelled out in each. They must agree
+/// on binary detection in particular, because it decides whether a block is
+/// abandoned — a divergence there would be a difference in `result`, not merely
+/// in what is returned alongside it. `BinaryDetection::none()` is therefore
+/// fixed here for all callers and is not a parameter.
 ///
-/// `BinaryDetection::none()` rather than `quit(b'\x00')`, which abandoned the
-/// entire block on the first NUL and so dropped matches that preceded it. The
-/// trade is that netgrep no longer declines to search binary input at all: a
-/// pattern occurring inside a `.png` is reported like any other match, and the
-/// line handed back is whatever those bytes decode to.
-fn build_searcher() -> Searcher {
+/// `line_numbers` is a parameter because it is the one setting that changes
+/// cost without changing answers: counting terminators is work the membership
+/// path has no use for, and `search_bytes` exists to allocate nothing.
+fn build_searcher(line_numbers: bool) -> Searcher {
     SearcherBuilder::new()
         .binary_detection(BinaryDetection::none())
-        .line_number(false)
+        .line_number(line_numbers)
         .build()
 }
 
 /// Run a compiled matcher over one chunk of bytes.
 fn search_with(matcher: &RegexMatcher, chunk: &[u8]) -> bool {
-    let mut searcher = build_searcher();
+    let mut searcher = build_searcher(false);
 
     let mut sink = MemSink { found: false };
 
@@ -286,7 +374,7 @@ impl Sink for MemSink {
 /// Run a compiled matcher over one block of bytes, keeping the first matching
 /// line.
 fn search_line_with(matcher: &RegexMatcher, chunk: &[u8], max_line_bytes: usize) -> Option<String> {
-    let mut searcher = build_searcher();
+    let mut searcher = build_searcher(false);
 
     let mut sink = LineSink { first: None };
 
@@ -328,50 +416,156 @@ impl Sink for LineSink {
 /// The ranges pass runs AFTER the search, over one line's bytes — it does not
 /// touch the early exit, and a `capture: 'line'` or boolean caller never pays
 /// for it.
-///
-/// `find_iter` runs over the full stripped line, not the truncated slice:
-/// truncating first would let `$` match at the cut, reporting a match the
-/// real line does not contain. Ranges past the cut are then dropped, and one
-/// straddling it is clamped — the string cannot show what it does not hold.
 fn search_line_ranges_with(
     matcher: &RegexMatcher,
     chunk: &[u8],
     max_line_bytes: usize,
 ) -> Option<(String, Vec<u32>)> {
-    let mut searcher = build_searcher();
+    let mut searcher = build_searcher(false);
     let mut sink = LineSink { first: None };
 
     let _ = searcher.search_slice(matcher, chunk, &mut sink);
 
-    sink.first.map(|line| {
-        let content = strip_terminator(&line);
-        let cap = floor_char_boundary(content, max_line_bytes);
+    sink.first
+        .map(|line| decode_line_with_ranges(matcher, &line, max_line_bytes))
+}
 
-        let mut byte_offsets: Vec<usize> = Vec::new();
-        let _ = matcher.find_iter(content, |m| {
-            byte_offsets.push(m.start());
-            byte_offsets.push(m.end());
-            true
-        });
+/// Decode one matched line and locate the pattern's matches within it.
+///
+/// `find_iter` runs over the FULL stripped line, not the truncated slice:
+/// truncating first would let `$` match at the cut, reporting a match the real
+/// line does not contain. Ranges starting at or past the cut are then dropped
+/// and one straddling it is clamped — the string cannot show what it does not
+/// hold. `start == 0 && cap == 0` is kept deliberately, so the empty match on
+/// an empty line still has a range, which is the one case a caller cannot
+/// re-derive.
+///
+/// Shared by `search_line_ranges_with` and the block path so the two cannot
+/// drift; every subtlety above was paid for once already.
+fn decode_line_with_ranges(
+    matcher: &RegexMatcher,
+    line: &[u8],
+    max_line_bytes: usize,
+) -> (String, Vec<u32>) {
+    let content = strip_terminator(line);
+    let cap = floor_char_boundary(content, max_line_bytes);
 
-        // Drop pairs starting at or past the cut; clamp ends to it. `start ==
-        // cap` survives only for the empty match on an empty line, where
-        // dropping it would break "a match always has a range" in the one case
-        // a caller cannot re-derive.
-        let mut kept: Vec<usize> = Vec::with_capacity(byte_offsets.len());
-        for pair in byte_offsets.chunks_exact(2) {
-            let (start, end) = (pair[0], pair[1]);
-            if start < cap || (start == 0 && cap == 0) {
-                kept.push(start);
-                kept.push(end.min(cap));
-            }
+    let mut byte_offsets: Vec<usize> = Vec::new();
+    let _ = matcher.find_iter(content, |m| {
+        byte_offsets.push(m.start());
+        byte_offsets.push(m.end());
+        true
+    });
+
+    let mut kept: Vec<usize> = Vec::with_capacity(byte_offsets.len());
+    for pair in byte_offsets.chunks_exact(2) {
+        let (start, end) = (pair[0], pair[1]);
+        if start < cap || (start == 0 && cap == 0) {
+            kept.push(start);
+            kept.push(end.min(cap));
         }
+    }
 
-        let capped = &content[..cap];
-        let ranges = byte_offsets_to_utf16(capped, &kept);
+    let capped = &content[..cap];
+    let ranges = byte_offsets_to_utf16(capped, &kept);
 
-        (String::from_utf8_lossy(capped).into_owned(), ranges)
-    })
+    (String::from_utf8_lossy(capped).into_owned(), ranges)
+}
+
+/// One matching line, as the block API reports it.
+pub struct BlockHit {
+    /// 1-based, **relative to the block searched**, not to the file. The
+    /// running file-absolute base is the streaming loop's job.
+    pub line_number: u32,
+    /// Terminator stripped, truncated to `max_line_bytes`, lossily decoded.
+    pub line: String,
+    /// Flat `[start, end, …]` pairs, UTF-16 code units into `line`.
+    pub ranges: Vec<u32>,
+}
+
+/// What one block produced.
+pub struct BlockOutcome {
+    /// How many lines the block contained, matching or not. The streaming loop
+    /// advances its running line base by this, so it must count the final line
+    /// of a terminator-less block.
+    pub lines_in_block: u32,
+    pub hits: Vec<BlockHit>,
+}
+
+/// A `Sink` that keeps every matching line rather than the first.
+///
+/// The counterpart to `LineSink`, and the difference is the return value:
+/// `Ok(true)` continues the search. The bytes are copied because `SinkMatch`
+/// does not outlive the callback, and copied undecoded so the expensive half
+/// happens once, after the search.
+struct BlockSink {
+    hits: Vec<(u32, Vec<u8>)>,
+}
+
+impl Sink for BlockSink {
+    type Error = std::io::Error;
+
+    fn matched(
+        &mut self,
+        _searcher: &Searcher,
+        mat: &SinkMatch<'_>,
+    ) -> Result<bool, std::io::Error> {
+        // `line_number` is `Some` because the searcher is built with
+        // `line_number(true)`; 0 is unreachable and would be a wrong answer
+        // rather than a crash, so it is not worth an unwrap that could trap
+        // the WASM instance.
+        self.hits
+            .push((mat.line_number().unwrap_or(0) as u32, mat.bytes().to_vec()));
+
+        Ok(true)
+    }
+}
+
+/// Count the lines in a block.
+///
+/// Terminators, plus one for a final line that has none — the last block of a
+/// file not ending in a newline. Getting this wrong drifts the streaming loop's
+/// running base for every line after it.
+fn count_lines(chunk: &[u8]) -> u32 {
+    if chunk.is_empty() {
+        return 0;
+    }
+
+    let terminators = bytecount_newlines(chunk);
+
+    if chunk.last() == Some(&b'\n') {
+        terminators
+    } else {
+        terminators + 1
+    }
+}
+
+/// Terminators in a block. Split out so `count_lines` reads as its own rule.
+fn bytecount_newlines(chunk: &[u8]) -> u32 {
+    chunk.iter().filter(|&&byte| byte == b'\n').count() as u32
+}
+
+fn search_block_with(
+    matcher: &RegexMatcher,
+    chunk: &[u8],
+    max_line_bytes: usize,
+) -> BlockOutcome {
+    let mut searcher = build_searcher(true);
+    let mut sink = BlockSink { hits: Vec::new() };
+
+    let _ = searcher.search_slice(matcher, chunk, &mut sink);
+
+    let hits = sink
+        .hits
+        .into_iter()
+        .map(|(line_number, bytes)| {
+            let (line, ranges) = decode_line_with_ranges(matcher, &bytes, max_line_bytes);
+
+            BlockHit { line_number, line, ranges }
+        })
+        .collect();
+
+    BlockOutcome { lines_in_block: count_lines(chunk), hits }
 }
 
 /// Map ascending byte offsets in `bytes` to UTF-16 code-unit offsets in

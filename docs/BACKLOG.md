@@ -174,6 +174,68 @@ features are deprecated no-ops, so `default-features = false` drops nothing. net
 Removing it means patching `grep-searcher`, i.e. reintroducing the fork that was deleted in
 [decision 0001](decisions/0001-fork-ripgrep-for-wasm.md). Not worth it. Recorded so it is not rediscovered.
 
+### 26. The block path copies each matching line three times — `packages/search/src/lib.rs`
+
+`search_block` copies every matching line's bytes three times before they cross the boundary:
+
+```
+lib.rs:518   mat.bytes().to_vec()                      # BlockSink, per hit
+lib.rs:472   String::from_utf8_lossy(capped).into_owned()   # decode_line_with_ranges
+lib.rs:152   text.push_str(&hit.line)                  # encode_block, into the joined buffer
+```
+
+**The first is forced and cannot be removed on its own.** `SinkMatch` does not outlive the callback — the
+searcher reuses its internal buffer — so anything that defers processing has to copy. `LineSink` carries
+the same constraint and the same comment.
+
+**The copies are not the interesting cost; the intermediate is.** `BlockOutcome.hits` holds one `String`
+and one `Vec<u32>` per hit, all alive at once, for the whole block before `encode_block` runs. That is a
+smaller version of the eager materialisation that the flat `text`+`table` encoding exists to avoid, so
+the design argument against `serde-wasm-bindgen` applies in miniature to netgrep's own intermediate.
+
+The candidate fix is to **fuse the sink with the encoder**: give `BlockSink` the `&RegexMatcher`,
+`max_line_bytes`, and the output `text`/`table` buffers, and encode inside `matched()` where
+`mat.bytes()` is still valid. That removes the first and third copies and the intermediate entirely —
+one copy per line, and peak memory O(output) rather than O(2 × output + 2N allocations). A smaller
+variant removes only the second: `from_utf8_lossy` returns a `Cow` that is `Borrowed` for valid UTF-8,
+which is nearly always, and `.into_owned()` allocates anyway; a consumer that pushed the `Cow` straight
+into a buffer would not.
+
+**Do not do either without measuring first.** [Decision 0016](decisions/0016-compiled-matcher-memo.md)
+profiled this engine and found matcher *compilation* was 97–99% of the cost — the copies were not where
+the time went. Nothing has profiled the block path, and `wee_alloc` is no longer in this crate, so
+[decision 0008](decisions/0008-wee-alloc.md)'s assumptions about allocation cost no longer hold either.
+The measurement wants a realistic workload, which means waiting until the streaming loop can drive it.
+
+Fusing also has a real cost beyond the code: `try_search_block` returning a plain `BlockOutcome` is what
+lets the sink and the encoding be reviewed and tested separately, and eight tests assert against that
+shape. Weigh that against whatever the measurement shows.
+
+### 27. The streaming loop never overlaps the network with the search — `packages/netgrep/src/lib/Netgrep.ts`
+
+`handleReader` awaits `reader.read()`, searches what came back, then recurses (`Netgrep.ts:295-354`). The two
+never run at the same time: the network sits idle while WebAssembly works, and WebAssembly sits idle while
+the next chunk arrives. Issuing the next `read()` *before* searching the current block would overlap them.
+
+Today the cost is small, because a search stops at the first match and most searches end early. It grows
+once every block is searched to completion rather than short-circuited, which is the direction
+[decision 0027](decisions/0027-streaming-matching-lines.md) takes the API.
+
+**Do not do this without measuring.** The saving is bounded by however long the search actually takes
+against however long a read takes, and nobody has measured either. If the network dominates — likely on the
+files netgrep is aimed at — overlapping buys nothing. [Decision 0016](decisions/0016-compiled-matcher-memo.md)
+is the precedent: it profiled this engine and found the cost was somewhere nobody expected.
+
+**A property to preserve, and a reason this must stay bounded.** An async generator suspends at `yield` and
+does not resume until the consumer asks for the next value, so a consumer that stops consuming stops the
+reads, the response body's queue fills, and the browser stops draining the socket — backpressure reaches the
+wire without any pause logic being written. That is a property of the shape rather than of any code here, and
+it is worth not breaking: a lookahead of one block costs exactly one block of slack, while an unbounded
+read-ahead queue would discard the property entirely and let a slow consumer buffer the file.
+
+Backpressure has one thing it cannot do — hold a pause long enough that the connection times out. That wants
+resuming by `Range` request instead, which is a feature and belongs in an issue rather than here.
+
 ---
 
 ## P3 — Papercuts
