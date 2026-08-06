@@ -18,8 +18,9 @@ match counts, no ranking.
 
 The case it is built for is being handed a URL with no shell on the machine that holds the file: an
 artefact on a CI platform, a published dataset, a log a support agent can open but not download. The
-file still has to be one an anonymous cross-origin request can fetch — netgrep sends no headers and
-no cookies, so anything behind a login is out of reach until item **22** lands. It also works for a
+file still has to be one the host is willing to serve cross-origin — `Netgrep.search` sends no headers and
+no cookies, so anything behind a login is out of *its* reach, while `grep` and `matches` take per-call
+`fetch` options and can carry a credential the host accepts. It also works for a
 small set of static files you own — a blog's raw post files, searched with nothing new deployed — but
 that is an example, not the definition.
 
@@ -216,7 +217,7 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **180 tests**: 60 unit in Node, 49 integration in headless Chromium, 71 tooling in Node |
+| Test TS | `pnpm test` | Vitest — **278 tests**: 102 unit in Node, 105 integration in headless Chromium, 71 tooling in Node |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
 | Test the tooling | `pnpm test:tools` | **71 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **73 tests** |
@@ -394,9 +395,11 @@ packages/
                                      whole public API — see grep.ts below
     src/lib/grep.ts                  async generator: every matching line, with a
                                      file-absolute line number, as it is found
-    src/lib/streamBlocks.ts          fetch → reader → blocks of whole lines,
-                                     onProgress, cancel-in-finally. Shared plumbing,
-                                     NOT re-exported by index.ts
+    src/lib/matches.ts               boolean membership; the first hit ends the
+                                     transfer, an absence costs the whole file
+    src/lib/streamBlocks.ts          fetch → reader → blocks of whole lines, caller
+                                     request options, onProgress, cancel-in-finally.
+                                     Shared plumbing, NOT re-exported by index.ts
     src/lib/decodeBlock.ts           lazy text+table walker for one block, plus
                                      linesInBlock(table). NOT re-exported
     src/lib/wasmReady.ts             the shared init() promise, awaited by both
@@ -407,7 +410,7 @@ packages/
                                      index.ts — see decision 0018
     src/lib/concatBytes.ts           joins tail + chunk. NOT re-exported
     src/lib/resolveMaxLineBytes.ts   applies GrepOptions' default cap. NOT re-exported
-    src/lib/data/*.ts                8 type definitions, one per file
+    src/lib/data/*.ts                9 type definitions, one per file
     src/lib/Netgrep.spec.ts          unit suite; mocks fetch and the engine
     src/lib/Netgrep.integration.spec.ts   real WASM through the real streaming loop,
                                           in headless Chromium (§4.2)
@@ -415,6 +418,9 @@ packages/
     src/lib/streamBlocks.spec.ts     unit suite; mocks fetch
     src/lib/grep.spec.ts             unit suite; mocks @netgrep/search
     src/lib/grep.integration.spec.ts real WASM through grep, in headless Chromium
+    src/lib/matches.spec.ts          unit suite; mocks fetch and the engine
+    src/lib/matches.integration.spec.ts   real WASM through matches, in headless
+                                          Chromium
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
@@ -500,8 +506,8 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
 |---|---|
 | Matching semantics (regex flags, case sensitivity, binary handling) | `packages/search/src/lib.rs` |
 | What a result contains | `packages/search/src/lib.rs` **and** `packages/netgrep/src/lib/data/NetgrepResult.ts`. Read [decision 0020](docs/decisions/0020-the-matching-line.md) and [0022](docs/decisions/0022-capture-ranges.md) first — 0022's table is the current list of what has been refused |
-| Streaming, batching, abort behaviour | `Netgrep.search`'s recursive reader lives in `packages/netgrep/src/lib/Netgrep.ts`; `grep`'s loop and its shared plumbing (`streamBlocks.ts`, `decodeBlock.ts`) live in `packages/netgrep/src/lib/grep.ts` and beside it |
-| A config option | `packages/netgrep/src/lib/data/NetgrepSearchConfig.ts` for `Netgrep`, `packages/netgrep/src/lib/data/GrepOptions.ts` for `grep` — both per-call, and the only configuration either has |
+| Streaming, batching, abort behaviour | `Netgrep.search`'s recursive reader lives in `packages/netgrep/src/lib/Netgrep.ts`; the streaming loops and their shared plumbing (`streamBlocks.ts`, `decodeBlock.ts`) live in `packages/netgrep/src/lib/grep.ts`, `matches.ts` and beside them |
+| A config option | `packages/netgrep/src/lib/data/NetgrepSearchConfig.ts` for `Netgrep`, `packages/netgrep/src/lib/data/GrepOptions.ts` for `grep` — and `MatchesOptions.ts`, which is `GrepOptions` without the cap. All per-call, and the only configuration any of them has |
 | Build or release steps | root `package.json` scripts, `packages/*/package.json` scripts, `.github/workflows/` |
 | Binary size / release profile | root `Cargo.toml` — **not** `packages/search/Cargo.toml` |
 
