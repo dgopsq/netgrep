@@ -96,6 +96,19 @@ not regress — a match arriving complete in **one** chunk is found, because the
 the window is taken; `^` does not match when the window is never flushed on its own; and a line captured from a
 single chunk starts where the line starts.
 
+**`grep` hits the same window and adds two more consequences**, confirmed against the real engine. A hit
+inside an over-long line is **yielded more than once** — the windowed tail is searched as the whole of one
+block and again as the head of the next, so each pass reports the hit again. And the running file-absolute
+line base **gains a line at every window slide**: on the tested fixture the true line number was 2 and `grep`
+reported 3, and the drift carries forward into every line number after the over-long line, not only its own.
+Both are pinned rather than fixed, and deliberately: suppressing the repeat would drop the hit outright if the
+stream ended inside the window, and a lost hit is worse for a grep than a repeated one; the windowed tail,
+once searched, is never re-searched at EOF, so there is no later pass that could correct the count. Pinned by
+`BACKLOG 3g: a hit inside an over-long line is yielded three times` and
+`BACKLOG 3g: the line number drifts after an over-long line` in `grep.integration.spec.ts`. Not yet in
+[`guide/caveats.data.json`](guide/caveats.data.json) below — the published list still describes only
+`Netgrep`, deliberately, until `grep`'s own consumer documentation lands.
+
 **Published anyway**, in [`guide/caveats.data.json`](guide/caveats.data.json) and so in the guide and the
 README, alongside item 25 below. The demo used to filter its own list down to what its own files could reach;
 it no longer carries one, and a reader running netgrep over minified JavaScript reaches this whether or not
@@ -287,6 +300,18 @@ browser on 2026-08-02. **But the demo has stopped being evidence against it.** I
 the matcher between paints over roughly 1.8 seconds, where the old 2.6 MB of stories was matched faster than a
 frame — so this is a thing a visitor could plausibly notice rather than a note kept against rediscovery.
 Still not planned: a worker is a widening and needs its own issue and record.
+
+### 28. An expression-bodied `beforeEach` silently registers a teardown — `packages/netgrep/src/lib/*.spec.ts`
+
+`beforeEach(() => mockFetch.mockReset())` returns the mock, and Vitest treats a function returned from a hook
+as that hook's own teardown — so it *calls* the mock after every test, not just resets it before one. Invisible
+until the mock's implementation has a side effect: in `grep.integration.spec.ts` the teardown invoked an
+implementation that returned a rejected promise, producing an unhandled rejection that failed an unrelated test
+with a bare `Error: offline`. Fixed there with a block body.
+
+`Netgrep.spec.ts:745` still has the shape — `beforeEach(() => mockSearchLine.mockReturnValue('x'));` — and is
+harmless today only because calling that mock has no side effect. The rule: hook bodies in this repository use
+braces.
 
 ---
 
