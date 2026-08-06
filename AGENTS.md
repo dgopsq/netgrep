@@ -402,8 +402,8 @@ packages/
                                      Shared plumbing, NOT re-exported by index.ts
     src/lib/decodeBlock.ts           lazy text+table walker for one block, plus
                                      linesInBlock(table). NOT re-exported
-    src/lib/wasmReady.ts             the shared init() promise, awaited by both
-                                     Netgrep and grep. NOT re-exported
+    src/lib/wasmReady.ts             the shared init() promise, awaited by Netgrep,
+                                     grep and matches alike. NOT re-exported
     src/lib/splitAtLastLine.ts       the chunk-boundary tail arithmetic, pure and
                                      unit-tested on its own; also exports
                                      MAX_TAIL_BYTES. NOT re-exported by

@@ -108,10 +108,11 @@ third returning a `LineWithRanges | undefined` carrying the same `line` plus a f
 max_line_bytes: number): BlockHits`, described below — all four simply **throw** on a pattern the regex engine
 will not accept, rather than trapping the instance as they did until 2026.
 
-The first three exist so the cheapest one stays free. `Netgrep.ts` calls one of them depending on `capture`, so
-a caller who wants only membership allocates nothing, decodes nothing and copies no string out of WebAssembly —
-the same call it has always made, and the line path pays for no ranges it did not ask for. `undefined` is the
-only no-match signal any of the three returns: a pattern matching an empty line yields `""`, which is falsy.
+The first three exist so the cheapest one stays free. `Netgrep.ts` picks among them by `capture` and
+`matches.ts` calls `search_bytes` outright, so a caller who wants only membership allocates nothing, decodes
+nothing and copies no string out of WebAssembly — the same call `Netgrep` has always made, and the line path
+pays for no ranges it did not ask for. `undefined` is the only no-match signal any of the three returns: a
+pattern matching an empty line yields `""`, which is falsy.
 
 All four share one compiled-matcher memo and one searcher-building function, `build_searcher`. Its **binary
 detection is fixed for every caller**, deliberately: `BinaryDetection::none()` decides whether a block is
@@ -131,8 +132,8 @@ into the input would be wrong wherever lossy decoding substituted `U+FFFD`. See
 `search_block` is the streaming counterpart to `search_bytes_line_ranges`: where `MemSink` and `LineSink` both
 return `Ok(false)` from `matched` to stop at the first hit, `search_block`'s `BlockSink` returns `Ok(true)` and
 keeps going, collecting every matching line in the block rather than just the first. Each hit carries a
-**1-based, block-relative** line number — turning that into a file-absolute one is the streaming loop's job, in
-a later PR — plus the same ranges `search_bytes_line_ranges` computes.
+**1-based, block-relative** line number — turning that into a file-absolute one is `grep`'s job, by advancing a
+running base per block — plus the same ranges `search_bytes_line_ranges` computes.
 
 The result crosses the WASM boundary as `BlockHits { text: String, table: Vec<u32> }` rather than a vector of
 per-hit structs. `serde-wasm-bindgen` would build every JavaScript object eagerly at marshalling time, and a

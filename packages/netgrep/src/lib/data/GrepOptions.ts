@@ -13,8 +13,9 @@ export type GrepOptions = {
    * lives here, and leaving the loop needs a hit to leave from.
    *
    * Passed through whole, so `method` and `body` come with it and are neither
-   * honoured specially nor rejected. netgrep searches whatever body comes back,
-   * and a `HEAD` returns none — which reads as a file with no matches.
+   * honoured specially nor rejected. netgrep searches whatever body comes back
+   * and validates nothing about the request first, so a request that returns
+   * something other than the file is the caller's to get right.
    */
   fetch?: RequestInit;
 
