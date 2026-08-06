@@ -261,6 +261,7 @@ deleted; the demo searches four generated log files totalling 408.6 MB, and `rob
 one module still owns it, and it is now `src/data/logs.ts`.
 
 Everything else here stands and is why the site is what it is: the example is the public demo, its
-dependencies are maintained, `searchBatchWithCallback` is still what makes each source resolve visibly on its
-own. The passages above are left as written, because a record that quietly agreed with whatever was done last
+dependencies are maintained, ~~`searchBatchWithCallback` is still what makes each source resolve visibly on its
+own~~ **(2026-08-06: the class and its batch methods are deleted; each source now resolves visibly on its own
+because the demo drives one `grep()` per source, which is the same property from a different mechanism.)** The passages above are left as written, because a record that quietly agreed with whatever was done last
 would be worth nothing.

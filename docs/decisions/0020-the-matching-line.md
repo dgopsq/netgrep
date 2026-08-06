@@ -160,7 +160,7 @@ the sharpest edge: a match on an empty line is `line: ""`.
 | **Match counts** | **Stands, on a new reason.** The old one — counting means scanning the whole file, which is what early exit deleted — is now a description of what `grep()` does. The reason today is that a consumer enumerating hits has its own index, and a second source of truth could only disagree with it. |
 | **Byte offsets** | Stands, unchanged. Offsets are still relative to the block, and making them file-absolute is still bookkeeping that fights [0002](0002-search-while-downloading.md). |
 | **Context lines (`-A`/`-B`)** | Stands, but **deferred with a design recorded** rather than refused. They were the sole reason for the overlap window an earlier draft of 0027 carried; dropping them halved the encoding. They are additive to a returned object, so nothing forecloses them. |
-| **Ranking** | Stands, untouched, and **for its own reason**, which was never early exit: there are no term statistics, no document frequencies and no index to build a scoring model from. No amount of reading the whole file produces one. Keeping this row apart from the four above is deliberate — conflating them has been got wrong once already. |
+| **Ranking** | Stands, untouched, and **for its own reason**, which was never early exit: there are no term statistics, no document frequencies and no index to build a scoring model from. No amount of reading the whole file produces one. Keeping this row apart from the rows that rested on early exit is deliberate — conflating them has been got wrong once already. |
 
 ### And the rule the table closes on
 

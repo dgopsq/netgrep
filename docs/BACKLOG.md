@@ -55,9 +55,12 @@ means inverting its assertion in the same PR.**
 > run `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
 >
 > **The two lists are not mirrors of each other.** Every P1 item still open here has an entry there today,
-> and since 2026-08-06 so does every *consequence* — the `grep` half of 3g was waiting on `grep`'s own
-> consumer documentation, and that wait is over;
-> that file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
+> and since 2026-08-06 so does every *consequence* of 3g: it was waiting on `grep` and `matches` getting
+> their own consumer documentation, and that wait is over. Note what the published entry got right that the
+> framing here did not — the two wrong answers are **not** a "`matches` half" and a "`grep` half". The window
+> is all the engine is given, so both functions meet both of them; only the repeated yield and the drifting
+> line number are `grep`'s alone.
+> That file also carries two `by-design` entries that nothing *open* here corresponds to: *no ranking*,
 > which has never been a backlog item at all, and *concurrent downloads of one url*, which is item **18** —
 > in *Done*, and staying there. An entry earns its place there by affecting a visitor, which is a judgement
 > call rather than a lookup. `pnpm docs:sync --check` keeps the two rendered surfaces honest
@@ -184,6 +187,13 @@ Found on 2026-08-05 during review of item 17's fix.
 | `search_block`, `BlockSink` and the flat encoding ([0027](decisions/0027-streaming-matching-lines.md), 2026-08-06) | +12,960 |
 | deleting `search_bytes_line` and `search_bytes_line_ranges` (the API rewrite, 2026-08-06) | **−13,222** |
 | **net** | **+130,430** |
+
+**Do not expect the column to add up, and the discrepancy is not new.** The rows total 1,175,877 against a net
+of 1,169,038 — over by exactly 6,839, the `removing wee_alloc` row, and they have been over by exactly that
+since the 2026-07-28 measurement. **The net is the measured artefact; the rows are the audit trail** for where
+it went, each measured against the build in front of it rather than derived from the ones above. Said here so
+that a reader who adds the column gets a third number and knows it predates the 2026-08-06 rows rather than
+suspecting them. Resolving it means re-measuring the `wee_alloc` row, which nobody has.
 
 **The give-back is not the sum of the two rows it reverses.** Deleting both exports returned 13,222 bytes, not
 the 20,378 they cost, because most of what they pulled in is still reachable from `search_block`:

@@ -7,8 +7,10 @@ amends [0023](0023-documentation-site.md) and [0025](0025-streaming-grep-over-ht
 (The split status is deliberate, by the test [0024](0024-remove-the-in-memory-cache.md) states: a record is
 amended when its decision survives in altered form and superseded when it survives in none. Almost all of 0017
 survives untouched — the example is still the public demo, its dependencies are still on the maintenance path,
-`searchBatchWithCallback` is still what drives it, and the base-path hazard its `story-url.ts` guarded against
-is still guarded, now by `data/logs.ts`. Its row labelled `Corpus` survives in no form: not a smaller grid,
+~~`searchBatchWithCallback` is still what drives it~~ **(2026-08-06: it is driven by one `grep()` per source
+now; the class is deleted. The premise this parenthetical rests on is unaffected — what mattered was that each
+source resolves on its own rather than behind the slowest, and it still does)**, and the base-path hazard its
+`story-url.ts` guarded against is still guarded, now by `data/logs.ts`. Its row labelled `Corpus` survives in no form: not a smaller grid,
 not fewer stories, not the same files renamed. `public/stories/`, `stories.ts`, `story-url.ts`, `story-card.tsx`,
 `build-manifest.mjs` and `use-flip.ts` are deleted, and the argument that produced that row — the eleven canon
 and omnibus files were supersets of the other 56 — is now about a choice nobody in this repository makes. So
