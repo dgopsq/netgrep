@@ -100,7 +100,7 @@ export type SearchState = {
   running: boolean;
 };
 
-/**
+/*
  * THE PAGE MEASURES THE NETWORK, AND IT NOW DOES SO BY CONSTRUCTION.
  *
  * netgrep used to keep downloaded bytes in memory, on by default, and this
@@ -122,8 +122,8 @@ export type SearchState = {
  * ABORTS the previous search, and an aborted download was never something a
  * later one could share. That is accepted — an aborted `fetch` stops the
  * transfer rather than merely abandoning it, so a fast typist does not queue
- * up hundreds of megabytes of superseded reads. The signal now travels in
- * `options.fetch.signal` rather than a top-level `signal`.
+ * up hundreds of megabytes of superseded reads. The signal is handed to
+ * `grep` in `options.fetch`.
  */
 
 /**
