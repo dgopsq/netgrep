@@ -11,8 +11,9 @@ export type NetgrepHit = {
   line: string;
 
   /**
-   * Every match's position within `line`, in order. Never null and never
-   * absent — a streamed hit with no match in it would not be a hit.
+   * Every match's position within `line`, in order. Always present, never
+   * null — but empty when every match sits past the `maxLineBytes` cut, since
+   * `line` cannot show a range it does not hold.
    */
   ranges: Array<NetgrepMatchRange>;
 

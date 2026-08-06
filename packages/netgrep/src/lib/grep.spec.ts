@@ -159,12 +159,17 @@ describe('grep', () => {
 
   it('stops searching when the consumer breaks out', async () => {
     serve(['a\n', 'a\n', 'a\n']);
-    mockSearchBlock.mockReturnValue(blockHits('a', [1, 1, 1, 1, 0, 1]));
+    const hits = blockHits('a', [1, 1, 1, 1, 0, 1]);
+    mockSearchBlock.mockReturnValue(hits);
 
     for await (const _hit of grep('/f', 'a')) {
       break;
     }
 
     expect(mockSearchBlock).toHaveBeenCalledTimes(1);
+
+    // Freed BEFORE the walk, so a consumer that leaves mid-block does not
+    // strand the carrier's WASM memory.
+    expect(hits.free).toHaveBeenCalledTimes(1);
   });
 });

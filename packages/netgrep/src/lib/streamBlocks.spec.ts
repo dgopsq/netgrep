@@ -85,7 +85,12 @@ async function collect(url: string): Promise<Array<string>> {
 }
 
 describe('streamBlocks', () => {
-  beforeEach(() => mockFetch.mockReset());
+  // A block body, not a concise one: `mockReset` returns the mock, which is a
+  // function, and a hook that returns a function has returned a teardown —
+  // Vitest would call `mockFetch()` after every test.
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
 
   it('yields whole lines and holds the incomplete one back', async () => {
     serve(chunked('alpha\nbeta\ngam', 32));

@@ -345,6 +345,10 @@ describe('grep integration (real WASM)', () => {
 
       expect(hits).toHaveLength(1);
       expect(hits[0].line).toBe('abcd');
+
+      // Dropped, not clamped to the cut: a range the truncated string cannot
+      // show is not reported at all.
+      expect(hits[0].ranges).toEqual([]);
     });
   });
 
@@ -395,6 +399,17 @@ describe('grep integration (real WASM)', () => {
       expect(hits).toHaveLength(1);
       expect(hits[0].line).toBe('xxTARGETxx');
     });
+
+    it('does not search a windowed tail twice when the file ends inside it', async () => {
+      // Over 64 KB with no terminator anywhere, so the last read leaves a tail
+      // that is a byte window its own block already searched. Yielding it
+      // again at EOF would report the same hit a second time — this is the one
+      // windowed path that is right today, and the guard that keeps it right.
+      const overLong = `${'x'.repeat(100 * 1024)}TARGET`;
+      serve(chunked(overLong, 32 * 1024));
+
+      expect(await collect('/f', 'TARGET')).toHaveLength(1);
+    });
   });
 
   describe('progress', () => {
@@ -432,6 +447,7 @@ describe('grep integration (real WASM)', () => {
         })(),
       ).rejects.toThrow('boom');
 
+      expect(state.cancelCalls).toBe(1);
       expect(state.sourceCancels).toBe(1);
     });
 
@@ -481,16 +497,16 @@ describe('grep integration (real WASM)', () => {
       // 100 KB in 32 KB chunks is the smallest fixture that actually windows:
       // the split only falls back to a byte window once a read leaves MORE
       // than 64 KB with no terminator in it, which takes a fourth chunk.
-      const overLong = `${'x'.repeat(100 * 1024)}\nTARGET\n`;
+      const overLong = `${'x'.repeat(100 * 1024)}\nTARGET\nAFTER\n`;
       serve(chunked(overLong, 32 * 1024));
 
-      const hits = await collect('/f', '^TARGET$');
+      const hits = await collect('/f', '^(TARGET|AFTER)$');
 
-      // The true answer is 2. The windowed block counts its incomplete final
-      // line, and the next block counts the same line again — one window
-      // slide, one line of drift.
-      expect(hits).toHaveLength(1);
-      expect(hits[0].lineNumber).toBe(3);
+      // The true answers are 2 and 3. The windowed block counts its incomplete
+      // final line, and the next block counts the same line again — one window
+      // slide, one line of drift, carried by EVERY line after the over-long
+      // one rather than spent on the first of them.
+      expect(hits.map((hit) => hit.lineNumber)).toEqual([3, 4]);
     });
   });
 });
