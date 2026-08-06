@@ -7,7 +7,7 @@ import init from '@netgrep/search';
  * begins as soon as the library is imported rather than on the first search,
  * and awaiting an already-settled promise costs nothing.
  *
- * Its own module so the class API and `grep` await the same promise. Two
+ * Its own module so no entry point instantiates its own. Two
  * `init()` calls would be idempotent, but two module-level promises racing to
  * instantiate on a cold import is not something to rely on being harmless.
  *
