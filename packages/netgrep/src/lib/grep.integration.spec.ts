@@ -319,6 +319,18 @@ describe('grep integration (real WASM)', () => {
       expect(await collect('/f', 'wiseman')).toHaveLength(2);
     });
 
+    it('applies smart case to the ranges, not just the verdict', async () => {
+      serve([encoder.encode('Needle\n')]);
+
+      const hits = await collect('/f', 'needle');
+
+      // The range covers what the engine matched, capitals and all. Re-running
+      // this pattern over the returned line in JavaScript would find nothing,
+      // so this is a position a caller has no way to work out for themselves —
+      // the whole reason the engine reports it.
+      expect(hits[0].ranges).toEqual([{ start: 0, end: 6 }]);
+    });
+
     it('applies smart case: an uppercased pattern is case-sensitive', async () => {
       serve([encoder.encode('Wiseman\nwiseman\n')]);
 
@@ -514,20 +526,32 @@ describe('grep integration (real WASM)', () => {
   describe('documented defects (asserting current, incorrect behaviour)', () => {
     // BACKLOG 3g: past the 64 KB retained-tail ceiling the tail becomes a byte
     // window that is searched with its own block AND again as the head of the
-    // next one. Two wrong answers follow, and both are pinned here rather than
-    // fixed: suppressing them would lose a hit outright when the stream ends
-    // inside such a line, and losing a hit is the worse failure for a grep.
+    // next one. Three wrong answers follow, and all three are pinned here
+    // rather than fixed: suppressing them would lose a hit outright when the
+    // stream ends inside such a line, and losing a hit is the worse failure for
+    // a grep.
 
-    it('BACKLOG 3g: a hit inside an over-long line is yielded three times', async () => {
+    it('BACKLOG 3g: a hit inside an over-long line is yielded three times, carrying a fragment', async () => {
       // The match sits far enough in that three consecutive windows still
       // contain it, and each one searches it again. One line of one file, and
       // the line number climbs with every repeat.
-      const overLong = `${'x'.repeat(100 * 1024)}TARGET${'y'.repeat(100 * 1024)}\n`;
+      //
+      // `START` marks where the line truly begins, so the second wrong answer
+      // is visible on the same fixture: the block handed to the engine no
+      // longer starts where the line does, and there is no way to tell the
+      // engine that, so what comes back begins at an arbitrary byte decided by
+      // where the window fell.
+      const overLong = `START${'x'.repeat(100 * 1024)}TARGET${'y'.repeat(100 * 1024)}\n`;
       serve(chunked(overLong, 32 * 1024));
 
       const hits = await collect('/f', 'TARGET');
 
       expect(hits.map((hit) => hit.lineNumber)).toEqual([2, 3, 4]);
+
+      // A mid-line fragment, though the type calls it a line: 100 KB into
+      // itself, and nothing marks the difference for a reader.
+      expect(hits[0].line).not.toContain('START');
+      expect(hits[0].line.startsWith('x')).toBe(true);
     });
 
     it('BACKLOG 3g: the line number drifts after an over-long line', async () => {
@@ -544,6 +568,28 @@ describe('grep integration (real WASM)', () => {
       // slide, one line of drift, carried by EVERY line after the over-long
       // one rather than spent on the first of them.
       expect(hits.map((hit) => hit.lineNumber)).toEqual([3, 4]);
+    });
+
+    it('BACKLOG 3c (FIXED): an invalid pattern rejects, and the engine survives it', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: building
+      // the matcher in the Rust unwrapped, so a malformed regex panicked and
+      // surfaced as `RuntimeError: unreachable` — a wasm trap rather than a
+      // catchable error carrying a diagnostic.
+      //
+      // The engine now returns an error the boundary can throw, so the
+      // rejection carries the regex crate's own words. Inverted in place, as
+      // the block comment above requires.
+      serve([encoder.encode(POEM)]);
+
+      await expect(collect('/f', '(')).rejects.toThrow('unclosed group');
+
+      // The point of the whole change, and why this can only be asserted in a
+      // browser: a trap poisons the WebAssembly module for every later call,
+      // not just the one that hit it. The same instance still answers
+      // correctly afterwards.
+      serve([encoder.encode(POEM)]);
+
+      expect(await collect('/f', 'set aside')).toHaveLength(1);
     });
 
     it('BACKLOG 3e (FIXED upstream): `^` anchors to the line, on any line', async () => {

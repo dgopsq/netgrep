@@ -531,6 +531,19 @@ mod block {
     }
 
     #[test]
+    fn smart_case_reaches_the_ranges_and_not_only_the_verdict() {
+        // A lowercase pattern against capitalised text, so smart case is what
+        // makes this match at all — and the range has to cover what the ENGINE
+        // matched. A caller re-matching the returned line with the same pattern
+        // in JavaScript would find nothing, which is exactly why the range is
+        // computed here rather than left to be re-derived.
+        let out = block(b"Needle\n", "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].ranges, vec![0, 6]);
+    }
+
+    #[test]
     fn a_crlf_terminator_is_stripped_before_ranges_are_computed() {
         // `\r` is structure, not content: it must be outside both the line and
         // any range touching the line's end.
