@@ -284,4 +284,59 @@ describe('matches integration (real WASM)', () => {
       expect(mockFetch).toHaveBeenCalledWith('/f', init);
     });
   });
+
+  describe('documented defects (asserting current, incorrect behaviour)', () => {
+    // BACKLOG 3g: a line with no terminator in it would buffer an entire
+    // response, so past a 64 KB ceiling the bytes carried between chunks stop
+    // being the incomplete trailing line and become a plain window on the last
+    // 64 KB. That window drops everything before it and starts mid-line, so the
+    // boolean can be wrong in BOTH directions. Pinned here rather than fixed:
+    // the ceiling is what keeps memory independent of the response size, and
+    // both answers below are the same window seen from two sides.
+
+    it('BACKLOG 3g: a match longer than 64 KB across a chunk boundary answers false', async () => {
+      const filler = 'x'.repeat(70_000);
+
+      // Control: the same bytes arriving in ONE chunk answer true, because the
+      // whole buffer is searched before the window is taken.
+      serve([encoder.encode(`nee${filler}dle`)]);
+      expect(await matches('/f', 'nee.*dle')).toBe(true);
+
+      // Split, and `nee` left the window before `dle` arrived — so no buffer
+      // handed to the engine ever holds both halves.
+      serve([
+        encoder.encode(`nee${filler}`),
+        encoder.encode('dle and then some'),
+      ]);
+      expect(await matches('/f', 'nee.*dle')).toBe(false);
+
+      // Control: the same boundary with the line under the ceiling, where the
+      // carry-over is still the exact trailing line. Pins the bound rather than
+      // merely the failure.
+      serve([
+        encoder.encode(`nee${'x'.repeat(1_000)}`),
+        encoder.encode('dle and then some'),
+      ]);
+      expect(await matches('/f', 'nee.*dle')).toBe(true);
+    });
+
+    it('BACKLOG 3g: ^ answers true when no line in the file begins that way', async () => {
+      // The false POSITIVE, and the worse of the two: the answer claims a match
+      // that is not in the file. The window starts mid-line on an `a`, the
+      // engine cannot be told that, so `^` anchors to the window's first byte.
+
+      // Control: the same shape under the ceiling, where the buffer still
+      // begins where the line begins. One line, beginning with `b`.
+      serve([encoder.encode(`b${'a'.repeat(1_000)}`), encoder.encode('end\n')]);
+      expect(await matches('/f', '^a')).toBe(false);
+
+      // Over the ceiling. Still one line beginning with `b`, and still nothing
+      // that `^a` should match.
+      serve([
+        encoder.encode(`b${'a'.repeat(70_000)}`),
+        encoder.encode('end\n'),
+      ]);
+      expect(await matches('/f', '^a')).toBe(true);
+    });
+  });
 });
