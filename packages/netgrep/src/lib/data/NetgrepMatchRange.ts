@@ -1,5 +1,5 @@
 /**
- * One match's position within a captured line.
+ * One match's position within the hit's line.
  *
  * `start` and `end` are UTF-16 code-unit offsets into the `line` string —
  * JavaScript's native string indexing — so `line.slice(start, end)` is the

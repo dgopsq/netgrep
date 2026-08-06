@@ -483,6 +483,34 @@ describe('grep integration (real WASM)', () => {
     });
   });
 
+  /**
+   * These assertions pin behaviour that is WRONG. Read this before changing
+   * anything below.
+   *
+   * Their job is to detect *unintended* change — during a dependency bump, or
+   * a refactor of the streaming loop. An assertion describing the
+   * correct-but-unimplemented behaviour would fail today and tell us nothing.
+   *
+   * When one is genuinely fixed, the assertion must be inverted IN THE SAME PR.
+   * That is the point: the fix cannot land quietly.
+   *
+   * An entry stays while the behaviour it names could still change silently —
+   * inverted in place once fixed, which is why the `(FIXED)` assertions below
+   * are here rather than tidied out into the suites above. It leaves only when
+   * there is no defect left to track: the subject was deleted, so there is
+   * nothing to assert, or the behaviour is now deliberate and its assertion
+   * belongs above as a design boundary.
+   *
+   * Tracked in `docs/BACKLOG.md`.
+   *
+   * AND the published demo tells its visitors about these defects, so a fix is
+   * not finished until it stops. Delete the caveat from
+   * `docs/guide/caveats.data.json` and run `pnpm docs:sync` in the same PR.
+   * That much is checked: `pnpm docs:sync --check` fails CI when the guide, the
+   * README and the demo disagree with that file. Inverting an assertion below
+   * still turns this suite green on its own, so the deletion is the step to
+   * remember.
+   */
   describe('documented defects (asserting current, incorrect behaviour)', () => {
     // BACKLOG 3g: past the 64 KB retained-tail ceiling the tail becomes a byte
     // window that is searched with its own block AND again as the head of the
@@ -527,22 +555,25 @@ describe('grep integration (real WASM)', () => {
       // Dropping the ripgrep fork for grep-regex 0.1.14 / grep-searcher 0.1.17
       // fixed it upstream — no change to the Rust was needed. It stays pinned
       // because nothing here guards against picking the fork back up.
+      const lineNumbers = async (pattern: string) =>
+        (await collect('/f', pattern)).map((hit) => hit.lineNumber);
+
       serve([encoder.encode('Needle x\nother\n')]);
-      expect(await collect('/f', '^Needle')).toHaveLength(1);
+      expect(await lineNumbers('^Needle')).toEqual([1]);
 
       // Previously empty. This is the case that was broken.
       serve([encoder.encode('other\nNeedle x\n')]);
-      expect((await collect('/f', '^Needle'))[0].lineNumber).toBe(2);
+      expect(await lineNumbers('^Needle')).toEqual([2]);
 
       serve([encoder.encode('a\nb\nNeedle x\n')]);
-      expect((await collect('/f', '^Needle'))[0].lineNumber).toBe(3);
+      expect(await lineNumbers('^Needle')).toEqual([3]);
 
       // The case-insensitive path was always correct; still is.
       serve([encoder.encode('other\nneedle x\n')]);
-      expect((await collect('/f', '^needle'))[0].lineNumber).toBe(2);
+      expect(await lineNumbers('^needle')).toEqual([2]);
 
       serve([encoder.encode('other\nxx Needle\n')]);
-      expect((await collect('/f', 'Needle$'))[0].lineNumber).toBe(2);
+      expect(await lineNumbers('Needle$')).toEqual([2]);
     });
 
     it('BACKLOG 3f (FIXED): a NUL byte no longer discards the searched block', async () => {
@@ -554,17 +585,24 @@ describe('grep integration (real WASM)', () => {
       // held-back partial line so it never shared a block with the match. It is
       // kept because it now passes for the ordinary reason rather than the
       // accidental one, and the two must not be told apart by chance.
+      const lineNumbers = async () =>
+        (await collect('/f', 'needle')).map((hit) => hit.lineNumber);
+
+      // (a) no NUL at all.
       serve([bytes('needle here')]);
-      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+      expect(await lineNumbers()).toEqual([1]);
 
+      // (b) NUL after the match, same unterminated line.
       serve([bytes('needle here', 0x00, 'tail')]);
-      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+      expect(await lineNumbers()).toEqual([1]);
 
+      // (c) NUL on a terminated line of its own, after the match's line.
       serve([bytes('needle here\n', 0x00, 'tail\n')]);
-      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+      expect(await lineNumbers()).toEqual([1]);
 
+      // (d) as (c), but the NUL's line is never terminated.
       serve([bytes('needle here\n', 0x00, 'tail')]);
-      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+      expect(await lineNumbers()).toEqual([1]);
     });
 
     it('BACKLOG 17 (FIXED): `$` matches on CRLF input, through the whole path', async () => {

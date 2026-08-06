@@ -1,7 +1,7 @@
 /**
- * Ceiling on the returned line when `capture` is set and the caller names no
- * other. Far past any line of prose, and small enough that a minified bundle
- * costs a snippet rather than a copy of itself.
+ * Ceiling on every line a hit carries, when the caller names no other. Far
+ * past any line of prose, and small enough that a minified bundle costs a
+ * snippet rather than a copy of itself.
  */
 const DEFAULT_MAX_LINE_BYTES = 4096;
 
