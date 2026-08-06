@@ -1,5 +1,5 @@
 import type { NetgrepMatchRange } from '@netgrep/netgrep';
-import { Netgrep } from '@netgrep/netgrep';
+import { grep } from '@netgrep/netgrep';
 import { useEffect, useRef, useState } from 'react';
 import { logUrl, sources } from '@/data/logs';
 import { beginScanRun, installScanMeter, scannedBytes } from '@/lib/scan-meter';
@@ -122,24 +122,15 @@ export type SearchState = {
  * ABORTS the previous search, and an aborted download was never something a
  * later one could share. That is accepted — an aborted `fetch` stops the
  * transfer rather than merely abandoning it, so a fast typist does not queue
- * up hundreds of megabytes of superseded reads.
+ * up hundreds of megabytes of superseded reads. The signal now travels in
+ * `options.fetch.signal` rather than a top-level `signal`.
  */
-const netgrep = new Netgrep();
 
 /**
  * Counting has to be in place before the first search, and this module is the
  * only thing that starts one. Idempotent, so a second import costs nothing.
  */
 installScanMeter();
-
-/**
- * Built once. The metadata generic carries each source's id back into the
- * callback, so a result can be matched to its panel without parsing the url.
- */
-const inputs = sources.map((source) => ({
-  url: logUrl(source),
-  metadata: { id: source.id },
-}));
 
 const sourceIds = sources.map((source) => source.id);
 
@@ -161,21 +152,44 @@ function idleState(): SearchState {
 }
 
 /**
+ * The first matching line of one source, or `null` if it has none.
+ *
+ * Leaving the loop after one hit is also what ends the transfer: `grep`'s
+ * generator runs its `finally` on any exit, which cancels the reader — so a
+ * match near the head of the 240 MB source costs a few chunks rather than the
+ * file, which is the behaviour this dashboard exists to show.
+ */
+async function firstLine(
+  url: string,
+  pattern: string,
+  signal: AbortSignal,
+): Promise<MatchedLine | null> {
+  for await (const hit of grep(url, pattern, {
+    fetch: { signal },
+    maxLineBytes: MAX_LINE_BYTES,
+  })) {
+    return { text: hit.line, ranges: hit.ranges };
+  }
+
+  return null;
+}
+
+/**
  * Search all four log sources for `pattern`, reporting each as it resolves.
  *
- * Uses `searchBatchWithCallback` rather than `searchBatch`. The batch method is
- * `Promise.all`, so nothing could render until the slowest of the four
- * downloads finished — which for the 240 MB OpenSSH source on a miss would
- * hide the one behaviour this demo exists to show.
+ * Four independent searches rather than one awaited whole. Waiting for all of
+ * them would mean nothing rendered until the slowest finished — which for the
+ * 240 MB OpenSSH source on a miss would hide the one behaviour this demo
+ * exists to show.
  */
 export function useLogSearch(pattern: string): SearchState {
   const [state, setState] = useState<SearchState>(idleState);
 
   /**
-   * Identifies the current run. An aborted `fetch` still rejects, and
-   * `searchBatchWithCallback` turns that rejection into a callback carrying an
-   * error — so without this, cancelling a search would repaint the dashboard
-   * with four spurious failures from a query the user has already replaced.
+   * Identifies the current run. An aborted `fetch` rejects, and a rejection
+   * per source is what this hook now sees — so without this, cancelling a
+   * search would repaint the dashboard with four spurious failures from a
+   * query the user has already replaced.
    */
   const runRef = useRef(0);
 
@@ -221,69 +235,66 @@ export function useLogSearch(pattern: string): SearchState {
       running: true,
     }));
 
-    netgrep.searchBatchWithCallback(
-      inputs,
-      pattern,
-      (result) => {
-        // Belongs to a superseded query: drop it silently.
-        if (run !== runRef.current) return;
+    for (const source of sources) {
+      const id = source.id;
+      const url = logUrl(source);
 
-        const id = result.metadata?.id;
-        if (!id) return;
+      firstLine(url, pattern, controller.signal)
+        .then(
+          (line) => ({ line, error: null as string | null }),
+          // grep throws from the iteration rather than folding a failure into
+          // a result, so a bad url, a dead host and an unparseable pattern all
+          // arrive here. An abort lands here too and is dropped below, by run.
+          (cause: unknown) => ({
+            line: null,
+            error: cause instanceof Error ? cause.message : String(cause),
+          }),
+        )
+        .then(({ line, error }) => {
+          // Belongs to a superseded query: drop it silently.
+          if (run !== runRef.current) return;
 
-        const elapsed = performance.now() - startedAt;
+          const elapsed = performance.now() - startedAt;
 
-        // Read here rather than inside the updater: the counter is a live
-        // mutable total, and an updater React may re-run would sample it again
-        // later, after more of a still-draining sibling had arrived.
-        const bytes = scannedBytes(result.url);
+          // Read here rather than inside the updater: the counter is a live
+          // mutable total, and an updater React may re-run would sample it
+          // again later, after more of a still-draining sibling had arrived.
+          const bytes = scannedBytes(url);
 
-        setState((prev) => {
-          const status: SourceStatus = result.error
-            ? 'failed'
-            : result.result
-              ? 'matched'
-              : 'missed';
+          setState((prev) => {
+            const status: SourceStatus = error
+              ? 'failed'
+              : line !== null
+                ? 'matched'
+                : 'missed';
 
-          // Read off the discriminant rather than off `status`: narrowing
-          // `result.result` is what gives `result.line` its `string` type, and
-          // the derived `status` above carries none of that.
-          const line: MatchedLine | null = result.result
-            ? { text: result.line, ranges: result.ranges }
-            : null;
+            const statuses = { ...prev.statuses, [id]: status };
+            const matched = prev.matched + (status === 'matched' ? 1 : 0);
+            const answered = prev.answered + 1;
+            const done = answered === sourceIds.length;
 
-          const statuses = { ...prev.statuses, [id]: status };
-          const matched = prev.matched + (status === 'matched' ? 1 : 0);
-          const answered = prev.answered + 1;
-          const done = answered === inputs.length;
-
-          return {
-            statuses,
-            // A miss leaves the previous line in place, exactly as it leaves
-            // the previous status: the panel is repainted by its own answer.
-            lines: line === null ? prev.lines : { ...prev.lines, [id]: line },
-            pending: { ...prev.pending, [id]: false },
-            elapsedMs: { ...prev.elapsedMs, [id]: elapsed },
-            scanned: { ...prev.scanned, [id]: bytes },
-            matched,
-            scannedTotal: prev.scannedTotal + bytes,
-            answered,
-            firstMatchMs:
-              prev.firstMatchMs === null && status === 'matched'
-                ? elapsed
-                : prev.firstMatchMs,
-            allAnsweredMs: done ? elapsed : null,
-            error: prev.error ?? result.error,
-            running: !done,
-          };
+            return {
+              statuses,
+              // A miss leaves the previous line in place, exactly as it leaves
+              // the previous status: the panel is repainted by its own answer.
+              lines: line === null ? prev.lines : { ...prev.lines, [id]: line },
+              pending: { ...prev.pending, [id]: false },
+              elapsedMs: { ...prev.elapsedMs, [id]: elapsed },
+              scanned: { ...prev.scanned, [id]: bytes },
+              matched,
+              scannedTotal: prev.scannedTotal + bytes,
+              answered,
+              firstMatchMs:
+                prev.firstMatchMs === null && status === 'matched'
+                  ? elapsed
+                  : prev.firstMatchMs,
+              allAnsweredMs: done ? elapsed : null,
+              error: prev.error ?? error,
+              running: !done,
+            };
+          });
         });
-      },
-      {
-        signal: controller.signal,
-        capture: 'line-ranges',
-        maxLineBytes: MAX_LINE_BYTES,
-      },
-    );
+    }
 
     return () => controller.abort();
   }, [pattern]);
