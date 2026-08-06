@@ -49,3 +49,8 @@ Thumbs.db
 # repo, so feature PRs stay reviewable.
 /docs/superpowers
 /.superpowers
+# Written by a FAILING browser test run, never by a passing one — so these
+# appear exactly when someone is already debugging and would commit them by
+# accident while staging the fix.
+.vitest-attachments/
+__screenshots__/
