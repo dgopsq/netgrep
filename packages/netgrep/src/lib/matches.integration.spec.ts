@@ -273,6 +273,30 @@ describe('matches integration (real WASM)', () => {
     });
   });
 
+  describe('retaining nothing', () => {
+    it('fetches once per concurrent search of one url, by design', async () => {
+      // The cost of retaining nothing, and the reason this is called by design
+      // rather than a defect. This used to be BACKLOG 18: a per-url registry
+      // made a second caller wait for the first and answer from the entry it
+      // wrote. That entry WAS the handover, and it is gone — so sharing would
+      // now mean either keeping every chunk of a file nobody asked to keep, or
+      // teeing the response stream and with it the first caller's abort
+      // signal. Both callers fetch instead. The answers are correct; the
+      // second request is wasted.
+      //
+      // One chunk, so this does not depend on how the two reads interleave.
+      serve([encoder.encode(POEM)]);
+
+      const answers = await Promise.all([
+        matches('/f', 'dragon'),
+        matches('/f', 'Wiseman'),
+      ]);
+
+      expect(answers).toEqual([false, true]);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('request options', () => {
     it('hands the caller request options to fetch, unchanged', async () => {
       serve([encoder.encode('a\n')]);

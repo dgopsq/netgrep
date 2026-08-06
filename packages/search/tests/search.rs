@@ -22,7 +22,8 @@
 //! failure names the engine rather than the streaming loop wrapped around it.
 //!
 //! Anything involving `fetch`, chunking, aborting or the WASM boundary belongs
-//! in `Netgrep.integration.spec.ts` instead. The two suites overlap on purpose
+//! in `grep.integration.spec.ts` and `matches.integration.spec.ts` instead —
+//! one per entry point the engine has. The three suites overlap on purpose
 //! at exactly one point — smart case — because that is the behaviour most
 //! likely to change silently under a dependency bump, and knowing *which*
 //! layer moved is worth one duplicated assertion.
@@ -238,9 +239,9 @@ mod search {
         // enough — and free enough — to be worth pinning.
         //
         // Note this only holds for bytes that CARRY the BOM. netgrep hands the
-        // engine one `fetch` chunk at a time, so in a real UTF-16 download only
-        // the first chunk is transcoded; see the note on BACKLOG 3a in
-        // `Netgrep.integration.spec.ts`.
+        // engine one buffer at a time — a chunk plus whatever trailing partial
+        // line was carried over — so in a real UTF-16 download only the first
+        // buffer starts with the BOM and every later one is matched as UTF-8.
         let mut utf16 = vec![0xff, 0xfe];
         for unit in "needle here".encode_utf16() {
             utf16.extend_from_slice(&unit.to_le_bytes());
@@ -779,9 +780,8 @@ mod encoding {
 /// ---------------------------------------------------------------------
 ///
 /// Read this before changing anything below. It is the `search` crate's half
-/// of the block at the bottom of `Netgrep.integration.spec.ts`; the rules are
-/// the same, and `AGENTS.md` §2.1 and
-/// `docs/decisions/0011-tests-that-assert-known-bugs.md` state them.
+/// of the block at the bottom of `grep.integration.spec.ts`, and the rules are
+/// the same on both sides.
 ///
 /// In short: these assert what netgrep does today, not what it should do. They
 /// exist to catch *unintended* change during a dependency bump — an assertion

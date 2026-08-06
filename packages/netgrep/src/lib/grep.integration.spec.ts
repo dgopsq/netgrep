@@ -85,6 +85,15 @@ function chunked(str: string, size: number): Array<Uint8Array> {
   return out;
 }
 
+/** Concatenate strings and raw byte values into a single chunk. */
+function bytes(...parts: Array<string | number>): Uint8Array {
+  return new Uint8Array(
+    parts.flatMap((part) =>
+      typeof part === 'string' ? Array.from(encoder.encode(part)) : [part],
+    ),
+  );
+}
+
 /**
  * The underlying source, so a cancel that actually reaches it is observable
  * separately from one the consumer merely called.
@@ -507,6 +516,87 @@ describe('grep integration (real WASM)', () => {
       // slide, one line of drift, carried by EVERY line after the over-long
       // one rather than spent on the first of them.
       expect(hits.map((hit) => hit.lineNumber)).toEqual([3, 4]);
+    });
+
+    it('BACKLOG 3e (FIXED upstream): `^` anchors to the line, on any line', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: `^`
+      // anchored to the start of the CHUNK rather than the line whenever
+      // smart case left a pattern case-sensitive, so `^Needle` matched only on
+      // line 1 while `^needle` worked everywhere.
+      //
+      // Dropping the ripgrep fork for grep-regex 0.1.14 / grep-searcher 0.1.17
+      // fixed it upstream — no change to the Rust was needed. It stays pinned
+      // because nothing here guards against picking the fork back up.
+      serve([encoder.encode('Needle x\nother\n')]);
+      expect(await collect('/f', '^Needle')).toHaveLength(1);
+
+      // Previously empty. This is the case that was broken.
+      serve([encoder.encode('other\nNeedle x\n')]);
+      expect((await collect('/f', '^Needle'))[0].lineNumber).toBe(2);
+
+      serve([encoder.encode('a\nb\nNeedle x\n')]);
+      expect((await collect('/f', '^Needle'))[0].lineNumber).toBe(3);
+
+      // The case-insensitive path was always correct; still is.
+      serve([encoder.encode('other\nneedle x\n')]);
+      expect((await collect('/f', '^needle'))[0].lineNumber).toBe(2);
+
+      serve([encoder.encode('other\nxx Needle\n')]);
+      expect((await collect('/f', 'Needle$'))[0].lineNumber).toBe(2);
+    });
+
+    it('BACKLOG 3f (FIXED): a NUL byte no longer discards the searched block', async () => {
+      // `BinaryDetection::quit(b'\x00')` abandoned the block on the first NUL,
+      // so the match was dropped even when it preceded the NUL. With
+      // `BinaryDetection::none()` the bytes are searched as text.
+      //
+      // Case (d) used to be the incidental narrowing — the NUL landing in the
+      // held-back partial line so it never shared a block with the match. It is
+      // kept because it now passes for the ordinary reason rather than the
+      // accidental one, and the two must not be told apart by chance.
+      serve([bytes('needle here')]);
+      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+
+      serve([bytes('needle here', 0x00, 'tail')]);
+      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+
+      serve([bytes('needle here\n', 0x00, 'tail\n')]);
+      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+
+      serve([bytes('needle here\n', 0x00, 'tail')]);
+      expect((await collect('/f', 'needle'))[0].lineNumber).toBe(1);
+    });
+
+    it('BACKLOG 17 (FIXED): `$` matches on CRLF input, through the whole path', async () => {
+      // Pinned here as well as in Rust because the defect was invisible to a
+      // consumer for a reason the engine tests cannot show: it depends on who
+      // authored the file, not on anything the caller did. The yielded line is
+      // asserted too, since its `\r` is stripped and a reader will compare it
+      // against what they searched for.
+      serve([bytes('needle\r\nnext\r\n')]);
+
+      const crlf = await collect('/f', 'needle$');
+
+      expect(crlf).toHaveLength(1);
+      expect(crlf[0].line).toBe('needle');
+
+      // The LF-only case, which is what could regress.
+      serve([bytes('needle\nnext\n')]);
+      expect(await collect('/f', 'needle$')).toHaveLength(1);
+    });
+
+    it('BACKLOG 25: `^`/`$` also anchor to a bare `\\r`, disagreeing with the yielded line', async () => {
+      // The CRLF-aware anchors that fixed BACKLOG 17 treat a lone `\r` as a
+      // line boundary too, not only `\r\n`. The match is real — the anchor did
+      // match — but the line splitter never split here, so the hit carries the
+      // whole unsplit text rather than what `$` anchored against. That
+      // disagreement, not just the extra match, is what a consumer sees.
+      serve([bytes('foo\rbar\n')]);
+
+      const hits = await collect('/f', 'foo$');
+
+      expect(hits).toHaveLength(1);
+      expect(hits[0].line).toBe('foo\rbar');
     });
   });
 });
