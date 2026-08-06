@@ -5,6 +5,10 @@ whose decision — "the answer is a boolean" — no longer holds unconditionally
 **Amended by [0022](0022-capture-ranges.md):** `captureLine` is now `capture: 'line'`, and the "Highlight
 ranges" rejection below was reopened — its rationale assumed JS re-matching, which cannot reproduce the
 engine's semantics.
+**Amended again by [0027](0027-streaming-matching-lines.md)** (2026-08-06): the line is no longer opt-in and no
+longer the first one — `grep()` yields every matching line, with a file-absolute number — and two more rows
+leave the refusal table below, by being *paid for* rather than by being shown wrong. See the amendment at the
+bottom.
 
 Proposed in [issue #19](https://github.com/dgopsq/netgrep/issues/19).
 
@@ -129,3 +133,46 @@ the cost. Each of these is a reasonable follow-up ask, and each is more expensiv
 
 Each remaining row is refused for its stated reason, not by blanket policy — 0022 reopened one when its reason
 failed. A future ask that needs file-wide positions, counts or ranking is still better served by an index.
+
+---
+
+## Amendment (2026-08-06) — two rows leave the table, and not by being shown wrong
+
+[0027](0027-streaming-matching-lines.md) replaced the `Netgrep` class with `grep()` and `matches()`, and this
+PR deleted the class. **Most of this record describes code that no longer exists** — `captureLine`, the
+`ng.search(url, pattern, undefined, { captureLine: true })` example, the second WASM export
+`search_bytes_line`, the `NetgrepSearchConfig<L>` / `NetgrepResult<T, L>` generics and the two opposite uses of
+`never`, `runEngine`, and the two spec files the *Consequences* pin against. Said once here rather than
+rewritten in eight places: this record is history, and it explains why the code looked the way it did. What it
+decided — that the matching line is netgrep's to give, because `SinkMatch::bytes()` is already in hand —
+survives whole, and is now unconditional: a `NetgrepHit` always carries its line, because a streamed hit
+without one would be meaningless. The Rust-side bounding (`maxLineBytes`, terminator stripped, truncated on a
+character boundary, then decoded lossily, in that order) and the clamp at both ends are unchanged, and so is
+the sharpest edge: a match on an empty line is `line: ""`.
+
+### The refusal table
+
+| Row | Fate |
+|---|---|
+| **Line numbers** | **Withdrawn.** Shipped as `NetgrepHit.lineNumber`, 1-based and file-absolute. Its stated reason — that the count would be of *searched* lines rather than file lines — was **true**, and is now **paid**: the engine counts every line of every block, matching or not, and the streaming loop carries a running base across blocks. |
+| **All matching lines** | **Withdrawn.** That is `grep()`. Its stated reason — an unbounded result size per file — is answered by yielding rather than returning: the consumer holds one hit at a time, and the block's hits are marshalled across the boundary as flat text plus a table so nothing is materialised eagerly. |
+| **Highlight ranges** | Already withdrawn by [0022](0022-capture-ranges.md); now unconditional rather than opt-in, since there is no flag left to make it optional. |
+| **Match counts** | **Stands, on a new reason.** The old one — counting means scanning the whole file, which is what early exit deleted — is now a description of what `grep()` does. The reason today is that a consumer enumerating hits has its own index, and a second source of truth could only disagree with it. |
+| **Byte offsets** | Stands, unchanged. Offsets are still relative to the block, and making them file-absolute is still bookkeeping that fights [0002](0002-search-while-downloading.md). |
+| **Context lines (`-A`/`-B`)** | Stands, but **deferred with a design recorded** rather than refused. They were the sole reason for the overlap window an earlier draft of 0027 carried; dropping them halved the encoding. They are additive to a returned object, so nothing forecloses them. |
+| **Ranking** | Stands, untouched, and **for its own reason**, which was never early exit: there are no term statistics, no document frequencies and no index to build a scoring model from. No amount of reading the whole file produces one. Keeping this row apart from the four above is deliberate — conflating them has been got wrong once already. |
+
+### And the rule the table closes on
+
+*"Each remaining row is refused for its stated reason, not by blanket policy — 0022 reopened one when its
+reason failed."* That rule stands and is not weakened. What 0027 adds is a **second** route off this table,
+because it did not take the first one.
+
+0022 reopened *Highlight ranges* by showing its stated reason **false**: a JS re-match cannot reproduce the
+engine. Line numbers and all matching lines were not shown false. Their stated reasons were **true** — early
+exit really does mean the count is of searched lines, and enumeration really is unbounded per file — and 0027
+**chose to pay them**, by making every byte read from offset 0 and by choosing a delivery shape that bounds the
+size. So a row now leaves this table in one of exactly two ways: its reason is shown wrong, or its reason is
+accepted and its cost is deliberately taken on in a record that says so. **They are not the same act**, and
+recording the difference is what stops the table becoming a formality — a row left on the second route is
+still evidence that the first route was never available.

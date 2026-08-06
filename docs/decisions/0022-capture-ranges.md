@@ -3,6 +3,10 @@
 **Status:** Accepted. **Amends [0020](0020-the-matching-line.md)** twice over: it reopens that record's
 "Highlight ranges" rejection, and it replaces `captureLine: boolean` with
 `capture: 'line' | 'line-ranges'`.
+**Amended by [0027](0027-streaming-matching-lines.md)** (2026-08-06): half of that stands and half is
+superseded. Ranges are still engine-derived UTF-16 offsets into the line — now on every hit, unconditionally —
+but `capture` is deleted along with the flag it renamed, so the second half of this record's decision has
+nothing left to describe. See the amendment at the bottom.
 
 No issue preceded this one — unlike 0020, the argument was made in a written design, reviewed and agreed
 before any code was written. The friction AGENTS.md §1 asks for was paid there.
@@ -112,3 +116,65 @@ at the end of anything. Matching over the full line and then dropping ranges tha
 a JS re-match cannot reproduce the engine — not because a refusal expires after two records. The rows above
 are refused for reasons that are still true, and the way to reopen one is to show its reason wrong, not to
 point at this record.
+
+---
+
+## Amendment (2026-08-06) — `capture` is deleted, and the ranges are unconditional
+
+[0027](0027-streaming-matching-lines.md) replaced the `Netgrep` class with `grep()` and `matches()`, and this
+PR deleted the class, the `capture` option and the `NetgrepResult` types. The half of this record's decision
+that is about **ranges** survives entirely: they are still produced by the same compiled matcher over the line
+the engine already holds, still UTF-16 code units into the returned string, still computed against the
+decoded-then-truncated line in that order, still found by `find_iter` over the whole stripped line and clipped
+to the cut, and still crossed as line text plus a flat `Uint32Array`. Every one of those arguments is
+load-bearing today. The half that is about **`capture`** has nothing left to describe: every `NetgrepHit`
+carries its line and its ranges, because a streamed hit without a line is meaningless and there is no flag to
+turn off.
+
+**The "no alias" argument was right about the cost, and something else dissolved it.** *"Two booleans make four
+states… and both would then be threaded into the result-type generics forever. The union has one input and
+three states, all of them real."* That reasoning is sound and this record does not retract it: given a
+*returned result* whose shape depends on a flag, the union is the right shape and the boolean pair is the worse
+one. 0027 deleted both generics anyway, and not by finding a better encoding of the flag — by removing the
+thing the flag varied. `capture: C` existed so a boolean caller need not pay for a string copy; splitting the
+third state (`matches()`) into its own function pays for that structurally, and the other two states collapse
+into one unconditional hit. The union's cost was bounded and real; what ended it was the answer stopping being
+a returned result at all.
+
+**Three exports become two.** *"A third export, not a changed one"* — `search_bytes_line` and
+`search_bytes_line_ranges` are both deleted, and `search_block` takes their place beside `search_bytes`. The
+sentence that survives is the last one: *"the membership path still allocates nothing and copies no string,
+and that is a property of which function is called rather than a claim about a flag."* It survives precisely
+because `matches()` still calls `search_bytes`, which is untouched. The shared `with_matcher` memo and the
+single `build_searcher` still hold across both remaining exports, so binary detection and matching semantics
+still cannot drift between them — pinned by `test_the_two_entry_points_share_one_searcher_configuration` and
+`test_the_two_entry_points_share_one_matcher` in `packages/search/tests/search.rs`, which now say *two* where
+they used to say three.
+
+**Both consequences are still true, restated in `NetgrepHit` terms.** `ranges` can be `[]` on a real hit —
+every match can fall past the `maxLineBytes` cut, and inside a line longer than 64 KB the yielded "line" is a
+fragment that need not contain the match (BACKLOG **3g**). And a match on an empty line is `line: ""` with
+`ranges: [{ start: 0, end: 0 }]`. The pins moved with the code: the cut case is
+`a_match_past_the_cap_is_dropped` and `a_match_straddling_the_cap_is_clamped` in `mod block` of
+`packages/search/tests/search.rs`, and *keeps the hit when the match itself is past the cut* in
+`grep.integration.spec.ts`; the empty line is `a_match_on_an_empty_line_is_an_empty_string_with_a_range` and
+*treats an EMPTY matching line as a hit, not as a miss*; the 3g fragment is the two `BACKLOG 3g` tests in
+`grep.integration.spec.ts`. **The advice changes shape**, though: *"Branch on `result`, never on `line` or on
+`ranges.length`"* has no `result` field to name any more. A yielded hit **is** the match — its existence is the
+answer, and `line` and `ranges.length` are still not the thing to test. The edge is unchanged; only the field
+that used to carry it is gone.
+
+**The *Rejected alongside* table takes the same casualties as 0020's**, and for the same reasons, set out row
+by row in [0020](0020-the-matching-line.md)'s amendment: **Line numbers** and **All matching lines** are
+withdrawn, **Match counts** stands on a new reason, **File-absolute byte offsets** stands unchanged, **Context
+lines** stands but is deferred with a design recorded, and **Ranking** stands untouched and for its own
+reason — no term statistics, no document frequencies, no index — which was never the early-exit reason and
+must not be filed with the rows above it.
+
+**And the closing rule is amended, not deleted.** *"The way to reopen one is to show its reason wrong, not to
+point at this record."* That still holds, and 0027 explicitly declines to use this record as precedent. What it
+adds is a second route: line numbers and all matching lines were **not** shown wrong. Their stated reasons were
+true, and 0027 chose to **pay** them — every byte read from offset 0, and a delivery shape that bounds the
+result size. A row therefore leaves a refusal table either by having its reason falsified or by having its cost
+knowingly taken on in a record that says which of the two it is doing. Pointing at a record remains not a
+reason.

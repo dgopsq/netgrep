@@ -2,7 +2,11 @@
 
 **Status: ACCEPTED (2026-07-30).** Closes [`BACKLOG`](../BACKLOG.md) items **3a**, **3b** and **11**, narrows
 **18**, and records why the fixed byte cap proposed in
-[issue #20](https://github.com/dgopsq/netgrep/issues/20) was not the design taken.
+[issue #20](https://github.com/dgopsq/netgrep/issues/20) was not the design taken. **Amended by
+[0024](0024-remove-the-in-memory-cache.md)** (2026-08-01), which deleted the cache this record narrowed, and by
+**[0027](0027-streaming-matching-lines.md)** (2026-08-06), which moved the loop off `Netgrep.search` and
+answered this record's open question about issue #3 differently than it predicted. The tail-buffer decision
+itself is untouched by both.
 
 ## Context
 
@@ -227,3 +231,48 @@ than by configuration, since the library retains nothing a repeat query could be
 
 This record's own decision is untouched. The tail buffer is what it was; only the second half of its title,
 *and cache only a drained stream*, has stopped describing anything.
+
+---
+
+## Amendment (2026-08-06) — the loop moved, and #3 did not handle the overlap
+
+[0027](0027-streaming-matching-lines.md) replaced the `Netgrep` class with `grep()` and `matches()`, and this
+PR deleted the class. **`splitAtLastLine` is unchanged, `MAX_TAIL_BYTES` is unchanged, and the guarantee table
+above holds exactly as written.** What moved is the loop that drives it: every sentence attaching this
+decision to `Netgrep.search` and `handleReader` should be read against `streamBlocks.ts`, which both `grep()`
+and `matches()` consume. There is now one loop where the record describes one method, which is the same shape
+with a different name.
+
+Two passages are wrong rather than merely relocated.
+
+**The prediction about issue #3 did not come true.** *"Harmless for a boolean, but a problem if issue #3
+(return the matching line) ever lands, since the same line could be reported from two chunks"*, concluding
+*"#3 would have to handle it."* #3 has landed, as `grep()`, and it **did not handle it**: inside a line past
+the 64 KB ceiling a hit is yielded once per window pass — three times on the pinned fixture — and the
+file-absolute line base gains a line at every window slide. Both are pinned as consequences of BACKLOG **3g**
+rather than fixed, and deliberately: suppressing the repeat would drop the hit outright when a stream ends
+inside such a line, and for a grep a lost hit is worse than a repeated one. The windowed tail, once searched,
+is never re-searched at end of stream, so no later pass could correct the count either. The paragraph's
+reasoning was right; only its conclusion about who would pay is not.
+
+**The residual's pin moved, and changed name with it.** *"Pinned by `BACKLOG 3a (RESIDUAL)` in
+`Netgrep.integration.spec.ts`"* names a test in a deleted file. The residual is unchanged and is now
+`BACKLOG 3g: a match longer than 64 KB across a chunk boundary answers false` in
+`matches.integration.spec.ts` — filed under 3g, which is where this record already said the residual lives. It
+still carries both controls the paragraph insists on: the same match arriving in **one** chunk is found,
+because the buffer is searched whole before the window is taken, and the same boundary with the line under the
+ceiling answers true. Getting the first of those backwards still turns the residual into a regression.
+
+Three passages are out of date in a way worth naming rather than editing:
+
+- The measurement the issue asked for — *"the demo corpus is 2.6 MB over 54,496 lines, and its longest line is
+  **76 bytes**"* — describes the story corpus [0026](0026-demo-as-log-dashboard.md) deleted. The demo is now
+  408.6 MB of generated logs whose longest line, across all four sources, is 387 bytes. The point survives with
+  a smaller multiple: 64 KB still has ~169× headroom over the worst line the demo can produce, and the economic
+  argument against a rescanned fixed window is unaffected.
+- *"Deliberately not given a caveat on the demo site… Recorded in the comment block of `limitations.tsx`"* was
+  already stale before this PR: the demo no longer carries its own filtered limitation list, and 3g's
+  consequences are published once in `guide/caveats.data.json`.
+- *"Item 18's duplicate fetch, and therefore the demo's cache, which stays off"* was overtaken by 0024 and is
+  addressed in the *Outcome* above; it is named again here only so a reader arriving at the bottom of this
+  record does not have to reconstruct which of the two notes covers it.

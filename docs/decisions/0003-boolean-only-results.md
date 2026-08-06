@@ -1,9 +1,10 @@
 # 0003 — Return a boolean, not match details
 
 **Status:** Accepted, then **amended by [0020](0020-the-matching-line.md)** (2026-07-30), which added the
-first matching line as an opt-in. The default is still a boolean and the reasoning below still explains why;
-what changed is that "and nothing else" became "unless you ask". Read 0020 for what is returned today, and for
-the list of match details that remain refused.
+first matching line as an opt-in, and **again by [0027](0027-streaming-matching-lines.md)** (2026-08-06).
+There is no longer a default to be a boolean: there are two functions, and `matches()` is the one whose answer
+is a boolean. The reasoning below still explains why that answer is worth having and why it is cheap — it is
+just no longer the only answer netgrep can give. Read 0027 for what is returned today.
 
 ## Context
 
@@ -43,3 +44,34 @@ a remote file."*
   every line matches, and nothing at all where matches are rare.
 - The richer output would require designing a serialisation format across the boundary. Out of scope while the
   project is in maintenance mode.
+
+---
+
+## Amendment (2026-08-06) — the boolean is a function, not a default
+
+[0027](0027-streaming-matching-lines.md) replaced the `Netgrep` class with `grep()` and `matches()`, and this
+PR deleted the class. The decision recorded above survives inside `matches()`, which is still
+`search_bytes(chunk, pattern) -> bool` and still stops at the first hit. What stops being true is that the
+boolean is the *default* — it is one of two answers a caller picks between.
+
+*The target use case — "which of these documents mention X?" — needs only membership* is no longer the whole
+story. It is the use case `matches()` serves, and it is still a real one; 0025 named a second, the viewer,
+which needs every matching line and where each one is, and `grep()` serves that.
+
+*Minimal WASM/JS boundary traffic: one pointer, one length, one bool* is exactly true of `matches()` today,
+and is why it survived as its own entry point rather than becoming `grep()` with a `break`. A caller that only
+wants membership still allocates nothing and copies no string out of WebAssembly.
+
+*Because only membership is needed, the searcher can stop at the first match* is retracted by 0027: early exit
+stops being a library policy and becomes the caller's choice. `grep()`'s `break` and `matches()`' `return true`
+are the two forms of it, and the mechanism underneath is the one this record described.
+
+*The richer output would require designing a serialisation format across the boundary. Out of scope while the
+project is in maintenance mode.* The format exists. It is `BlockHits { text, table }` — the block's matching
+lines joined into one string plus a flat `Uint32Array` of line numbers, offsets and lengths — designed in 0027
+precisely so that nothing is materialised eagerly. The cost this bullet anticipated was real and was paid, not
+avoided.
+
+One line above quotes a README sentence the README no longer contains: *"At the moment Netgrep is just going
+to tell whether a pattern is present on a remote file."* It went with 0025's repositioning. Naming that here
+rather than editing the quotation, because the quotation is what the record was written against.

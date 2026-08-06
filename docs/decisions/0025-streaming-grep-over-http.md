@@ -1,6 +1,11 @@
 # 0025 — netgrep is streaming grep over HTTP, not client-side site search
 
-**Status: ACCEPTED (2026-08-02).** Amends [0017](0017-example-as-hosted-demo.md) and
+**Status: ACCEPTED (2026-08-02).** **Amended by [0026](0026-demo-as-log-dashboard.md)** (2026-08-02), which
+closed the timing half of the demo's gap, and by **[0027](0027-streaming-matching-lines.md)** (2026-08-06),
+which retracts one sentence of this record's *Consequences*, moves property 2 from the library to the caller,
+and closes BACKLOG item **22**. The positioning — netgrep is grep over HTTP, running in the browser — is
+untouched by both, and 0027 is what makes its six properties unconditional. Amends
+[0017](0017-example-as-hosted-demo.md) and
 [0023](0023-documentation-site.md) — both specified demo copy that this record rewrites. Cites
 [0002](0002-search-while-downloading.md), whose decision it leaves entirely intact, and
 [0024](0024-remove-the-in-memory-cache.md), which made the constant-memory claim unconditional.
@@ -209,7 +214,7 @@ them is not mistaken for refusing them on the merits — the distinction the tab
 | Ask | Why not |
 |---|---|
 | gzip / `DecompressionStream` content decompression | netgrep already searches transport-compressed responses for free — the browser decompresses before `res.body` exists. Content-level `.gz` needs an API change, since netgrep owns its own `fetch`, and ripgrep's own `-z` is the CLI shelling out to `gzip`/`xz` binaries, not anything in the three `grep-*` crates. Needs its own record |
-| `fetch` options passthrough / authenticated URLs | Only `signal` is passed today. A real ask and a real widening — backlog item **22**, not this PR |
+| `fetch` options passthrough / authenticated URLs | ~~Only `signal` is passed today. A real ask and a real widening — backlog item **22**, not this PR~~ **Shipped 2026-08-06** under [0027](0027-streaming-matching-lines.md): `GrepOptions.fetch?: RequestInit` goes to `fetch` whole. The deferral was right and is kept here because it worked — the widening got an argued record before it got code |
 | A worker | Chunk searching runs on the main thread. Backlog item **23** |
 | Package renames, a new npm scope, API widening | [0022](0022-capture-ranges.md) was the last widening and was argued on its own merits. A repositioning is not a licence to reopen the surface |
 | A CORS proxy for the demo | A third-party runtime dependency on the one page whose entire value is that it is accurate |
@@ -236,3 +241,71 @@ One line above is now out of date in a way worth naming rather than editing: *Li
 third-party corpus host* stays refused, and 0026 refuses it again — but the corpus is loghub, from Zenodo,
 committed as four ~512 KB CC BY 4.0 seed prefixes and tiled at build time. Refusing the runtime dependency and
 taking the data are the same decision, not opposite ones.
+
+---
+
+## Amendment (2026-08-06) — property 2 becomes the caller's, and item 22 is closed
+
+[0027](0027-streaming-matching-lines.md) replaced the `Netgrep` class with `grep()` and `matches()`, and this
+PR deleted the class. The positioning this record argued is unchanged and is the reason 0027 exists: the one
+case a hostile reviewer conceded — a human is going to read the file anyway, so the search rides along — is a
+**viewer**, and a viewer needs every matching line. Four of the six properties above are untouched. Two things
+need saying.
+
+**Property 2 moves from the library to the caller, and widens rather than narrows.** *"Since the cancel-on-match
+fix the reader is cancelled at the match site, so early exit ends the transfer rather than abandoning it, and
+saves bandwidth as well as latency."* Under `grep()` the first hit still surfaces at the same byte offset and
+the same millisecond it always did — *an answer before the last byte* is intact — but the transfer is no longer
+cancelled *at the match site*. It ends when the consumer stops asking: `break` runs the generator's `finally`,
+where the reader is cancelled. So the quoted sentence is true of `matches()`, true of a `grep()` loop that
+breaks, and false of one that reads to the end. That last case is a caller choosing to read the whole file
+because it wants every line, which is a capability this record did not have rather than a property it lost.
+Early exit stopped being a library policy and became a choice; the bandwidth saving follows the choice.
+
+**The sentence 0027 retracts.** *"Match counts and all matching lines each delete early exit outright — you
+cannot count or enumerate what you have not read, so each turns every search into a full download and takes
+constant memory and the mid-download answer with it."* The full download is right. The other two are wrong, and
+0027 says why: the engine still runs on one block plus the incomplete trailing line, capped at 64 KB, however
+many matches that block holds, so **constant memory survives** — what can grow is the *consumer's*
+accumulation, which the yield-shaped delivery is chosen to bound; and the first match is found at the same
+offset and surfaces at the same millisecond, so **the mid-download answer survives** too. What enumeration
+costs is termination. This paragraph's conclusion is unaffected: 0003's boolean is still not a gap, and
+`matches()` is still the mechanism the sentence was defending. Its final clause — *"0022's refusal table stands
+unchanged, including its rule that a row reopens only when its stated reason is shown false"* — is amended in
+[0020](0020-the-matching-line.md) and [0022](0022-capture-ranges.md): the rule stands, and 0027 opens a second
+route off the table by paying a reason that was true rather than by showing it false.
+
+The paragraph immediately after it needs no amendment and is worth naming for that: **ranking is refused for
+its own reason**, not the early-exit one, *"because it has been got wrong once already"*. 0027 keeps them
+apart deliberately, and so does this amendment.
+
+### BACKLOG item 22 shipped on 2026-08-06, and six sites above still call it open
+
+`GrepOptions.fetch?: RequestInit` is handed to `fetch(url, init)` unchanged by `streamBlocks`, so `grep()` and
+`matches()` reach a file needing an `Authorization` header, an API key or `credentials: 'include'`. Taken site
+by site, because they say different things:
+
+- *"The wrapper passes only `signal` to `fetch`, so no `Authorization` header and no API key are sent, and
+  `Request.credentials` defaults to `same-origin`"* — true of `Netgrep.search`, which is deleted. **False of
+  `grep()` and `matches()`**, which take fetch options whole. The paragraph's *argument* survives without it:
+  CORS is a gate and not *the* gate, a host can answer `Access-Control-Allow-Origin: *` and still hand an
+  anonymous reader a 401, and credentials therefore belong in *Requirements* rather than being left implied by
+  the CORS line. What changed is that a caller can now do something about it.
+- *"It was recorded twice, in BACKLOG item 22 and in Rejected alongside below … nothing a consumer reads said
+  it"* — item 22 is in *Done*, and the guide now says it.
+- *"A CI artefact behind a provider login and a session-gated support log are named as out of reach today"* —
+  both are now reachable, with the caller's own credentials. The niche argued above is a **person** with no
+  shell on the machine holding the file, and this is the widening of that person's reachable set the record
+  asked for.
+- *"Lifting the bound is item 22's job."* Done, 2026-08-06.
+- *"Two asks move onto the backlog rather than being refused outright"* — of the two, **22 shipped**, under
+  0027 and without a record of its own, which is the exception this record's own rule allows only because it
+  rode along with an argued one. **23, the worker, is still open** and still needs its own issue and record.
+- The *Rejected alongside* row *"Only `signal` is passed today … backlog item 22, not this PR"* is amended in
+  place below rather than deleted. **The row is a brake and the brake is the point**: it recorded that
+  deferring is not refusing, and the thing it deferred landed four days later through the process it named.
+
+Also **`@netgrep/search` exports two functions over a byte slice, not three** — `search_bytes` and
+`search_block`, since `search_bytes_line` and `search_bytes_line_ranges` are deleted. The paragraph's argument
+is untouched: it is still the low-level core with no `fetch`, no stream and no HTTP in it, so "grep over HTTP"
+would still be false about that artefact.
