@@ -1,5 +1,5 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
+import { useWindowVirtualizer } from '@tanstack/react-virtual';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ResultRow } from '@/components/result-row';
 import type { GrepStreamState } from '@/hooks/use-grep-stream';
 import { MAX_RETAINED_HITS } from '@/lib/hit-buffer';
@@ -35,10 +35,25 @@ function countLabel(state: GrepStreamState): string {
  * legible without it — the count moves, the meter runs, and the scrollbar thumb
  * visibly shrinks as rows pour in, which says the same thing and can be read.
  *
- * The scroll container has a FIXED HEIGHT rather than growing with its content.
- * A list that grows pushes the footer down 2.4 million rows and hands the
- * virtualizer the window as its scroll element, which is the one arrangement
- * where it cannot bound what it renders.
+ * THE PAGE IS THE SCROLL CONTAINER — there is exactly one scrollbar, the
+ * window's, and this list grows to its full height inside it.
+ *
+ * An earlier revision gave the feed a fixed `h-[28rem]` and its own scrollbar,
+ * on the argument that handing the virtualizer the window was "the one
+ * arrangement where it cannot bound what it renders". THAT ARGUMENT WAS SIMPLY
+ * WRONG: `useWindowVirtualizer` takes the window as the scroll element by
+ * design and bounds the rendered window exactly as the element version does —
+ * still ~60 rows in the DOM whatever the match count. A nested scroller was
+ * buying nothing and cost a visitor the two-scrollbar tangle where a flick of
+ * the wheel scrolls whichever region the pointer happens to be over.
+ *
+ * ⚠️ WHAT THE OLD COMMENT GOT RIGHT IS THE CONSEQUENCE, AND IT IS REAL. At the
+ * retention ceiling this list is 100,000 × 24px — about 2.4 MILLION pixels of
+ * document — so the footer below it is genuinely a long way down and the
+ * scrollbar thumb becomes a sliver. That is accepted deliberately: the thumb
+ * shrinking as hits pour in is legible evidence of the stream, and the licence
+ * attribution in the footer is reachable by `End`. Anything added below this
+ * feed inherits the same problem, so add it above.
  */
 export function ResultFeed({
   state,
@@ -47,13 +62,33 @@ export function ResultFeed({
   state: GrepStreamState;
   service: string;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listTop, setListTop] = useState(0);
 
-  const virtualizer = useVirtualizer({
+  // Where this list starts in the DOCUMENT. The window virtualizer needs it to
+  // turn a scroll position into a row index, and everything above the list
+  // moves it: the hero, the sticky controls, and an error banner that appears
+  // and disappears mid-run. So it is measured after every render rather than
+  // once on mount — `getBoundingClientRect` plus `scrollY` rather than
+  // `offsetTop`, which would be relative to the nearest positioned ancestor and
+  // silently wrong the moment one is added above.
+  //
+  // Re-rendering on an unchanged value is the thing to avoid here, since this
+  // component already re-renders once per animation frame during a run; the
+  // equality check makes the steady state a no-op.
+  useLayoutEffect(() => {
+    const top = listRef.current
+      ? listRef.current.getBoundingClientRect().top + window.scrollY
+      : 0;
+
+    setListTop((previous) => (previous === top ? previous : top));
+  });
+
+  const virtualizer = useWindowVirtualizer({
     count: state.retained,
-    getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: OVERSCAN,
+    scrollMargin: listTop,
   });
 
   const rows = virtualizer.getVirtualItems();
@@ -65,10 +100,7 @@ export function ResultFeed({
         <span className="font-mono tabular-nums">{countLabel(state)}</span>
       </div>
 
-      <div
-        ref={scrollRef}
-        className="h-[28rem] overflow-auto overscroll-contain"
-      >
+      <div ref={listRef}>
         {state.retained === 0 ? (
           <p className="text-muted-foreground/50 px-4 py-10 text-center text-sm">
             {state.running
@@ -76,7 +108,7 @@ export function ResultFeed({
               : 'No line in this file matches that pattern.'}
           </p>
         ) : (
-          // The spacer carries the full scroll height and each row is placed
+          // The spacer carries the full list height and each row is placed
           // absolutely inside it. `translateY` rather than `top` keeps the
           // rows on the compositor during a fast scroll.
           <div
@@ -89,7 +121,10 @@ export function ResultFeed({
                 className="absolute inset-x-0 top-0"
                 style={{
                   height: `${row.size}px`,
-                  transform: `translateY(${row.start}px)`,
+                  // `row.start` is a position in the WINDOW's scroll space, so
+                  // the list's own document offset comes back off it to get a
+                  // position inside this spacer.
+                  transform: `translateY(${row.start - listTop}px)`,
                 }}
               >
                 {/* biome-ignore lint/style/noNonNullAssertion: row.index < state.retained by construction */}

@@ -57,8 +57,11 @@ export function App() {
       </div>
 
       {/*
-        The field stays sticky: it is the page's only control, and a feed that
-        fills for seconds is a feed you may have scrolled away from.
+        The controls and the figures stay sticky, and the feed below them is
+        scrolled by the WINDOW — one scrollbar on the page, not a scroller
+        nested in a scroller. What is worth sticking is whatever changes during
+        a run or steers it: the field, the source picker, the five figures and
+        the read meter. Everything below is the result, and results scroll.
 
         The panel is FULL BLEED, outside the max-width container — constrained
         to the container it ends mid-viewport, leaving a visible vertical seam
@@ -80,6 +83,24 @@ export function App() {
               bytes={sizes.bytes}
             />
           </div>
+
+          {/*
+            The figures are sticky WITH the controls, and that is the point of
+            the arrangement: every one of them moves while the feed streams
+            past, so a visitor who has scrolled a thousand rows down can still
+            watch `Elapsed` climb against a `First match` that settled in
+            milliseconds — which is the page's whole argument, and was
+            previously visible only from the top of the document.
+          */}
+          <div className="mt-4">
+            <RunStats state={state} />
+          </div>
+
+          <ScanMeterBar
+            bytesRead={state.bytesRead}
+            totalBytes={sizes.bytes[source.id] ?? source.targetBytes}
+            running={state.running}
+          />
         </div>
         <div className="hairline-top absolute inset-x-0 bottom-0 h-px" />
       </div>
@@ -113,17 +134,7 @@ export function App() {
               : ''}
         </p>
 
-        <RunStats state={state} />
-
-        <ScanMeterBar
-          bytesRead={state.bytesRead}
-          totalBytes={sizes.bytes[source.id] ?? source.targetBytes}
-          running={state.running}
-        />
-
-        <div className="mt-6">
-          <ResultFeed state={state} service={source.service} />
-        </div>
+        <ResultFeed state={state} service={source.service} />
 
         <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
           <p>
