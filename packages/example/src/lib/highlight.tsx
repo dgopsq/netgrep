@@ -4,10 +4,10 @@ import type { ReactNode } from 'react';
 /**
  * `text` with each match wrapped in `<mark>`.
  *
- * Ranges are UTF-16 offsets into `text` — exactly what `slice` takes — and
- * arrive sorted and non-overlapping, so one forward walk covers the string.
- * `ranges` can be empty (every match past the byte cap): then the line renders
- * unmarked, which is honest — the visible text contains no match.
+ * Ranges are UTF-16 offsets into `text` — what `slice` takes — and arrive sorted
+ * and non-overlapping, so one forward walk covers the string. Empty `ranges`
+ * (every match past the byte cap) renders unmarked, which is honest: the
+ * visible text contains no match.
  */
 export function highlight(
   text: string,

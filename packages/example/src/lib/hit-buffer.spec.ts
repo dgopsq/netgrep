@@ -28,9 +28,8 @@ describe('HitBuffer', () => {
     expect(buffer.truncated).toBe(false);
   });
 
-  // The property the whole design rests on: past the ceiling the count keeps
-  // rising and the array does not. A page that stopped counting here would
-  // report a total that is a function of its own memory budget.
+  // Past the ceiling the count keeps rising and the array does not. A page that
+  // stopped counting would report a total set by its own memory budget.
   it('keeps counting past the ceiling but stops storing', () => {
     const buffer = new HitBuffer();
 
@@ -41,9 +40,8 @@ describe('HitBuffer', () => {
     expect(buffer.truncated).toBe(true);
   });
 
-  // Identity is stable because the hook hands this array to the virtualizer
-  // once and re-renders on the COUNT. A buffer that replaced the array per
-  // push would defeat that.
+  // The hook hands this array to the virtualizer once and re-renders on the
+  // count, so replacing it per push would defeat that.
   it('never replaces the hits array', () => {
     const buffer = new HitBuffer();
     const before = buffer.hits;

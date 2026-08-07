@@ -12,9 +12,9 @@ describe('formatThroughput', () => {
     expect(formatThroughput(240 * 1024 * 1024, 1000)).toBe('240 MB/s');
   });
 
-  // A run that has read nothing, or has not started, has no rate — and a
-  // division by an elapsed of zero would print `Infinity MB/s` on the one page
-  // whose whole claim is that its numbers are real.
+  // A run that has read nothing has no rate, and dividing by a zero elapsed
+  // prints `Infinity MB/s` on the one page whose claim is that its numbers are
+  // real.
   it('has no answer before there is one', () => {
     expect(formatThroughput(0, 0)).toBe('—');
     expect(formatThroughput(1024, 0)).toBe('—');

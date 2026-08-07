@@ -4,13 +4,12 @@ import { useEffect, useState } from 'react';
 import { HitBuffer } from '@/lib/hit-buffer';
 
 /**
- * How much of each matching line the demo asks for.
+ * How much of each matching line the demo asks for, well under the library's
+ * 4096 default.
  *
- * Well under the library's 4096 default. A row is one clipped line of
- * monospace, so anything past this is copied out of WebAssembly only to be
- * hidden by CSS — and at up to 100,000 retained lines that waste is measured in
- * tens of megabytes rather than in bytes. The longest line across all four
- * seeds is 387 bytes (ZooKeeper), so 512 clips nothing the page would show.
+ * A row is one clipped line, so anything past this is copied out of WebAssembly
+ * only to be hidden by CSS — tens of megabytes at 100,000 retained lines. The
+ * longest line across all four seeds is 387 bytes, so 512 clips nothing shown.
  */
 export const MAX_LINE_BYTES = 512;
 
@@ -18,11 +17,10 @@ export type GrepStreamState = {
   /**
    * The retained matching lines, in file order.
    *
-   * ⚠️ STABLE IDENTITY, MUTATED IN PLACE. This is the live `HitBuffer` array,
-   * handed out by reference; `retained` is what changes when it grows. React
-   * re-renders on the number and the virtualizer reads the array, so copying it
-   * per frame would reintroduce exactly the cost the buffer exists to avoid.
-   * Nothing may sort, splice or otherwise write to it.
+   * ⚠️ STABLE IDENTITY, MUTATED IN PLACE — the live `HitBuffer` array, handed
+   * out by reference. `retained` is what changes when it grows; copying it per
+   * frame would reintroduce the cost the buffer exists to avoid. Nothing may
+   * sort, splice or otherwise write to it.
    */
   hits: NetgrepHit[];
   /** `hits.length` — and the virtualizer's item count. */
@@ -32,12 +30,11 @@ export type GrepStreamState = {
   /** `total > retained`: the page is showing fewer lines than it found. */
   truncated: boolean;
   /**
-   * Bytes of the file delivered to the search so far, from
-   * `GrepOptions.onProgress`.
+   * Bytes of the file delivered to the search so far.
    *
-   * ⚠️ DECOMPRESSED FILE CONTENT, NOT BYTES ON THE WIRE. The logs are served
-   * gzipped at roughly 16×, so the transfer behind this figure was a fraction
-   * of it. Anything rendering it must name it as file content read.
+   * ⚠️ DECOMPRESSED FILE CONTENT, NOT BYTES ON THE WIRE — the logs are served
+   * gzipped at ~16×, so the transfer behind this was a fraction of it. Anything
+   * rendering it must name it as file content read.
    */
   bytesRead: number;
   /** Milliseconds from the run's start to its first matching line. */
@@ -46,20 +43,17 @@ export type GrepStreamState = {
   elapsedMs: number;
   running: boolean;
   /**
-   * Whatever ended the run, in its own words. `grep` throws from the iteration
-   * rather than folding a failure into a result, so a pattern that will not
-   * compile arrives here as regex-crate prose, and so do a dead host and a
-   * dropped connection.
+   * Whatever ended the run, in its own words. `grep` throws from the iteration,
+   * so an uncompilable pattern arrives here as regex-crate prose, and so do a
+   * dead host and a dropped connection.
    */
   error: string | null;
   /**
    * Whether `error` arrived AFTER hits had already been yielded.
    *
-   * `grep` is explicit that it can: a connection dropping at 180 MB gives every
-   * hit up to that point and then throws, and those hits are correct and
-   * complete for the bytes that were read. So the feed is kept and the banner
-   * says the results are partial. Blanking 40,000 true lines because the
-   * 40,001st read failed would be both wrong and a worse demonstration.
+   * A connection dropping at 180 MB gives every hit up to that point and then
+   * throws, and those hits are correct for the bytes read — so the feed is kept
+   * and the banner says the results are partial.
    */
   partial: boolean;
 };
@@ -82,29 +76,18 @@ function idleState(): GrepStreamState {
 /**
  * Grep one remote log and report the run as it happens.
  *
- * THE PAGE MEASURES THE NETWORK. Every figure here is the cost of actually
- * fetching a file: netgrep retains nothing between reads and there is no cache
- * in the library to switch off, so what a repeat query costs is whatever the
- * host's response headers say — the browser's business, and visible in
- * devtools. Do not add a layer here that answers a repeat from memory; the
- * numbers are the page's only evidence for its claim.
+ * THE PAGE MEASURES THE NETWORK: every figure here is the cost of actually
+ * fetching a file, and it is the page's only evidence for its claim. Do not add
+ * a layer that answers a repeat query from memory.
  *
- * UNLIKE THE DASHBOARD THIS REPLACED, EVERY RUN READS THE WHOLE FILE. There is
- * no `break` out of the loop and no early exit, because enumeration is the
- * subject: `grep` yields every matching line, and the last one cannot be known
- * before the last byte. A query that matches nothing therefore costs exactly
- * what a query that matches everything costs, which is a simplification the old
- * page could not make and which several comments elsewhere were written against.
+ * EVERY RUN READS THE WHOLE FILE — no `break`, no early exit, because `grep`
+ * yields every matching line and the last cannot be known before the last byte.
+ * A query matching nothing costs what a query matching everything costs.
  *
- * ⚠️ HITS ARE ACCUMULATED IN A CLOSURE AND PUBLISHED ONCE PER ANIMATION FRAME.
- * This is not a micro-optimisation. A `setState` per hit is 100,000 renders on
- * a loose pattern and takes the tab down whether or not the list is virtualized.
- *
- * The frame cadence works because `grep` yields to the event loop: its loop
- * awaits `reader.read()` once per network chunk, and within one 64 KB block the
- * decode is bounded at a few hundred hits. That is a property of the library's
- * implementation this page depends on — if `grep` ever buffered whole
- * responses, frames would stop landing and this would need a worker instead.
+ * ⚠️ HITS ACCUMULATE IN A CLOSURE AND PUBLISH ONCE PER ANIMATION FRAME. A
+ * `setState` per hit is 100,000 renders on a loose pattern and takes the tab
+ * down, virtualized or not. The cadence relies on `grep` awaiting a read per
+ * network chunk; if it ever buffered whole responses this would need a worker.
  */
 export function useGrepStream(url: string, pattern: string): GrepStreamState {
   const [state, setState] = useState<GrepStreamState>(idleState);
@@ -150,9 +133,8 @@ export function useGrepStream(url: string, pattern: string): GrepStreamState {
       if (frame === 0) frame = requestAnimationFrame(publish);
     };
 
-    // Paint the empty running state immediately: the field shows a spinner and
-    // the previous run's rows go, rather than the page sitting on stale results
-    // until the first frame with a hit in it.
+    // Paint the empty running state at once, rather than sitting on the last
+    // run's results until the first frame with a hit in it.
     publish();
 
     void (async () => {
@@ -171,8 +153,8 @@ export function useGrepStream(url: string, pattern: string): GrepStreamState {
           schedule();
         }
       } catch (cause) {
-        // A superseded query: this run's abort is not news, and publishing it
-        // would repaint the page with a failure the visitor never asked for.
+        // A superseded query. Publishing this would show a failure the visitor
+        // never asked for.
         if (controller.signal.aborted) return;
 
         error = cause instanceof Error ? cause.message : String(cause);
@@ -183,9 +165,8 @@ export function useGrepStream(url: string, pattern: string): GrepStreamState {
       done = true;
       elapsedMs = performance.now() - startedAt;
 
-      // The final publish is synchronous rather than scheduled: a run that ends
-      // while the tab is backgrounded gets no more frames, and the page would
-      // sit on `running: true` forever.
+      // Synchronous rather than scheduled: a run ending in a backgrounded tab
+      // gets no more frames, and would sit on `running: true` forever.
       if (frame !== 0) cancelAnimationFrame(frame);
       publish();
     })();

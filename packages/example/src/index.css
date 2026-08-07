@@ -266,12 +266,9 @@
    * The share of the file already delivered to the search, painted behind the
    * run figures.
    *
-   * A GRADIENT RATHER THAN A FLAT TINT, and that is the difference between this
-   * reading as progress and reading as a status colour. Filled flat, a finished
-   * run is just a card that has turned teal: there is no leading edge to find,
-   * and 100% is indistinguishable from "this box is green". Weighting the tint
-   * toward the head gives the sweep a front to follow and leaves the oldest
-   * bytes nearly clear.
+   * A gradient rather than a flat tint: filled flat there is no leading edge to
+   * follow, and a finished run is just a card that has turned teal. Weighting
+   * the tint toward the head gives the sweep a front.
    */
   background-image: linear-gradient(
     90deg,
@@ -282,18 +279,12 @@
 
 @utility read-meter-edge {
   /*
-   * The filled part of the meter, running along the bottom of the figures card.
+   * The filled part of the meter, along the bottom of the figures card.
    *
-   * ⚠️ IT NEEDS THE TRACK BEHIND IT TO READ AS A METER AT ALL. Drawn alone this
-   * is a filled length with nothing to be a fraction OF: at 100% it is a bottom
-   * border and at 0% it is absent, and neither says "progress". The track is
-   * what makes the same line a proportion, so the two ship together.
-   *
-   * The glow is deliberately faint — one soft shadow, no bright inner one. An
-   * earlier revision stacked two and the card looked like it was radioactive;
-   * this only has to lift the line off the track. It stays a STATIC shadow
-   * rather than an animation, because everything on this page that looks like
-   * an instrument has to be a measurement.
+   * ⚠️ NEEDS THE TRACK BEHIND IT TO READ AS A METER AT ALL — alone it is a
+   * length with nothing to be a fraction of, a bottom border at 100% and absent
+   * at 0%. The glow only has to lift the line off that track, and stays a
+   * static shadow: anything here that looks like an instrument is a measurement.
    */
   background-color: var(--primary);
   box-shadow: 0 0 6px 0 color-mix(in oklch, var(--primary), transparent 70%);

@@ -5,35 +5,25 @@ import { windowLine } from '@/lib/window-line';
 /**
  * One matching line.
  *
- * FIXED HEIGHT, ONE LINE, CLIPPED — `leading-6` is 24px and matches
- * `ROW_HEIGHT` in `result-feed.tsx`. Those two numbers are one number and must
- * move together; a wrapped row makes every offset the virtualizer computed
- * wrong, and the symptom is rows overlapping rather than anything that reads
- * like a height bug.
+ * FIXED HEIGHT, ONE LINE, CLIPPED — `leading-6` is 24px and must equal
+ * `ROW_HEIGHT` in `result-feed.tsx`. A wrapped row makes every offset the
+ * virtualizer computed wrong, and the symptom is overlapping rows rather than
+ * anything resembling a height bug. It is also what grep output looks like.
  *
- * It is also what grep output looks like, which is the point.
+ * Clipping is why the line is windowed first: rendering from offset 0 meant a
+ * match at column 300 never appeared, so the row read as a false positive.
+ * Wrapping was the alternative and was rejected — it retires `ROW_HEIGHT`,
+ * forces per-row measurement, and makes 100,000 ragged rows harder to skim.
  *
- * CLIPPED IS WHY THE LINE IS WINDOWED FIRST. Rendering from offset 0 and
- * letting CSS cut the overflow meant a match at column 300 never appeared, so
- * the row read as a false positive — a result with nothing in it to explain why
- * it is a result. `windowLine` keeps the head, elides the middle and brings the
- * first match into view, which preserves the fixed height that the rest of this
- * arrangement depends on. Wrapping was the alternative and was rejected: it
- * retires `ROW_HEIGHT`, forces per-row measurement, and makes 100,000 ragged
- * rows harder to skim than the uniform grid they replace.
- *
- * ⚠️ THE LINE NUMBER IS EXACT HERE ONLY BECAUSE OF THESE SEEDS. `grep`'s
- * running line base gains a line at every 64 KB window slide inside a line
- * with no terminator (BACKLOG 3g), so the number is approximate past such a
- * line. `docs/ARCHITECTURE.md` records that this is unreachable in the demo's
- * logs — the longest line across all four is 387 bytes. A future seed carrying
- * a 100 KB line silently turns every number in this gutter into a guess, and
- * nothing on the page or in CI would catch it.
+ * ⚠️ THE LINE NUMBER IS EXACT ONLY BECAUSE OF THESE SEEDS. `grep`'s line base
+ * gains a line at each 64 KB window slide inside a line with no terminator
+ * (BACKLOG 3g), which needs a line longer than 64 KB; the longest across all
+ * four seeds is 387 bytes. A future seed with a 100 KB line turns every number
+ * in this gutter into a guess, and nothing in CI would catch it.
  */
 export function ResultRow({ hit }: { hit: NetgrepHit }) {
-  // The line is windowed onto its first match before it is highlighted, so a
-  // match past the visible width still shows. `windowLine` rebases the ranges
-  // onto the text it returns, and the two are used together or not at all.
+  // Windowed onto the first match, so one past the visible width still shows.
+  // The returned ranges are rebased onto the returned text; use them together.
   const line = windowLine(hit.line, hit.ranges);
 
   return (
@@ -43,9 +33,8 @@ export function ResultRow({ hit }: { hit: NetgrepHit }) {
       </span>
       <span
         className="text-foreground/85 min-w-0 flex-1 truncate"
-        // Only on a windowed row, and it carries the WHOLE line: the gap is the
-        // one thing on this page that hides content the search actually read,
-        // so there has to be some way back to it.
+        // The gap is the one place the page hides content the search read, so
+        // a windowed row carries the whole line here.
         title={line.elided ? hit.line : undefined}
       >
         {highlight(line.text, line.ranges)}

@@ -6,26 +6,18 @@ import { cn } from '@/lib/utils';
 /**
  * Queries worth trying, chosen to teach something rather than to look busy.
  *
- * THE OLD RULE HERE — "every suggestion matches something" — IS RETIRED, AND
- * ITS PREMISE IS WHY. It existed because a zero-match query read all four
- * sources to their last byte, so offering one as a chip spent hundreds of
- * megabytes to show a row of dashes. Under enumeration there is no early exit
- * for it to be expensive relative to: `grep` yields every matching line, the
- * last of which cannot be known before the last byte, so a query matching
- * nothing costs exactly what a query matching everything costs. The chip that
- * matches nothing is now the cheapest honest way to show what a full read
- * costs, which is the other half of the page's argument.
+ * THE OLD "every suggestion matches something" RULE IS RETIRED because its
+ * premise is void: a zero-match query used to read all four sources to the last
+ * byte, but under enumeration every query does, so it now costs no more than
+ * any other. `zzz-no-such-line` is the cheapest honest way to show a full read.
  *
- * The generated logs tile a fixed sample, so anything drawn from the sample
- * recurs near the head of its file — and, being tiled, recurs tens of thousands
- * of times, which is what fills the feed. The `NETGREP-MARKER-<pct>` lines are
- * the exception: the generator injects them at 25%, 50%, 75% and 99% of every
- * file, so each is exactly ONE line, and finding it is proof the read reached
- * that depth.
+ * The logs tile a fixed sample, so anything from it recurs tens of thousands of
+ * times — which is what fills the feed. `NETGREP-MARKER-<pct>` is the
+ * exception: injected once each at 25%, 50%, 75% and 99%, so finding one proves
+ * the read reached that depth.
  *
- * Every pattern here is valid against every source, because the picker can
- * change under a chip that is already selected. A hint naming one service would
- * be wrong as soon as it did.
+ * Every pattern must be valid against every source, since the picker can change
+ * under a selected chip.
  */
 const SUGGESTIONS = [
   { pattern: 'error', hint: 'smart case — lowercase matches any case' },

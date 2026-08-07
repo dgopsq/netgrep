@@ -30,7 +30,7 @@ describe('windowLine', () => {
   });
 
   // The bug this module exists for: a match past the visible width rendered a
-  // row with no highlight in it at all, which reads as a false positive.
+  // row with no highlight at all, which reads as a false positive.
   it('pulls a match past the visible width into view', () => {
     const line = `${'x'.repeat(200)}BREAK-IN${'y'.repeat(20)}`;
     const ranges = [{ start: 200, end: 208 }];
@@ -43,8 +43,8 @@ describe('windowLine', () => {
     expect(windowed.ranges[0]?.start).toBeLessThan(VISIBLE_CHARS);
   });
 
-  // A log line's head is its timestamp and level. Dropping it to show the match
-  // would trade one missing piece of context for another.
+  // A log line's head is its timestamp and level: dropping it to show the match
+  // trades one missing piece of context for another.
   it('keeps the head of the line and marks the gap', () => {
     const line = `2016-09-28 04:30:31 INFO ${'x'.repeat(200)}BREAK-IN`;
     const ranges = [{ start: 225, end: 233 }];
@@ -68,8 +68,7 @@ describe('windowLine', () => {
     expect(before).toMatch(/x{2,}$/);
   });
 
-  // Every match's offsets have to survive the shift, not just the first — the
-  // row highlights all of them, and one stale offset marks the wrong text.
+  // The row highlights every match, and one stale offset marks the wrong text.
   it('shifts every range, not only the one it windowed around', () => {
     const line = `${'x'.repeat(200)}BREAK-IN and again BREAK-IN`;
     const ranges = [
@@ -85,8 +84,8 @@ describe('windowLine', () => {
     ]);
   });
 
-  // `ranges` is empty when every match sat past the library's byte cap. There
-  // is nothing to centre on, so there is nothing to gain by cutting the line.
+  // `ranges` is empty when every match sat past the byte cap: nothing to centre
+  // on, so nothing to gain by cutting the line.
   it('leaves a line with no ranges alone', () => {
     const line = 'x'.repeat(500);
 

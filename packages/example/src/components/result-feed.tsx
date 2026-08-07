@@ -29,31 +29,19 @@ function countLabel(state: GrepStreamState): string {
 /**
  * Every matching line, as it arrives.
  *
- * DELIBERATELY DOES NOT FOLLOW THE TAIL. Auto-scrolling to the newest row was
- * considered and rejected: at the rate hits arrive it is an unreadable blur,
- * and it takes the scroll away from anyone trying to read one. The streaming is
- * legible without it — the count moves, the meter runs, and the scrollbar thumb
- * visibly shrinks as rows pour in, which says the same thing and can be read.
+ * DELIBERATELY DOES NOT FOLLOW THE TAIL. At the rate hits arrive that is an
+ * unreadable blur, and it steals the scroll from anyone reading a row. The
+ * count, the meter and the shrinking scrollbar thumb say the same thing.
  *
- * THE PAGE IS THE SCROLL CONTAINER — there is exactly one scrollbar, the
- * window's, and this list grows to its full height inside it.
+ * THE PAGE IS THE SCROLL CONTAINER — one scrollbar, the window's, and this list
+ * grows to full height inside it. `useWindowVirtualizer` still bounds what it
+ * renders to ~60 rows, so a nested scroller bought nothing and cost a visitor
+ * the two-scrollbar tangle.
  *
- * An earlier revision gave the feed a fixed `h-[28rem]` and its own scrollbar,
- * on the argument that handing the virtualizer the window was "the one
- * arrangement where it cannot bound what it renders". THAT ARGUMENT WAS SIMPLY
- * WRONG: `useWindowVirtualizer` takes the window as the scroll element by
- * design and bounds the rendered window exactly as the element version does —
- * still ~60 rows in the DOM whatever the match count. A nested scroller was
- * buying nothing and cost a visitor the two-scrollbar tangle where a flick of
- * the wheel scrolls whichever region the pointer happens to be over.
- *
- * ⚠️ WHAT THE OLD COMMENT GOT RIGHT IS THE CONSEQUENCE, AND IT IS REAL. At the
- * retention ceiling this list is 100,000 × 24px — about 2.4 MILLION pixels of
- * document — so the footer below it is genuinely a long way down and the
- * scrollbar thumb becomes a sliver. That is accepted deliberately: the thumb
- * shrinking as hits pour in is legible evidence of the stream, and the licence
- * attribution in the footer is reachable by `End`. Anything added below this
- * feed inherits the same problem, so add it above.
+ * ⚠️ AT THE RETENTION CEILING THIS LIST IS ~2.4 MILLION PIXELS TALL, so the
+ * footer is a long way down and the scrollbar thumb becomes a sliver. Accepted:
+ * the thumb shrinking as hits pour in is legible evidence of the stream.
+ * Anything added below this feed inherits that, so add it above.
  */
 export function ResultFeed({
   state,
@@ -65,17 +53,12 @@ export function ResultFeed({
   const listRef = useRef<HTMLDivElement>(null);
   const [listTop, setListTop] = useState(0);
 
-  // Where this list starts in the DOCUMENT. The window virtualizer needs it to
-  // turn a scroll position into a row index, and everything above the list
-  // moves it: the hero, the sticky controls, and an error banner that appears
-  // and disappears mid-run. So it is measured after every render rather than
-  // once on mount — `getBoundingClientRect` plus `scrollY` rather than
-  // `offsetTop`, which would be relative to the nearest positioned ancestor and
-  // silently wrong the moment one is added above.
-  //
-  // Re-rendering on an unchanged value is the thing to avoid here, since this
-  // component already re-renders once per animation frame during a run; the
-  // equality check makes the steady state a no-op.
+  // Where this list starts in the DOCUMENT — the window virtualizer needs it to
+  // turn a scroll position into a row index. Measured after every render rather
+  // than once on mount, because an error banner appearing mid-run moves it.
+  // `getBoundingClientRect` rather than `offsetTop`, which is relative to the
+  // nearest positioned ancestor and already wrong here. The equality check
+  // keeps the steady state a no-op.
   useLayoutEffect(() => {
     const top = listRef.current
       ? listRef.current.getBoundingClientRect().top + window.scrollY
@@ -101,16 +84,11 @@ export function ResultFeed({
       </div>
 
       {/*
-        ⚠️ THE MIN-HEIGHT IS LOAD-BEARING, NOT DECORATION, AND IT APPLIES
-        WHATEVER THE ROW COUNT. The document has to stay taller than a viewport
-        for `App`'s move to the sticky anchor to land — below that the browser
-        clamps the window's scroll and the page lurches instead.
-
-        An earlier revision put this on the empty state alone, which fixed only
-        the gap between a run starting and its first row arriving. It left the
-        real case wide open: a pattern matching ONCE collapses the document just
-        as thoroughly as a pattern matching nothing, and `NETGREP-MARKER-75` —
-        which the page offers as a suggestion chip — matches exactly once.
+        ⚠️ THE MIN-HEIGHT IS LOAD-BEARING, WHATEVER THE ROW COUNT. The document
+        must stay taller than a viewport or the browser clamps the scroll `App`
+        performs on a new run, and the page lurches. One matching line collapses
+        it as thoroughly as none, so this cannot be conditional on the list
+        being empty.
       */}
       <div ref={listRef} className="min-h-[60vh]">
         {state.retained === 0 ? (
@@ -133,9 +111,8 @@ export function ResultFeed({
                 className="absolute inset-x-0 top-0"
                 style={{
                   height: `${row.size}px`,
-                  // `row.start` is a position in the WINDOW's scroll space, so
-                  // the list's own document offset comes back off it to get a
-                  // position inside this spacer.
+                  // `row.start` is in the WINDOW's scroll space; subtracting the
+                  // list's document offset puts it inside this spacer.
                   transform: `translateY(${row.start - listTop}px)`,
                 }}
               >
@@ -148,11 +125,9 @@ export function ResultFeed({
       </div>
 
       {/*
-        THE CEILING IS THE PAGE'S, AND SAYING SO IS NOT OPTIONAL. What the demo
-        retains and what the library retains are different claims, and this is
-        the one page where letting them blur would be self-defeating — a visitor
-        who reads "showing 100,000 of 2,413,882" and concludes netgrep buffers
-        has learned the opposite of the thing being demonstrated.
+        THE CEILING IS THE PAGE'S, AND SAYING SO IS NOT OPTIONAL. A visitor who
+        reads "showing 100,000 of 2,413,882" and concludes netgrep buffers has
+        learned the opposite of what is being demonstrated.
       */}
       {state.truncated && (
         <p className="border-border/60 text-muted-foreground/60 border-t px-4 py-2 text-[11px] leading-relaxed">

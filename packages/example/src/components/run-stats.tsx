@@ -10,14 +10,11 @@ import { cn } from '@/lib/utils';
 /**
  * One figure and its label, on a single baseline.
  *
- * A `dt`/`dd` pair rather than two spans: these are five name/value pairs, and
- * the markup may as well say so — a screen reader then reads "first match,
- * 27ms" instead of two unrelated strings.
+ * A `dt`/`dd` pair rather than two spans, so a screen reader reads "first
+ * match, 27ms" instead of two unrelated strings.
  *
- * LABEL BESIDE THE VALUE, NOT ABOVE IT, AND THAT IS THE HEIGHT DECISION. This
- * row is sticky for the whole run, so every pixel it takes is a pixel of feed a
- * visitor never sees. Stacked labels made each figure two lines tall and the
- * card ~155px; inline they are one line that wraps only on narrow screens.
+ * Label beside the value, not above it: this row is sticky for the whole run,
+ * and stacking made the card ~155px of feed nobody sees.
  */
 function Stat({
   label,
@@ -48,45 +45,23 @@ function Stat({
 /**
  * The numbers that make the point.
  *
- * "First match" against "elapsed" is the whole argument in two figures: the
- * first matching line lands while the file is still almost entirely
- * undownloaded, and the run then continues to the last byte because that is
- * what enumerating every match costs. On the 240 MB source the gap between them
- * is seconds wide.
+ * "First match" against "Elapsed" is the argument in two figures: the first
+ * line lands while the file is almost entirely undownloaded, and the run
+ * continues to the last byte because that is what enumeration costs.
  *
- * ⚠️ THROUGHPUT IS END-TO-END AND IS NOT A BENCHMARK OF THE ENGINE. It is bytes
- * delivered over wall-clock time, so on the published site it measures GitHub
- * Pages and gzip inflation at least as much as it measures ripgrep. The note
- * below says so and may not be dropped.
+ * ⚠️ THROUGHPUT IS END-TO-END, NOT AN ENGINE BENCHMARK, and `RunStatsNote` is
+ * where the page says so — which is why that note may not be dropped. It is a
+ * separate component only because this row is sticky and static prose need not
+ * be; keep both in this file, which `docs/BACKLOG.md` points at for the
+ * WebAssembly figure the note carries.
  *
- * Memory held is still not reported and still cannot be: no browser API gives
- * an honest per-stream figure, so a number there would be a fabrication rather
- * than a measurement. Do not add one to make the page look instrumented.
+ * Memory held is not reported and cannot be: no browser API gives an honest
+ * per-stream figure, so any number there would be fabricated.
  *
- * ⚠️ THE NOTE THAT QUALIFIES THESE FIGURES IS `RunStatsNote`, BELOW, AND IT IS
- * PART OF THEM. It is a separate component only because this row is sticky and
- * that prose is not — three static lines held on screen for a whole run cost
- * more than they give. It renders directly beneath the sticky bar, so it is
- * adjacent to these figures on first paint, which is when it is read. Keep the
- * two in this one file: they are one statement, and `docs/BACKLOG.md` points
- * here for the WebAssembly figure the note carries.
- *
- * THE READ METER IS THIS CARD ITSELF, not a bar of its own — a faint gradient
- * sweep behind the figures and a glowing rule along the bottom border, both
- * sized by the same measured ratio. It replaced a separate `ScanMeterBar` that
- * cost ~40px of a permanently sticky header to say one thing; the container the
- * figures already sit in says the same thing for free. The page refused a
- * progress bar at all until
- * `GrepOptions.onProgress` and the generator's `manifest.json` supplied a
- * measured numerator and a measured denominator — what was refused was an
- * animation impersonating a measurement, and this fill is a ratio of two known
- * numbers. Do not drive it from elapsed time, a guess, or anything that is not
- * bytes actually delivered.
- *
- * ⚠️ IT IS DECOMPRESSED FILE CONTENT, NOT BYTES ON THE WIRE — the logs are
- * served gzipped at about 16×, so a full card was carried by a fraction of the
- * transfer. `RunStatsNote` is where the page says so, which is why that note may
- * not be dropped.
+ * THE READ METER IS THIS CARD ITSELF — a gradient sweep behind the figures and a
+ * rule along the bottom border, both sized by bytes actually delivered over the
+ * manifest's real size. Do not drive it from elapsed time or a guess; a
+ * progress bar was refused here until both numbers were measured.
  */
 export function RunStats({
   state,
@@ -98,30 +73,25 @@ export function RunStats({
 }) {
   const share = totalBytes > 0 ? Math.min(state.bytesRead / totalBytes, 1) : 0;
 
-  // A pattern that will not compile fails in milliseconds having read nothing,
-  // and every figure below is then true and misleading at once: `0` and `3ms`
-  // read as a completed search rather than as a refusal. The alert above says
-  // what happened; these have nothing to add.
+  // An uncompilable pattern fails in milliseconds having read nothing, so every
+  // figure is true and misleading at once: `0` and `3ms` read as a completed
+  // search rather than a refusal. The alert above already says what happened.
   const uncompiled = state.error !== null && !state.partial;
 
   const dash = (value: string) => (uncompiled ? '—' : value);
 
   return (
-    // SQUARE ALONG THE BOTTOM, rounded everywhere else. The meter is pinned to
-    // that edge, and a radius there clips its ends into tapering stubs — the
-    // fill stops looking like it reaches 100% because the corner eats the last
-    // few pixels of it. Flat corners let the track run the full width.
+    // Square along the bottom: the meter is pinned to that edge, and a radius
+    // clips its ends into stubs, so a full read never looks full.
     <div className="border-border/60 bg-card/40 relative overflow-hidden rounded-t-lg border backdrop-blur">
       {/*
-        Decorative, and `aria-hidden` for it: the accessible reading of this
-        same number is the `progressbar` below, which is a sibling rather than
-        this card's role because `progressbar` makes its children presentational
-        — putting the role here would hide all five figures from a screen reader
-        to announce a percentage.
+        Decorative; the `progressbar` below carries the same number for screen
+        readers. It is a sibling rather than this card's role because
+        `progressbar` makes its children presentational, which would hide all
+        five figures to announce a percentage.
 
-        Emptying is instant and only advancing is smoothed: a new run publishes
-        `bytesRead` as 0, and easing the fill back would spend 150ms animating a
-        read that is not happening.
+        Only advancing is smoothed — a new run publishes `bytesRead` as 0, and
+        easing back would animate a read that is not happening.
       */}
       <div
         aria-hidden="true"
@@ -133,21 +103,15 @@ export function RunStats({
       />
 
       {/*
-        THE TRACK. Full width, always drawn, and the reason the line on top of
-        it reads as a proportion rather than as a border: a bar needs a visible
-        remainder to be a fraction of. Without it a finished run just looks like
-        a card with a teal underline.
+        THE TRACK, always drawn: a bar needs a visible remainder to be a
+        fraction of. Without it a finished run is just a teal underline.
       */}
       <div
         aria-hidden="true"
         className="bg-border/70 absolute inset-x-0 bottom-0 h-[3px]"
       />
 
-      {/*
-        The filled part. The sweep above is atmosphere; THIS is what a
-        percentage is actually read off, which is why it is opaque and the wash
-        behind it is barely there.
-      */}
+      {/* The filled part. The sweep above is atmosphere; this is the reading. */}
       <div
         aria-hidden="true"
         className={cn(
@@ -197,18 +161,14 @@ export function RunStats({
 /**
  * What the figures above mean, and what they are not.
  *
- * ⚠️ THIS IS A TERM OF THE MEASUREMENT, NOT A CAPTION, AND IT MAY NOT BE
- * SHORTENED PAST THE POINT WHERE IT DISTINGUISHES DECOMPRESSED CONTENT FROM
- * BYTES ON THE WIRE. The logs are served gzipped at about 16×, so a `Scanned`
- * reading of 240.2 MB was carried by roughly 15 MB of transfer; drop this
- * sentence and the page overstates bandwidth by a factor of sixteen. The same
- * goes for the throughput clause: end-to-end over a CDN is not a benchmark of
- * the engine, and presenting it as one would put someone else's network under
- * this library's name.
+ * ⚠️ A TERM OF THE MEASUREMENT, NOT A CAPTION. It may not be shortened past the
+ * point where it separates decompressed content from bytes on the wire: the
+ * logs are gzipped at ~16×, so a `Scanned` of 240.2 MB moved roughly 15 MB, and
+ * dropping this overstates bandwidth sixteenfold. Same for the throughput
+ * clause, which keeps a CDN measurement from wearing the library's name.
  *
- * It renders immediately below the sticky bar rather than inside it — see the
- * note on `RunStats`. The 1.17 MB WebAssembly figure is a hand-written literal
- * and has to move when the binary does; `docs/BACKLOG.md` points at this file.
+ * The 1.17 MB WebAssembly figure is a hand-written literal and has to move when
+ * the binary does; `docs/BACKLOG.md` points at this file for it.
  */
 export function RunStatsNote() {
   return (

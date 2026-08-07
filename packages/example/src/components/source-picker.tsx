@@ -6,15 +6,12 @@ import { cn } from '@/lib/utils';
 const LABEL_ID = 'source-picker-label';
 
 /**
- * Which log is being grepped.
+ * Which log is being grepped, one at a time.
  *
- * ONE SOURCE AT A TIME, and the sizes are on the buttons because the sizes are
- * the demonstration. Reading `8.3 MB` beside `240.2 MB` and then watching the
- * same pattern take thirty times as long is the argument the old four-row table
- * made statically; here the visitor performs it.
- *
- * Four concurrent reads were considered and rejected — a feed interleaving four
- * files cannot be read or attributed, and it is 400 MB of someone's connection.
+ * The sizes are on the tags because the sizes are the demonstration: reading
+ * `8.3 MB` beside `240.2 MB` and watching the same pattern take thirty times as
+ * long is an argument the visitor performs rather than reads. Four concurrent
+ * reads were rejected — unattributable, and 400 MB of someone's connection.
  */
 export function SourcePicker({
   value,
@@ -27,12 +24,10 @@ export function SourcePicker({
   bytes: Record<string, number>;
 }) {
   return (
-    // THE VISIBLE LABEL IS WHAT SEPARATES THIS FROM THE SUGGESTION CHIPS ABOVE.
-    // Both are a row of pills; the chips carry a "Try" and this row carried
-    // nothing, so the eye read it as more of the same list rather than as a
-    // different control. Labelling both makes each row say what it is, and
-    // `aria-labelledby` points the group at that same visible text rather than
-    // repeating it in an `aria-label` only a screen reader would ever hear.
+    // The visible label is what separates this from the suggestion chips above:
+    // both are rows of pills, and an unlabelled one reads as more of the same
+    // list. `aria-labelledby` reuses that text instead of an `aria-label` only a
+    // screen reader would hear.
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
       <span id={LABEL_ID} className="text-muted-foreground/70 mr-1 text-xs">
         Search in
@@ -47,10 +42,9 @@ export function SourcePicker({
           const selected = source.id === value;
 
           return (
-            // A REAL RADIO, VISUALLY HIDDEN, RATHER THAN A BUTTON WEARING
-            // `role="radio"`. The native input is what makes the group one tab
-            // stop with arrow keys moving between the four — behaviour a styled
-            // button would have to reimplement, and usually does not.
+            // A real radio rather than a button wearing `role="radio"`: the
+            // native input is what makes the group one tab stop with arrow keys
+            // between the four, which a styled button must reimplement.
             <label
               key={source.id}
               className={cn(
@@ -60,10 +54,8 @@ export function SourcePicker({
                   : 'border-border/80 bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-primary',
               )}
             >
-              {/*
-                `sr-only` is absolutely positioned, so the real radio does not
-                take part in this flex row and the two spans sit alone on it.
-              */}
+              {/* `sr-only` is absolutely positioned, so the radio sits outside
+                  this flex row. */}
               <input
                 type="radio"
                 name="log-source"
