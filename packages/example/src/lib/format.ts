@@ -37,3 +37,26 @@ export function formatMs(ms: number): string {
 
   return `${(ms / 1000).toFixed(1)}s`;
 }
+
+/**
+ * Format a read rate for display, e.g. `184 MB/s`.
+ *
+ * ⚠️ END-TO-END, NOT A BENCHMARK OF THE ENGINE. This is bytes delivered to the
+ * search divided by wall-clock time, so over the published site it measures
+ * GitHub Pages and gzip inflation at least as much as it measures ripgrep. The
+ * label beside it has to say so; presented as an engine figure it is a
+ * measurement of someone's CDN wearing the library's name.
+ *
+ * One decimal below 100 MB/s and none above it: the difference between 184 and
+ * 184.3 MB/s is run-to-run noise on a network figure, and printing it claims a
+ * precision the measurement does not have.
+ */
+export function formatThroughput(bytes: number, ms: number): string {
+  if (bytes <= 0 || ms <= 0) return '—';
+
+  const perSecond = bytes / (1024 * 1024) / (ms / 1000);
+
+  return perSecond >= 100
+    ? `${Math.round(perSecond)} MB/s`
+    : `${perSecond.toFixed(1)} MB/s`;
+}
