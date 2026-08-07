@@ -3,9 +3,9 @@ import {
   DRIP_HEAD_LINE,
   DRIP_TAIL_LINE,
 } from '../../../../vitest.drip-server.js';
+import type { GrepOptions } from './data/GrepOptions.js';
 import { grep } from './grep.js';
 import { matches } from './matches.js';
-import { Netgrep } from './Netgrep.js';
 
 /**
  * How long to wait before calling it: the bytes are not coming.
@@ -48,6 +48,17 @@ function dripId(): string {
 
 const release = (id: string) => fetch(`/__drip/release?id=${id}`);
 
+/**
+ * The first hit `grep` yields, or `undefined` if the file has none.
+ *
+ * Leaving the loop after one hit is also what ends the transfer, so this is
+ * the shape a caller who wants a single answer actually writes.
+ */
+async function firstHit(url: string, pattern: string, options?: GrepOptions) {
+  for await (const hit of grep(url, pattern, options)) return hit;
+  return undefined;
+}
+
 describe('the transport delivers bytes while the response is still open', () => {
   // ⚠️ This file must NOT mock `fetch`. Every other integration test fakes the
   // network to make chunk boundaries deterministic, which means none of them
@@ -89,20 +100,16 @@ describe('the transport delivers bytes while the response is still open', () => 
 
   it('answers a search from bytes that arrived before the response ended', async () => {
     const id = dripId();
-    const netgrep = new Netgrep();
 
     // Resolving at all is the assertion. The line this matches is in the head;
     // the rest of the body does not exist yet, so a buffered response could
     // never produce this answer.
-    const result = await beforeTheResponseEnds(
-      netgrep.search(`/__drip?id=${id}`, DRIP_HEAD_LINE, undefined, {
-        capture: 'line',
-      }),
-      'the search result',
+    const hit = await beforeTheResponseEnds(
+      firstHit(`/__drip?id=${id}`, DRIP_HEAD_LINE),
+      'the first hit',
     );
 
-    expect(result.result).toBe(true);
-    expect(result.line).toBe(DRIP_HEAD_LINE);
+    expect(hit?.line).toBe(DRIP_HEAD_LINE);
 
     await release(id);
   }, 20_000);
@@ -112,9 +119,14 @@ describe('the transport delivers bytes while the response is still open', () => 
     // reason: if the whole body were somehow already present, this search
     // would find the tail's line too.
     const id = dripId();
-    const netgrep = new Netgrep();
 
-    const search = netgrep.search(`/__drip?id=${id}`, DRIP_TAIL_LINE);
+    let bytesSearched = 0;
+
+    const search = firstHit(`/__drip?id=${id}`, DRIP_TAIL_LINE, {
+      onProgress: (bytes) => {
+        bytesSearched = bytes;
+      },
+    });
 
     // Give the head every chance to arrive and be searched. Nothing is being
     // waited FOR here — the point is that the search is still unresolved after
@@ -126,11 +138,18 @@ describe('the transport delivers bytes while the response is still open', () => 
 
     expect(settledEarly).toBe(false);
 
+    // What stops the assertion above from passing vacuously. `firstHit` is
+    // never awaited before the race, so if a refactor made the transfer start
+    // only on the first `await`, an unresolved search would mean a request
+    // that had not begun rather than a tail being withheld. Bytes having
+    // arrived AND been searched is what makes the unresolved search evidence.
+    expect(bytesSearched).toBeGreaterThan(0);
+
     await release(id);
 
-    const result = await beforeTheResponseEnds(search, 'the released result');
+    const hit = await beforeTheResponseEnds(search, 'the released hit');
 
-    expect(result.result).toBe(true);
+    expect(hit?.line).toBe(DRIP_TAIL_LINE);
   }, 20_000);
 
   it('aborts a search that is finding nothing, before the response ends', async () => {

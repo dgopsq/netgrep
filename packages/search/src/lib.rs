@@ -26,9 +26,9 @@ thread_local! {
     /// which also records why the compiled-matcher *handle* proposed in issue
     /// #17 was not the shape taken.
     ///
-    /// ONE ENTRY IS ENOUGH. Every caller of a single `searchBatch` shares one
-    /// pattern, so a single slot hits on every chunk after the first. The case
-    /// it does not cover is two patterns interleaving — a search-as-you-type
+    /// ONE ENTRY IS ENOUGH. Every chunk of every url in one search shares the
+    /// same pattern, so a single slot hits on every chunk after the first. The
+    /// case it does not cover is two patterns interleaving — a search-as-you-type
     /// box whose previous keystroke has not finished — and there the slot
     /// simply thrashes back to the old behaviour, plus one string comparison.
     ///
@@ -51,66 +51,6 @@ pub fn search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, JsError> {
     try_search_bytes(chunk, pattern).map_err(|error| JsError::new(&error))
 }
 
-/// Search a bytes array for the given pattern, returning the first matching
-/// line rather than a boolean.
-///
-/// `undefined` in JavaScript means no match; a string is the line, with its
-/// terminator removed and truncated to `max_line_bytes`. **A match on an empty
-/// line yields an empty string**, so a caller must test for `undefined` rather
-/// than for truthiness.
-///
-/// A separate export rather than a change to `search_bytes`, so a caller that
-/// only wants membership goes on paying for membership only — no allocation,
-/// no decode, no string crossing the boundary.
-///
-/// Throws the same way `search_bytes` does when the pattern will not compile.
-#[wasm_bindgen]
-pub fn search_bytes_line(
-    chunk: &[u8],
-    pattern: &str,
-    max_line_bytes: usize,
-) -> Result<Option<String>, JsError> {
-    try_search_bytes_line(chunk, pattern, max_line_bytes).map_err(|error| JsError::new(&error))
-}
-
-/// The value `search_bytes_line_ranges` hands to JavaScript.
-///
-/// `getter_with_clone` because both fields are heap types: the getters return
-/// copies, and the caller frees the carrier after reading them.
-#[wasm_bindgen(getter_with_clone)]
-pub struct LineWithRanges {
-    /// The first matching line — terminator stripped, truncated, lossily
-    /// decoded, exactly as `search_bytes_line` returns it.
-    pub line: String,
-    /// Flat `[start, end, …]` pairs, UTF-16 code units into `line`, one pair
-    /// per match within it. Can be empty: every match can sit past the
-    /// truncation cut, and `result` is still true.
-    pub ranges: Vec<u32>,
-}
-
-/// Search a bytes array, returning the first matching line and where the
-/// pattern matches within it.
-///
-/// `undefined` means no match, exactly as for `search_bytes_line` — a match on
-/// an empty line yields an empty `line` with one `[0, 0]` range, so test for
-/// `undefined`, never for truthiness.
-///
-/// A third entry point rather than a flag on the second, so each capture mode
-/// pays only its own cost: the boolean path allocates nothing, the line path
-/// runs no ranges pass.
-///
-/// Throws the same way the other two do when the pattern will not compile.
-#[wasm_bindgen]
-pub fn search_bytes_line_ranges(
-    chunk: &[u8],
-    pattern: &str,
-    max_line_bytes: usize,
-) -> Result<Option<LineWithRanges>, JsError> {
-    try_search_bytes_line_ranges(chunk, pattern, max_line_bytes)
-        .map(|hit| hit.map(|(line, ranges)| LineWithRanges { line, ranges }))
-        .map_err(|error| JsError::new(&error))
-}
-
 /// The value `search_block` hands to JavaScript.
 ///
 /// Two fields rather than a vector of structs, and the choice is load-bearing.
@@ -121,9 +61,8 @@ pub fn search_bytes_line_ranges(
 /// the crossing is one string and one integer array per block whatever the hit
 /// count, and the consumer builds each object at the moment it yields it.
 ///
-/// `getter_with_clone` for the same reason `LineWithRanges` uses it: both
-/// fields are heap types, so the getters return copies and the caller frees the
-/// carrier after reading them.
+/// `getter_with_clone` because both fields are heap types: the getters return
+/// copies, and the caller frees the carrier once it has read them.
 #[wasm_bindgen(getter_with_clone)]
 pub struct BlockHits {
     /// The matching lines in hit order, joined by `\n`.
@@ -170,13 +109,16 @@ pub fn try_encode_block(
 
 /// Search a block and return every matching line, flattened.
 ///
-/// The streaming counterpart to `search_bytes_line_ranges`, which returns only
-/// the first match and stops there. Two values cross the boundary per block
-/// however many lines matched; see `BlockHits` for the layout and why it is not
-/// a vector of structs.
+/// Every match, not just the first: the streaming loop above this yields one
+/// result per matching line, so stopping early would lose all but one of them.
+/// Two values cross the boundary per block however many lines matched; see
+/// `BlockHits` for the layout and why it is not a vector of structs.
+///
+/// A match on an empty line yields an empty `line` with one `[0, 0]` range, so
+/// a consumer must count hits rather than test the line for truthiness.
 ///
 /// Throws a JavaScript `Error` when the pattern will not compile, exactly as
-/// the other exports do.
+/// `search_bytes` does.
 #[wasm_bindgen]
 pub fn search_block(
     chunk: &[u8],
@@ -198,34 +140,6 @@ pub fn try_search_bytes(chunk: &[u8], pattern: &str) -> Result<bool, String> {
     with_matcher(pattern, |matcher| search_with(matcher, chunk))
 }
 
-/// `search_bytes_line`, as plain Rust. Split from the export for the same
-/// reason as `try_search_bytes`.
-pub fn try_search_bytes_line(
-    chunk: &[u8],
-    pattern: &str,
-    max_line_bytes: usize,
-) -> Result<Option<String>, String> {
-    with_matcher(pattern, |matcher| {
-        search_line_with(matcher, chunk, max_line_bytes)
-    })
-}
-
-/// `search_bytes_line_ranges`, as plain Rust. Split from the export for the
-/// same reason as `try_search_bytes`.
-///
-/// The tuple is the line (terminator stripped, truncated, lossily decoded) and
-/// flat `[start, end, …]` pairs — UTF-16 code units into that string, so a
-/// JavaScript caller can `line.slice(start, end)` without conversion.
-pub fn try_search_bytes_line_ranges(
-    chunk: &[u8],
-    pattern: &str,
-    max_line_bytes: usize,
-) -> Result<Option<(String, Vec<u32>)>, String> {
-    with_matcher(pattern, |matcher| {
-        search_line_ranges_with(matcher, chunk, max_line_bytes)
-    })
-}
-
 /// Search a block for every matching line.
 ///
 /// The native half of `search_block`, for the reason `try_search_bytes` gives:
@@ -244,9 +158,9 @@ pub fn try_search_block(
 /// Run `use_matcher` against the compiled form of `pattern`, compiling it only
 /// if the memo is not already holding it.
 ///
-/// Generic over the return type so all four entry points share one memo: the
-/// slot caches the *matcher*, which is the expensive part, and is indifferent
-/// to what the caller then does with it.
+/// Generic over the return type so both entry points share one memo: the slot
+/// caches the *matcher*, which is the expensive part, and is indifferent to
+/// what the caller then does with it.
 fn with_matcher<T>(
     pattern: &str,
     use_matcher: impl FnOnce(&RegexMatcher) -> T,
@@ -318,11 +232,12 @@ fn build_matcher(pattern: &str) -> Result<RegexMatcher, String> {
 /// Build a searcher with netgrep's fixed reading semantics: search every byte
 /// as text, and count lines only when the caller needs them.
 ///
-/// Shared by every entry point rather than spelled out in each. They must agree
+/// Shared by both entry points rather than spelled out in each. They must agree
 /// on binary detection in particular, because it decides whether a block is
-/// abandoned — a divergence there would be a difference in `result`, not merely
-/// in what is returned alongside it. `BinaryDetection::none()` is therefore
-/// fixed here for all callers and is not a parameter.
+/// abandoned — a divergence there would make `search_bytes` and `search_block`
+/// disagree about whether the same bytes matched at all, not merely about what
+/// comes back alongside the answer. `BinaryDetection::none()` is therefore fixed
+/// here for all callers and is not a parameter.
 ///
 /// `line_numbers` is a parameter because it is the one setting that changes
 /// cost without changing answers: counting terminators is work the membership
@@ -371,66 +286,19 @@ impl Sink for MemSink {
     }
 }
 
-/// Run a compiled matcher over one block of bytes, keeping the first matching
-/// line.
-fn search_line_with(matcher: &RegexMatcher, chunk: &[u8], max_line_bytes: usize) -> Option<String> {
-    let mut searcher = build_searcher(false);
-
-    let mut sink = LineSink { first: None };
-
-    let _ = searcher.search_slice(matcher, chunk, &mut sink);
-
-    sink.first.map(|line| decode_line(&line, max_line_bytes))
-}
-
-/// A `Sink` that keeps the bytes of the first matching line.
-///
-/// The line is copied rather than borrowed because `SinkMatch` does not outlive
-/// the callback, and it is copied *before* any decoding or truncation so this
-/// stays the cheap half — the expensive half happens once, outside the search.
-struct LineSink {
-    first: Option<Vec<u8>>,
-}
-
-impl Sink for LineSink {
-    type Error = std::io::Error;
-
-    fn matched(
-        &mut self,
-        _searcher: &Searcher,
-        mat: &SinkMatch<'_>,
-    ) -> Result<bool, std::io::Error> {
-        self.first = Some(mat.bytes().to_vec());
-
-        // Same short-circuit as `MemSink`: only the FIRST match is wanted, so
-        // there is nothing left to look for. Unlike there, this one is
-        // observable — keep searching and the field would end up holding the
-        // last matching line instead of the first.
-        Ok(false)
-    }
-}
-
-/// Run a compiled matcher over one block of bytes, keeping the first matching
-/// line and where the pattern matches within it.
-///
-/// The ranges pass runs AFTER the search, over one line's bytes — it does not
-/// touch the early exit, and a `capture: 'line'` or boolean caller never pays
-/// for it.
-fn search_line_ranges_with(
-    matcher: &RegexMatcher,
-    chunk: &[u8],
-    max_line_bytes: usize,
-) -> Option<(String, Vec<u32>)> {
-    let mut searcher = build_searcher(false);
-    let mut sink = LineSink { first: None };
-
-    let _ = searcher.search_slice(matcher, chunk, &mut sink);
-
-    sink.first
-        .map(|line| decode_line_with_ranges(matcher, &line, max_line_bytes))
-}
-
 /// Decode one matched line and locate the pattern's matches within it.
+///
+/// Three lossy steps turn the raw bytes into the string that crosses the
+/// boundary, in an order that matters:
+///
+/// 1. **Strip the terminator.** `SinkMatch::bytes()` includes the trailing
+///    `\n`, and a `\r` before it on Windows-authored input. Both are line
+///    *structure* rather than content, and rendering either verbatim in a UI is
+///    a defect the caller cannot fix without knowing this.
+/// 2. **Truncate**, so the cap applies to visible content rather than to
+///    content-plus-terminator, and so one minified bundle cannot copy megabytes
+///    per file into JavaScript.
+/// 3. **Decode**, last, so the lossy pass runs over at most `max_line_bytes`.
 ///
 /// `find_iter` runs over the FULL stripped line, not the truncated slice:
 /// truncating first would let `$` match at the cut, reporting a match the real
@@ -440,8 +308,10 @@ fn search_line_ranges_with(
 /// an empty line still has a range, which is the one case a caller cannot
 /// re-derive.
 ///
-/// Shared by `search_line_ranges_with` and the block path so the two cannot
-/// drift; every subtlety above was paid for once already.
+/// One decoder, not one per caller. Nothing but the block path calls it today,
+/// but every rule above was paid for once, and a second decoder that got the
+/// order, the drop or the clamp wrong would be wrong only for lines longer than
+/// the cap or shorter than one character — the two cases nobody looks at.
 fn decode_line_with_ranges(
     matcher: &RegexMatcher,
     line: &[u8],
@@ -492,12 +362,12 @@ pub struct BlockOutcome {
     pub hits: Vec<BlockHit>,
 }
 
-/// A `Sink` that keeps every matching line rather than the first.
+/// A `Sink` that keeps every matching line.
 ///
-/// The counterpart to `LineSink`, and the difference is the return value:
-/// `Ok(true)` continues the search. The bytes are copied because `SinkMatch`
-/// does not outlive the callback, and copied undecoded so the expensive half
-/// happens once, after the search.
+/// `Ok(true)` rather than `MemSink`'s `Ok(false)`: membership is answered by the
+/// first hit, but a block has to report all of them. The bytes are copied
+/// because `SinkMatch` does not outlive the callback, and copied undecoded so
+/// the expensive half happens once, after the search.
 struct BlockSink {
     hits: Vec<(u32, Vec<u8>)>,
 }
@@ -610,25 +480,6 @@ fn byte_offsets_to_utf16(bytes: &[u8], offsets: &[usize]) -> Vec<u32> {
     }
 
     out
-}
-
-/// Turn one matched line's raw bytes into the string that crosses the boundary.
-///
-/// Three lossy steps, in an order that matters:
-///
-/// 1. **Strip the terminator.** `SinkMatch::bytes()` includes the trailing
-///    `\n`, and a `\r` before it on Windows-authored input. Both are line
-///    *structure* rather than content, and rendering either verbatim in a UI is
-///    a defect the caller cannot fix without knowing this.
-/// 2. **Truncate**, so the cap applies to visible content rather than to
-///    content-plus-terminator, and so one minified bundle cannot copy megabytes
-///    per file into JavaScript.
-/// 3. **Decode**, last, so the lossy pass runs over at most `max_line_bytes`.
-fn decode_line(line: &[u8], max_line_bytes: usize) -> String {
-    let content = strip_terminator(line);
-    let capped = &content[..floor_char_boundary(content, max_line_bytes)];
-
-    String::from_utf8_lossy(capped).into_owned()
 }
 
 /// Drop one trailing `\n`, and a `\r` immediately before it.

@@ -15,7 +15,7 @@ etag: "..."
 ```
 
 A warm HTTP hit is still delivered as a stream, so a search answered from the browser's cache still
-resolves on the first matching line rather than waiting for the whole file.
+delivers its first hit without waiting for the whole file.
 
 There is no configuration for any of this. The library used to keep downloaded bytes in memory, on by
 default, behind an `enableMemoryCache` flag; that was removed because the platform does the same job

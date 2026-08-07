@@ -15,17 +15,28 @@
 //!
 //! WHAT BELONGS HERE, AND WHAT DOES NOT
 //! ------------------------------------
-//! `search_bytes` is bytes in, bool out; `search_bytes_line` is bytes in, the
-//! first matching line out. Everything that depends only on those bytes — regex
-//! syntax, smart case, line semantics, encoding, binary detection, and what a
-//! returned line contains — is cheapest to pin here: no browser to boot, and a
-//! failure names the engine rather than the streaming loop wrapped around it.
+//! `search_bytes` is bytes in, bool out; `search_block` is bytes in, every
+//! matching line out, flattened into the wire format by `try_encode_block`.
+//! Everything that depends only on those bytes — regex syntax, smart case,
+//! line semantics, encoding, binary detection, what a returned line contains
+//! and how a block of them is laid out for the crossing — is cheapest to pin
+//! here: no browser to boot, and a failure names the engine rather than the
+//! streaming loop wrapped around it.
 //!
 //! Anything involving `fetch`, chunking, aborting or the WASM boundary belongs
-//! in `Netgrep.integration.spec.ts` instead. The two suites overlap on purpose
-//! at exactly one point — smart case — because that is the behaviour most
-//! likely to change silently under a dependency bump, and knowing *which*
-//! layer moved is worth one duplicated assertion.
+//! in `grep.integration.spec.ts` and `matches.integration.spec.ts` instead —
+//! one per entry point the engine has.
+//!
+//! SOME ASSERTIONS ARE DUPLICATED ACROSS THE LANGUAGES ON PURPOSE. Smart case
+//! is one, verdict and ranges both, because it is the behaviour most likely to
+//! change silently under a dependency bump and knowing *which* layer moved is
+//! worth the duplication. The BACKLOG 3c, 3f and 17 pins are the others, 17
+//! including its widening to a bare `\r` — which the TypeScript side files
+//! under 25, since what a consumer sees there is a yielded line disagreeing
+//! with the anchor. Each is a defect whose symptom in a browser is not its
+//! symptom here: a trap, for one, poisons the whole WebAssembly module, so
+//! only the browser can show that the next call still answers. **Do not delete
+//! one side of such a pair because the other exists.**
 
 /// Assert-friendly wrapper: bytes in, bool out, exactly as the module comment
 /// above describes.
@@ -238,9 +249,9 @@ mod search {
         // enough — and free enough — to be worth pinning.
         //
         // Note this only holds for bytes that CARRY the BOM. netgrep hands the
-        // engine one `fetch` chunk at a time, so in a real UTF-16 download only
-        // the first chunk is transcoded; see the note on BACKLOG 3a in
-        // `Netgrep.integration.spec.ts`.
+        // engine one buffer at a time — a chunk plus whatever trailing partial
+        // line was carried over — so in a real UTF-16 download only the first
+        // buffer starts with the BOM and every later one is matched as UTF-8.
         let mut utf16 = vec![0xff, 0xfe];
         for unit in "needle here".encode_utf16() {
             utf16.extend_from_slice(&unit.to_le_bytes());
@@ -310,421 +321,31 @@ mod search {
     }
 }
 
-/// Ranges variant of `matches_line`: bytes in, `(line, flat utf16 ranges)` out.
-#[cfg(test)]
-fn line_ranges(haystack: &[u8], pattern: &str, cap: usize) -> Option<(String, Vec<u32>)> {
-    ::search::try_search_bytes_line_ranges(haystack, pattern, cap)
-        .expect("the pattern should compile")
-}
-
-/// Assert-friendly wrapper around the line-returning entry point.
-///
-/// `None` is "no match"; `Some` carries the line. The same note as `matches`
-/// applies about calling `try_search_bytes_line` rather than the
-/// `#[wasm_bindgen]` export.
-#[cfg(test)]
-fn first_line(haystack: &[u8], pattern: &str, max_line_bytes: usize) -> Option<String> {
-    ::search::try_search_bytes_line(haystack, pattern, max_line_bytes)
-        .expect("the pattern should compile")
-}
-
-/// The matching line, rather than the boolean — BACKLOG 19.
-///
-/// Everything here is about what `search_bytes_line` returns *given* a match;
-/// whether something matches at all is `mod search` above, and is deliberately
-/// not re-asserted. All four entry points share one compiled matcher and one
-/// searcher configuration, so matching semantics cannot diverge between them —
-/// `test_the_four_entry_points_share_one_matcher` is the assertion that keeps
-/// that true.
-#[cfg(test)]
-mod matching_line {
-    use super::{block, first_line, line_ranges, matches};
-    use ::search::try_search_bytes_line;
-
-    /// Comfortably above every line used here, so a test only exercises the cap
-    /// when it says so.
-    const NO_CAP: usize = 4096;
-
-    const POEM: &str = "One Wiseman came to Jhaampe-town.\n\
-                        He set aside both Queen and Crown\n\
-                        Did his task and fell asleep\n\
-                        Gave his bones to the stones to keep.\n";
-
-    // ---------------------------------------------------------------
-    // What comes back
-    // ---------------------------------------------------------------
-
-    #[test]
-    fn test_returns_the_whole_line_not_the_match() {
-        // The point of the feature: a boolean says "yes", this says what was
-        // read. The pattern is three characters and the answer is a sentence.
-        assert_eq!(
-            first_line(POEM.as_bytes(), "aside", NO_CAP).as_deref(),
-            Some("He set aside both Queen and Crown")
-        );
-    }
-
-    #[test]
-    fn test_no_match_is_none() {
-        assert_eq!(first_line(POEM.as_bytes(), "dragon", NO_CAP), None);
-    }
-
-    #[test]
-    fn test_returns_the_first_matching_line_not_the_last() {
-        // `LineSink::matched` stops at the first hit. Keep searching and this
-        // would hold the LAST matching line — the one place that short-circuit
-        // is observable rather than merely faster.
-        let haystack = b"needle one\nneedle two\nneedle three\n";
-
-        assert_eq!(
-            first_line(haystack, "needle", NO_CAP).as_deref(),
-            Some("needle one")
-        );
-    }
-
-    // ---------------------------------------------------------------
-    // Line terminators
-    // ---------------------------------------------------------------
-
-    #[test]
-    fn test_the_trailing_newline_is_stripped() {
-        assert_eq!(
-            first_line(b"alpha\nbeta\n", "alpha", NO_CAP).as_deref(),
-            Some("alpha")
-        );
-    }
-
-    #[test]
-    fn test_a_carriage_return_before_the_newline_is_stripped_too() {
-        // On CRLF input the `\r` is the last byte of the line under netgrep's
-        // `\n`-terminator semantics, so without this it would render as a
-        // control character in whatever the caller displays. BACKLOG 17 fixed
-        // `$` matching here; this strip is unrelated to that fix — it runs on
-        // the captured line for display, after the match already happened
-        // against the raw bytes.
-        assert_eq!(
-            first_line(b"alpha\r\nbeta\r\n", "alpha", NO_CAP).as_deref(),
-            Some("alpha")
-        );
-    }
-
-    #[test]
-    fn test_a_lone_carriage_return_is_content() {
-        // Not a terminator here, so not structure: only the `\r\n` PAIR is
-        // dropped. A file with bare CR endings is one line to the line
-        // SPLITTER — it still only ever breaks on `\n` — and pretending
-        // otherwise here would silently truncate it. The anchors disagree
-        // since `crlf(true)`: they treat a bare `\r` as a line boundary too,
-        // which is BACKLOG 25, pinned below.
-        assert_eq!(
-            first_line(b"alpha\rbeta\n", "alpha", NO_CAP).as_deref(),
-            Some("alpha\rbeta")
-        );
-    }
-
-    #[test]
-    fn test_an_unterminated_final_line_comes_back_whole() {
-        // The common case at a chunk boundary, and at the end of a file with no
-        // trailing newline.
-        assert_eq!(
-            first_line(b"alpha\nbeta", "beta", NO_CAP).as_deref(),
-            Some("beta")
-        );
-    }
-
-    #[test]
-    fn test_a_match_on_an_empty_line_is_an_empty_string() {
-        // ⚠️ LOAD-BEARING FOR Netgrep.ts, which must test the result against
-        // `undefined` rather than for truthiness. An empty string is a MATCH,
-        // and it is falsy in JavaScript.
-        assert_eq!(
-            first_line(b"alpha\n\nbeta\n", "^$", NO_CAP).as_deref(),
-            Some("")
-        );
-    }
-
-    // ---------------------------------------------------------------
-    // The cap
-    // ---------------------------------------------------------------
-
-    #[test]
-    fn test_a_long_line_is_truncated_to_the_cap() {
-        let mut haystack = vec![b'x'; 10_000];
-        haystack.extend_from_slice(b"needle\n");
-
-        let line = first_line(&haystack, "needle", 64).expect("it matches");
-
-        assert_eq!(line.len(), 64);
-        assert!(line.chars().all(|c| c == 'x'));
-    }
-
-    #[test]
-    fn test_the_cap_applies_to_content_not_to_the_terminator() {
-        // Stripping happens before truncation, so a line exactly at the cap
-        // survives intact rather than losing its last character to a `\n` that
-        // is not part of it.
-        assert_eq!(first_line(b"abcde\n", "abc", 5).as_deref(), Some("abcde"));
-    }
-
-    #[test]
-    fn test_truncation_does_not_split_a_utf8_character() {
-        // Five two-byte characters, cut at an odd offset. Splitting the third
-        // would produce a replacement character at the end of the line — the
-        // most visible possible place for one.
-        let line = first_line("ééééé\n".as_bytes(), "é", 5).expect("it matches");
-
-        assert_eq!(line, "éé");
-        assert!(!line.contains('\u{FFFD}'));
-    }
-
-    #[test]
-    fn test_a_cap_of_zero_yields_an_empty_string_not_none() {
-        // Degenerate, and unreachable through `Netgrep.ts`, which clamps to at
-        // least 1. Pinned so that if it ever IS reached the answer is still
-        // "matched", not "did not match".
-        assert_eq!(first_line(b"needle\n", "needle", 0).as_deref(), Some(""));
-    }
-
-    // ---------------------------------------------------------------
-    // Encoding
-    // ---------------------------------------------------------------
-
-    #[test]
-    fn test_non_ascii_content_survives_intact() {
-        assert_eq!(
-            first_line("il a bu un café noir\n".as_bytes(), "café", NO_CAP).as_deref(),
-            Some("il a bu un café noir")
-        );
-    }
-
-    #[test]
-    fn test_invalid_utf8_decodes_lossily_rather_than_failing() {
-        // A latin-1 file, which the engine matches happily because it works on
-        // bytes. The line has to become a JavaScript string somehow, and a
-        // replacement character is the only answer that still returns the rest
-        // of the line. Documented, because it is a class of wrong output the
-        // boolean API could not produce.
-        let line = first_line(b"caf\xE9 noir\n", "caf", NO_CAP).expect("it matches");
-
-        assert_eq!(line, "caf\u{FFFD} noir");
-    }
-
-    // ---------------------------------------------------------------
-    // Shared state with `search_bytes`
-    // ---------------------------------------------------------------
-
-    #[test]
-    fn test_the_four_entry_points_share_one_searcher_configuration() {
-        // All four go through `build_searcher`, so binary detection cannot
-        // differ between them. That matters more than it looks: a divergence
-        // would change `result` — adding `capture: 'line-ranges'` to a working
-        // search would change its ANSWER, not just what came back alongside it.
-        //
-        // Asserted through the observable behaviour rather than the builder,
-        // because the builder is not comparable. The input still carries a NUL
-        // because that is the setting most able to diverge — it used to abandon
-        // the whole block and now searches it as text.
-        assert!(matches(b"needle here\x00tail", "needle"));
-        assert_eq!(
-            first_line(b"needle here\x00tail", "needle", NO_CAP).as_deref(),
-            Some("needle here\u{0}tail")
-        );
-        assert_eq!(
-            line_ranges(b"needle here\x00tail", "needle", NO_CAP),
-            Some(("needle here\u{0}tail".to_string(), vec![0, 6]))
-        );
-        let block_hit = block(b"needle here\x00tail", "needle");
-        assert_eq!(block_hit.hits[0].line, "needle here\u{0}tail");
-        assert_eq!(block_hit.hits[0].ranges, vec![0, 6]);
-
-        // The control, so this is pinning the shared config rather than an
-        // input that never matched.
-        assert!(matches(b"needle here", "needle"));
-        assert_eq!(
-            first_line(b"needle here", "needle", NO_CAP).as_deref(),
-            Some("needle here")
-        );
-        assert_eq!(
-            line_ranges(b"needle here", "needle", NO_CAP),
-            Some(("needle here".to_string(), vec![0, 6]))
-        );
-        let block_hit = block(b"needle here", "needle");
-        assert_eq!(block_hit.hits[0].line, "needle here");
-        assert_eq!(block_hit.hits[0].ranges, vec![0, 6]);
-    }
-
-    #[test]
-    fn test_the_four_entry_points_share_one_matcher() {
-        // All four go through `with_matcher`, so a pattern compiled by one is
-        // reused by the others. That is the point — but it also means a stale
-        // slot would let one entry point answer with another's matcher, which
-        // is the same silent-wrong-answer failure `mod search` guards for
-        // `search_bytes` alone.
-        assert!(matches(b"one wiseman", "wiseman"));
-        assert_eq!(
-            first_line(b"one wiseman", "wiseman", NO_CAP).as_deref(),
-            Some("one wiseman")
-        );
-        assert_eq!(
-            line_ranges(b"one wiseman", "wiseman", NO_CAP),
-            Some(("one wiseman".to_string(), vec![4, 11]))
-        );
-        assert_eq!(
-            block(b"one wiseman", "wiseman").hits[0].line,
-            "one wiseman"
-        );
-
-        // Smart case is decided at compile time, so these need different
-        // matchers despite differing by one bit.
-        assert_eq!(first_line(b"one wiseman", "Wiseman", NO_CAP), None);
-        assert_eq!(line_ranges(b"one wiseman", "Wiseman", NO_CAP), None);
-        assert!(block(b"one wiseman", "Wiseman").hits.is_empty());
-        assert!(matches(b"one wiseman", "wiseman"));
-    }
-
-    #[test]
-    fn test_an_invalid_pattern_is_an_error_here_too() {
-        let error =
-            try_search_bytes_line(b"anything", "(", NO_CAP).expect_err("`(` is not valid regex");
-
-        assert!(
-            error.contains("unclosed group"),
-            "unexpected error: {error}"
-        );
-
-        // And the memo is replaced rather than consulted afterwards.
-        assert_eq!(
-            first_line(b"anything", "any", NO_CAP).as_deref(),
-            Some("anything")
-        );
-    }
-}
-
-/// Ranges within the matching line.
-///
-/// `line_ranges` returns the same line as `first_line` plus flat `[start,
-/// end, …]` pairs in UTF-16 code units, so a caller can `line.slice(start,
-/// end)` in JavaScript without conversion.
-#[cfg(test)]
-mod line_ranges_tests {
-    use super::line_ranges;
-
-    #[test]
-    fn test_ranges_for_a_single_match() {
-        let (line, ranges) = line_ranges(b"one needle here\n", "needle", 4096).unwrap();
-        assert_eq!(line, "one needle here");
-        assert_eq!(ranges, vec![4, 10]);
-    }
-
-    #[test]
-    fn test_no_match_returns_none() {
-        assert!(line_ranges(b"nothing here\n", "dragon", 4096).is_none());
-    }
-
-    #[test]
-    fn test_all_matches_within_the_line_not_just_the_first() {
-        let (_, ranges) = line_ranges(b"cat and cat and cat\n", "cat", 4096).unwrap();
-        assert_eq!(ranges, vec![0, 3, 8, 11, 16, 19]);
-    }
-
-    #[test]
-    fn test_ranges_are_for_the_first_matching_line_only() {
-        // The second matching line contributes nothing: the search stops at the
-        // first, exactly as the boolean and line variants do.
-        let (line, ranges) = line_ranges(b"a cat\nanother cat cat\n", "cat", 4096).unwrap();
-        assert_eq!(line, "a cat");
-        assert_eq!(ranges, vec![2, 5]);
-    }
-
-    #[test]
-    fn test_offsets_are_utf16_units_not_bytes() {
-        // 'é' is 2 bytes in UTF-8 but 1 UTF-16 unit; '𝄞' (U+1D11E) is 4 bytes
-        // in UTF-8 and a surrogate PAIR — 2 UTF-16 units. Byte offsets would be
-        // 6 and 12; char offsets 2 and 8; only UTF-16 gives 3 and 9.
-        let (_, ranges) = line_ranges("é𝄞needle\n".as_bytes(), "needle", 4096).unwrap();
-        assert_eq!(ranges, vec![3, 9]);
-    }
-
-    #[test]
-    fn test_offsets_follow_lossy_decoding() {
-        // A truncated 3-byte sequence (0xE0 0xA0 with no valid continuation)
-        // decodes to exactly ONE U+FFFD (1 UTF-16 unit), so the match sits at
-        // UTF-16 index 1, not at byte index 2. `[0xFF, 0xFE]` was avoided here:
-        // it is the UTF-16LE BOM, and `grep_searcher` sniffs and transcodes it
-        // before matching, so it never reaches this decoding path at all.
-        let mut haystack = vec![0xE0, 0xA0];
-        haystack.extend_from_slice(b"needle\n");
-        let (line, ranges) = line_ranges(&haystack, "needle", 4096).unwrap();
-        // Derive the expectation from the decoded line itself, so the test states
-        // the actual invariant: ranges index into `line` as a JS string would.
-        let expected_start = line.chars().take_while(|c| *c == '\u{FFFD}').count() as u32;
-        assert_eq!(
-            line,
-            format!("{}needle", "\u{FFFD}".repeat(expected_start as usize))
-        );
-        assert_eq!(ranges, vec![expected_start, expected_start + 6]);
-    }
-
-    #[test]
-    fn test_a_match_past_the_cap_is_dropped() {
-        // The line matched, but the only match sits beyond `max_line_bytes`, so
-        // the returned string cannot show it: ranges is EMPTY, result stays true.
-        let (line, ranges) = line_ranges(b"aaaa needle\n", "needle", 4).unwrap();
-        assert_eq!(line, "aaaa");
-        assert!(ranges.is_empty());
-    }
-
-    #[test]
-    fn test_a_match_straddling_the_cap_is_clamped() {
-        let (line, ranges) = line_ranges(b"aa needle\n", "needle", 6).unwrap();
-        assert_eq!(line, "aa nee");
-        assert_eq!(ranges, vec![3, 6]);
-    }
-
-    #[test]
-    fn test_a_match_on_an_empty_line_is_an_empty_range() {
-        let (line, ranges) = line_ranges(b"x\n\ny\n", "^$", 4096).unwrap();
-        assert_eq!(line, "");
-        assert_eq!(ranges, vec![0, 0]);
-    }
-
-    #[test]
-    fn test_crlf_terminator_is_stripped_before_ranges() {
-        // `\r` is structure, not content: it must be outside both the line and
-        // any range touching the line's end.
-        let (line, ranges) = line_ranges(b"needle\r\n", "needle", 4096).unwrap();
-        assert_eq!(line, "needle");
-        assert_eq!(ranges, vec![0, 6]);
-    }
-
-    #[test]
-    fn test_smart_case_applies_to_ranges() {
-        // Lowercase pattern, capitalised text: the range must cover what the
-        // ENGINE matched, which a case-sensitive JS re-match would miss entirely.
-        let (_, ranges) = line_ranges(b"Needle\n", "needle", 4096).unwrap();
-        assert_eq!(ranges, vec![0, 6]);
-    }
-
-    #[test]
-    fn test_invalid_pattern_is_a_domain_error() {
-        assert!(::search::try_search_bytes_line_ranges(b"x\n", "a(", 4096).is_err());
-    }
-}
-
 /// Assert-friendly wrapper for the block API, matching `matches` above.
+///
+/// The cap is comfortably above every line used with it, so a test only
+/// exercises truncation when it says so by calling `block_capped` instead.
 #[cfg(test)]
 fn block(haystack: &[u8], pattern: &str) -> ::search::BlockOutcome {
-    ::search::try_search_block(haystack, pattern, 4096).expect("the pattern should compile")
+    block_capped(haystack, pattern, 4096)
+}
+
+/// `block`, with `max_line_bytes` spelled out — for the tests that are *about*
+/// the cap.
+#[cfg(test)]
+fn block_capped(haystack: &[u8], pattern: &str, max_line_bytes: usize) -> ::search::BlockOutcome {
+    ::search::try_search_block(haystack, pattern, max_line_bytes)
+        .expect("the pattern should compile")
 }
 
 #[cfg(test)]
 mod block {
-    use super::block;
+    use super::{block, block_capped};
 
     #[test]
     fn every_matching_line_is_returned_not_just_the_first() {
-        // The whole point of the export: `LineSink` stops at the first match,
-        // this one does not.
+        // The whole point of the export: membership stops at the first hit,
+        // this one reports all of them.
         let out = block(b"needle one\nmiss\nneedle two\nneedle three\n", "needle");
 
         assert_eq!(out.hits.len(), 3);
@@ -755,8 +376,8 @@ mod block {
 
     #[test]
     fn ranges_are_utf16_offsets_into_the_returned_line() {
-        // Same contract as `search_bytes_line_ranges`: offsets index the
-        // decoded string, not the bytes.
+        // Offsets index the decoded string, not the bytes, so a JavaScript
+        // caller can `line.slice(start, end)` without converting anything.
         let out = block("café needle\n".as_bytes(), "needle");
 
         assert_eq!(out.hits.len(), 1);
@@ -782,8 +403,11 @@ mod block {
 
     #[test]
     fn a_match_on_an_empty_line_is_an_empty_string_with_a_range() {
-        // The trap `search_bytes_line` documents: an empty string is falsy, so
-        // a consumer must count hits rather than test the line for truthiness.
+        // ⚠️ LOAD-BEARING FOR the TypeScript walker, which must count hits
+        // rather than test the line for truthiness: an empty line is a real
+        // match, and an empty string is falsy in JavaScript. The `[0, 0]` range
+        // is deliberate too — it is the one range a caller cannot re-derive by
+        // re-matching the line itself.
         let out = block(b"a\n\nb\n", "^$");
 
         assert_eq!(out.hits.len(), 1);
@@ -795,6 +419,205 @@ mod block {
     #[test]
     fn an_invalid_pattern_is_an_error_not_a_panic() {
         assert!(::search::try_search_block(b"anything", "(", 4096).is_err());
+    }
+
+    // ---------------------------------------------------------------
+    // The cap, and the decoding around it
+    //
+    // Every line a hit carries is terminator-stripped, truncated to
+    // `max_line_bytes` and lossily decoded, in that order, and the ranges are
+    // then dropped or clamped to fit what the string can actually show. These
+    // pin those rules directly, so a failure names the decoder rather than the
+    // wire format the `encoding` tests below wrap around it.
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn the_cap_measures_content_not_content_plus_terminator() {
+        // The terminator is stripped before the cap is measured, so a line
+        // whose content is exactly `max_line_bytes` survives whole. Were the
+        // `\n` counted, five bytes of content under a cap of five would come
+        // back one character short — and the character lost would be the one
+        // the caller is least able to guess is missing, at the very end.
+        let out = block_capped(b"abcde\n", "abc", 5);
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "abcde");
+        assert_eq!(out.hits[0].ranges, vec![0, 3]);
+    }
+
+    #[test]
+    fn truncation_does_not_split_a_utf8_character() {
+        // Five two-byte characters, cut at an odd offset. Splitting the third
+        // would produce a replacement character at the end of the line — the
+        // most visible possible place for one.
+        let out = block_capped("ééééé\n".as_bytes(), "é", 5);
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "éé");
+        assert!(!out.hits[0].line.contains('\u{FFFD}'));
+    }
+
+    #[test]
+    fn a_cap_of_zero_yields_an_empty_line_that_is_still_a_hit() {
+        // Degenerate, and unreachable through the streaming loop, which clamps
+        // to at least 1. Pinned so that if it ever IS reached the answer is
+        // still "this line matched", not "nothing matched" — the empty match at
+        // offset zero is kept deliberately rather than dropped with the rest.
+        let out = block_capped(b"needle\n", "needle", 0);
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "");
+        assert_eq!(out.hits[0].ranges, vec![0, 0]);
+    }
+
+    #[test]
+    fn a_match_past_the_cap_is_dropped() {
+        // The line matched, but its only match sits beyond `max_line_bytes`, so
+        // the returned string cannot show it: the hit stays, its ranges go.
+        let out = block_capped(b"aaaa needle\n", "needle", 4);
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "aaaa");
+        assert!(out.hits[0].ranges.is_empty());
+    }
+
+    #[test]
+    fn a_match_straddling_the_cap_is_clamped() {
+        let out = block_capped(b"aa needle\n", "needle", 6);
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "aa nee");
+        assert_eq!(out.hits[0].ranges, vec![3, 6]);
+    }
+
+    #[test]
+    fn invalid_utf8_decodes_lossily_rather_than_failing() {
+        // A latin-1 file, which the engine matches happily because it works on
+        // bytes. The line has to become a JavaScript string somehow, and a
+        // replacement character is the only answer that still returns the rest
+        // of the line.
+        let out = block(b"caf\xE9 noir\n", "caf");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "caf\u{FFFD} noir");
+    }
+
+    #[test]
+    fn offsets_are_utf16_units_not_bytes_or_characters() {
+        // Sharper than `ranges_are_utf16_offsets_into_the_returned_line` above,
+        // which only uses a BMP character. 'é' is 2 bytes in UTF-8 but 1 UTF-16
+        // unit; '𝄞' (U+1D11E) is 4 bytes in UTF-8 and a surrogate PAIR — 2
+        // UTF-16 units. Byte offsets would be 6 and 12; char offsets 2 and 8;
+        // only UTF-16 gives 3 and 9.
+        let out = block("é𝄞needle\n".as_bytes(), "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].ranges, vec![3, 9]);
+    }
+
+    #[test]
+    fn offsets_follow_lossy_decoding() {
+        // A truncated 3-byte sequence (0xE0 0xA0 with no valid continuation)
+        // decodes to exactly ONE U+FFFD (1 UTF-16 unit), so the match sits at
+        // UTF-16 index 1, not at byte index 2. `[0xFF, 0xFE]` was avoided here:
+        // it is the UTF-16LE BOM, and `grep_searcher` sniffs and transcodes it
+        // before matching, so it never reaches this decoding path at all.
+        let mut haystack = vec![0xE0, 0xA0];
+        haystack.extend_from_slice(b"needle\n");
+
+        let out = block(&haystack, "needle");
+        let hit = &out.hits[0];
+
+        // Derive the expectation from the decoded line itself, so the test
+        // states the actual invariant: ranges index into `line` as a JS string
+        // would.
+        let expected_start = hit.line.chars().take_while(|c| *c == '\u{FFFD}').count() as u32;
+
+        assert_eq!(
+            hit.line,
+            format!("{}needle", "\u{FFFD}".repeat(expected_start as usize))
+        );
+        assert_eq!(hit.ranges, vec![expected_start, expected_start + 6]);
+    }
+
+    #[test]
+    fn smart_case_reaches_the_ranges_and_not_only_the_verdict() {
+        // A lowercase pattern against capitalised text, so smart case is what
+        // makes this match at all — and the range has to cover what the ENGINE
+        // matched. A caller re-matching the returned line with the same pattern
+        // in JavaScript would find nothing, which is exactly why the range is
+        // computed here rather than left to be re-derived.
+        let out = block(b"Needle\n", "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].ranges, vec![0, 6]);
+    }
+
+    #[test]
+    fn a_crlf_terminator_is_stripped_before_ranges_are_computed() {
+        // `\r` is structure, not content: it must be outside both the line and
+        // any range touching the line's end.
+        let out = block(b"needle\r\n", "needle");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "needle");
+        assert_eq!(out.hits[0].ranges, vec![0, 6]);
+    }
+}
+
+/// What `search_bytes` and `search_block` must agree on.
+///
+/// They compile the pattern through one memo and read the bytes through one
+/// searcher configuration, so matching semantics cannot diverge between them.
+/// A divergence here would not merely change what came back alongside the
+/// answer — it would change the answer, so that a url `matches()` reports as a
+/// hit yields no lines from `grep()`, or the reverse.
+#[cfg(test)]
+mod shared_configuration {
+    use super::{block, matches};
+
+    #[test]
+    fn test_the_two_entry_points_share_one_searcher_configuration() {
+        // Both go through `build_searcher`, so binary detection cannot differ
+        // between them.
+        //
+        // Asserted through the observable behaviour rather than the builder,
+        // because the builder is not comparable. The input carries a NUL
+        // because that is the setting most able to diverge — it used to abandon
+        // the whole block and now searches it as text, so a searcher built
+        // without that change would find nothing here at all.
+        assert!(matches(b"needle here\x00tail", "needle"));
+
+        let out = block(b"needle here\x00tail", "needle");
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "needle here\u{0}tail");
+        assert_eq!(out.hits[0].ranges, vec![0, 6]);
+
+        // The control, so this is pinning the shared config rather than an
+        // input that never matched.
+        assert!(matches(b"needle here", "needle"));
+
+        let out = block(b"needle here", "needle");
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "needle here");
+        assert_eq!(out.hits[0].ranges, vec![0, 6]);
+    }
+
+    #[test]
+    fn test_the_two_entry_points_share_one_matcher() {
+        // Both go through `with_matcher`, so a pattern compiled by one is
+        // reused by the other. That is the point — but it also means a stale
+        // slot would let one entry point answer with the other's matcher, which
+        // is the same silent-wrong-answer failure `mod search` guards for
+        // `search_bytes` alone.
+        assert!(matches(b"one wiseman", "wiseman"));
+        assert_eq!(block(b"one wiseman", "wiseman").hits[0].line, "one wiseman");
+
+        // Smart case is decided at compile time, so these need different
+        // matchers despite differing by one bit.
+        assert!(block(b"one wiseman", "Wiseman").hits.is_empty());
+        assert!(!matches(b"one wiseman", "Wiseman"));
+        assert!(matches(b"one wiseman", "wiseman"));
     }
 }
 
@@ -922,12 +745,12 @@ mod encoding {
 
     #[test]
     fn a_line_past_the_cap_is_truncated_and_its_ranges_drop_or_clamp() {
-        // block()'s test helper (above) hardcodes max_line_bytes = 4096, so no
-        // block-path test exercised truncation before this — the drop/clamp
-        // branches were pinned only through `search_bytes_line_ranges`. This
-        // threads a small cap through the encoder instead: the first match
-        // straddles the cut and is clamped, the second sits entirely past it
-        // and is dropped.
+        // What a truncated hit looks like ON THE WIRE. `mod block` pins the
+        // decoder's own drop and clamp rules; this threads a small cap through
+        // the encoder to pin that the table and the joined text still agree
+        // afterwards — the first match straddles the cut and is clamped, the
+        // second sits entirely past it and is dropped, and the record has to
+        // report the one range that survived rather than the two that matched.
         let encoded = ::search::try_encode_block(b"needle and needle\n", "needle", 4)
             .expect("the pattern should compile");
 
@@ -980,9 +803,8 @@ mod encoding {
 /// ---------------------------------------------------------------------
 ///
 /// Read this before changing anything below. It is the `search` crate's half
-/// of the block at the bottom of `Netgrep.integration.spec.ts`; the rules are
-/// the same, and `AGENTS.md` §2.1 and
-/// `docs/decisions/0011-tests-that-assert-known-bugs.md` state them.
+/// of the block at the bottom of `grep.integration.spec.ts`, and the rules are
+/// the same on both sides.
 ///
 /// In short: these assert what netgrep does today, not what it should do. They
 /// exist to catch *unintended* change during a dependency bump — an assertion
@@ -1003,13 +825,8 @@ mod encoding {
 /// not evidence of it either way, so do the deletion here.
 #[cfg(test)]
 mod documented_defects {
-    use super::{first_line, matches};
+    use super::{block, matches};
     use ::search::try_search_bytes;
-
-    /// Comfortably above every line used here, so a test only exercises the
-    /// cap when it says so — same rationale as `matching_line`'s constant of
-    /// the same name.
-    const NO_CAP: usize = 4096;
 
     #[test]
     fn backlog_3c_fixed_an_invalid_pattern_is_an_error() {
@@ -1098,14 +915,16 @@ mod documented_defects {
         assert!(matches(b"foo\rbar\n", "foo$"));
         assert!(matches(b"foo\rbar\n", "^bar"));
 
-        // The line splitter disagrees: it only ever breaks on `\n`
-        // (`test_a_lone_carriage_return_is_content`, above), so the anchors
-        // and the returned line now describe different boundaries for the
-        // same bytes — the captured line is the whole un-split text, not
-        // "foo" or "bar" alone.
-        assert_eq!(
-            first_line(b"foo\rbar\n", "foo$", NO_CAP).as_deref(),
-            Some("foo\rbar")
-        );
+        // The line splitter disagrees: it only ever breaks on `\n`, so the
+        // anchors and the returned line now describe different boundaries for
+        // the same bytes. `grep()` therefore yields ONE line containing the
+        // whole un-split text, not "foo" and "bar" as two, and its range covers
+        // only the part the anchor actually matched.
+        let out = block(b"foo\rbar\n", "foo$");
+
+        assert_eq!(out.hits.len(), 1);
+        assert_eq!(out.hits[0].line, "foo\rbar");
+        assert_eq!(out.hits[0].ranges, vec![0, 3]);
+        assert_eq!(out.lines_in_block, 1);
     }
 }

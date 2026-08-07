@@ -85,6 +85,15 @@ function chunked(str: string, size: number): Array<Uint8Array> {
   return out;
 }
 
+/** Concatenate strings and raw byte values into a single chunk. */
+function bytes(...parts: Array<string | number>): Uint8Array {
+  return new Uint8Array(
+    parts.flatMap((part) =>
+      typeof part === 'string' ? Array.from(encoder.encode(part)) : [part],
+    ),
+  );
+}
+
 /**
  * The underlying source, so a cancel that actually reaches it is observable
  * separately from one the consumer merely called.
@@ -310,6 +319,18 @@ describe('grep integration (real WASM)', () => {
       expect(await collect('/f', 'wiseman')).toHaveLength(2);
     });
 
+    it('applies smart case to the ranges, not just the verdict', async () => {
+      serve([encoder.encode('Needle\n')]);
+
+      const hits = await collect('/f', 'needle');
+
+      // The range covers what the engine matched, capitals and all. Re-running
+      // this pattern over the returned line in JavaScript would find nothing,
+      // so this is a position a caller has no way to work out for themselves —
+      // the whole reason the engine reports it.
+      expect(hits[0].ranges).toEqual([{ start: 0, end: 6 }]);
+    });
+
     it('applies smart case: an uppercased pattern is case-sensitive', async () => {
       serve([encoder.encode('Wiseman\nwiseman\n')]);
 
@@ -474,23 +495,63 @@ describe('grep integration (real WASM)', () => {
     });
   });
 
+  /**
+   * These assertions pin behaviour that is WRONG. Read this before changing
+   * anything below.
+   *
+   * Their job is to detect *unintended* change — during a dependency bump, or
+   * a refactor of the streaming loop. An assertion describing the
+   * correct-but-unimplemented behaviour would fail today and tell us nothing.
+   *
+   * When one is genuinely fixed, the assertion must be inverted IN THE SAME PR.
+   * That is the point: the fix cannot land quietly.
+   *
+   * An entry stays while the behaviour it names could still change silently —
+   * inverted in place once fixed, which is why the `(FIXED)` assertions below
+   * are here rather than tidied out into the suites above. It leaves only when
+   * there is no defect left to track: the subject was deleted, so there is
+   * nothing to assert, or the behaviour is now deliberate and its assertion
+   * belongs above as a design boundary.
+   *
+   * Tracked in `docs/BACKLOG.md`.
+   *
+   * AND the published demo tells its visitors about these defects, so a fix is
+   * not finished until it stops. Delete the caveat from
+   * `docs/guide/caveats.data.json` and run `pnpm docs:sync` in the same PR.
+   * That much is checked: `pnpm docs:sync --check` fails CI when the guide, the
+   * README and the demo disagree with that file. Inverting an assertion below
+   * still turns this suite green on its own, so the deletion is the step to
+   * remember.
+   */
   describe('documented defects (asserting current, incorrect behaviour)', () => {
     // BACKLOG 3g: past the 64 KB retained-tail ceiling the tail becomes a byte
     // window that is searched with its own block AND again as the head of the
-    // next one. Two wrong answers follow, and both are pinned here rather than
-    // fixed: suppressing them would lose a hit outright when the stream ends
-    // inside such a line, and losing a hit is the worse failure for a grep.
+    // next one. Three wrong answers follow, and all three are pinned here
+    // rather than fixed: suppressing them would lose a hit outright when the
+    // stream ends inside such a line, and losing a hit is the worse failure for
+    // a grep.
 
-    it('BACKLOG 3g: a hit inside an over-long line is yielded three times', async () => {
+    it('BACKLOG 3g: a hit inside an over-long line is yielded three times, carrying a fragment', async () => {
       // The match sits far enough in that three consecutive windows still
       // contain it, and each one searches it again. One line of one file, and
       // the line number climbs with every repeat.
-      const overLong = `${'x'.repeat(100 * 1024)}TARGET${'y'.repeat(100 * 1024)}\n`;
+      //
+      // `START` marks where the line truly begins, so the second wrong answer
+      // is visible on the same fixture: the block handed to the engine no
+      // longer starts where the line does, and there is no way to tell the
+      // engine that, so what comes back begins at an arbitrary byte decided by
+      // where the window fell.
+      const overLong = `START${'x'.repeat(100 * 1024)}TARGET${'y'.repeat(100 * 1024)}\n`;
       serve(chunked(overLong, 32 * 1024));
 
       const hits = await collect('/f', 'TARGET');
 
       expect(hits.map((hit) => hit.lineNumber)).toEqual([2, 3, 4]);
+
+      // A mid-line fragment, though the type calls it a line: 100 KB into
+      // itself, and nothing marks the difference for a reader.
+      expect(hits[0].line).not.toContain('START');
+      expect(hits[0].line.startsWith('x')).toBe(true);
     });
 
     it('BACKLOG 3g: the line number drifts after an over-long line', async () => {
@@ -507,6 +568,119 @@ describe('grep integration (real WASM)', () => {
       // slide, one line of drift, carried by EVERY line after the over-long
       // one rather than spent on the first of them.
       expect(hits.map((hit) => hit.lineNumber)).toEqual([3, 4]);
+    });
+
+    it('BACKLOG 3c (FIXED): an invalid pattern rejects, and the engine survives it', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: building
+      // the matcher in the Rust unwrapped, so a malformed regex panicked and
+      // surfaced as `RuntimeError: unreachable` — a wasm trap rather than a
+      // catchable error carrying a diagnostic.
+      //
+      // The engine now returns an error the boundary can throw, so the
+      // rejection carries the regex crate's own words. Inverted in place, as
+      // the block comment above requires.
+      serve([encoder.encode(POEM)]);
+
+      await expect(collect('/f', '(')).rejects.toThrow('unclosed group');
+
+      // The point of the whole change, and why this can only be asserted in a
+      // browser: a trap poisons the WebAssembly module for every later call,
+      // not just the one that hit it. The same instance still answers
+      // correctly afterwards.
+      serve([encoder.encode(POEM)]);
+
+      expect(await collect('/f', 'set aside')).toHaveLength(1);
+    });
+
+    it('BACKLOG 3e (FIXED upstream): `^` anchors to the line, on any line', async () => {
+      // This assertion used to sit here inverted, pinning a real bug: `^`
+      // anchored to the start of the CHUNK rather than the line whenever
+      // smart case left a pattern case-sensitive, so `^Needle` matched only on
+      // line 1 while `^needle` worked everywhere.
+      //
+      // Dropping the ripgrep fork for grep-regex 0.1.14 / grep-searcher 0.1.17
+      // fixed it upstream — no change to the Rust was needed. It stays pinned
+      // because nothing here guards against picking the fork back up.
+      const lineNumbers = async (pattern: string) =>
+        (await collect('/f', pattern)).map((hit) => hit.lineNumber);
+
+      serve([encoder.encode('Needle x\nother\n')]);
+      expect(await lineNumbers('^Needle')).toEqual([1]);
+
+      // Previously empty. This is the case that was broken.
+      serve([encoder.encode('other\nNeedle x\n')]);
+      expect(await lineNumbers('^Needle')).toEqual([2]);
+
+      serve([encoder.encode('a\nb\nNeedle x\n')]);
+      expect(await lineNumbers('^Needle')).toEqual([3]);
+
+      // The case-insensitive path was always correct; still is.
+      serve([encoder.encode('other\nneedle x\n')]);
+      expect(await lineNumbers('^needle')).toEqual([2]);
+
+      serve([encoder.encode('other\nxx Needle\n')]);
+      expect(await lineNumbers('Needle$')).toEqual([2]);
+    });
+
+    it('BACKLOG 3f (FIXED): a NUL byte no longer discards the searched block', async () => {
+      // `BinaryDetection::quit(b'\x00')` abandoned the block on the first NUL,
+      // so the match was dropped even when it preceded the NUL. With
+      // `BinaryDetection::none()` the bytes are searched as text.
+      //
+      // Case (d) used to be the incidental narrowing — the NUL landing in the
+      // held-back partial line so it never shared a block with the match. It is
+      // kept because it now passes for the ordinary reason rather than the
+      // accidental one, and the two must not be told apart by chance.
+      const lineNumbers = async () =>
+        (await collect('/f', 'needle')).map((hit) => hit.lineNumber);
+
+      // (a) no NUL at all.
+      serve([bytes('needle here')]);
+      expect(await lineNumbers()).toEqual([1]);
+
+      // (b) NUL after the match, same unterminated line.
+      serve([bytes('needle here', 0x00, 'tail')]);
+      expect(await lineNumbers()).toEqual([1]);
+
+      // (c) NUL on a terminated line of its own, after the match's line.
+      serve([bytes('needle here\n', 0x00, 'tail\n')]);
+      expect(await lineNumbers()).toEqual([1]);
+
+      // (d) as (c), but the NUL's line is never terminated.
+      serve([bytes('needle here\n', 0x00, 'tail')]);
+      expect(await lineNumbers()).toEqual([1]);
+    });
+
+    it('BACKLOG 17 (FIXED): `$` matches on CRLF input, through the whole path', async () => {
+      // Pinned here as well as in Rust because the defect was invisible to a
+      // consumer for a reason the engine tests cannot show: it depends on who
+      // authored the file, not on anything the caller did. The yielded line is
+      // asserted too, since its `\r` is stripped and a reader will compare it
+      // against what they searched for.
+      serve([bytes('needle\r\nnext\r\n')]);
+
+      const crlf = await collect('/f', 'needle$');
+
+      expect(crlf).toHaveLength(1);
+      expect(crlf[0].line).toBe('needle');
+
+      // The LF-only case, which is what could regress.
+      serve([bytes('needle\nnext\n')]);
+      expect(await collect('/f', 'needle$')).toHaveLength(1);
+    });
+
+    it('BACKLOG 25: `^`/`$` also anchor to a bare `\\r`, disagreeing with the yielded line', async () => {
+      // The CRLF-aware anchors that fixed BACKLOG 17 treat a lone `\r` as a
+      // line boundary too, not only `\r\n`. The match is real — the anchor did
+      // match — but the line splitter never split here, so the hit carries the
+      // whole unsplit text rather than what `$` anchored against. That
+      // disagreement, not just the extra match, is what a consumer sees.
+      serve([bytes('foo\rbar\n')]);
+
+      const hits = await collect('/f', 'foo$');
+
+      expect(hits).toHaveLength(1);
+      expect(hits[0].line).toBe('foo\rbar');
     });
   });
 });

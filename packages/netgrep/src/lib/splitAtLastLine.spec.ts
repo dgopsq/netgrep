@@ -4,7 +4,7 @@ import { splitAtLastLine } from './splitAtLastLine.js';
 // The buffer arithmetic behind BACKLOG 3a's fix, on its own.
 //
 // A pure function specifically so this can be a table in Node: reaching the
-// windowed branches through `Netgrep.search` needs a >64 KB fixture with no line
+// windowed branches through `grep` needs a >64 KB fixture with no line
 // breaks, which pins the same logic far more expensively.
 //
 // `cap` is 8 throughout, so the windowed cases fit on one line.

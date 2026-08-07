@@ -38,12 +38,18 @@ returned `false`.
 
 **Playwright drives a real browser; ChromeDriver and `wasm-pack test` are removed.**
 
-`vitest.config.ts` declares two projects:
+~~`vitest.config.ts` declares two projects:~~
 
 | Project | Environment | Suite |
 |---|---|---|
-| `unit` | Node | `Netgrep.spec.ts` — mocks `fetch` *and* the engine, so a browser would add nothing |
-| `browser` | Playwright Chromium, headless | `Netgrep.integration.spec.ts` — the real WASM, the real streaming loop |
+| `unit` | Node | ~~`Netgrep.spec.ts`~~ — mocks `fetch` *and* the engine, so a browser would add nothing |
+| `browser` | Playwright Chromium, headless | ~~`Netgrep.integration.spec.ts`~~ — the real WASM, the real streaming loop |
+
+**(2026-08-07: three projects now, matched by glob rather than by name. `unit` takes every `*.spec.ts` under
+`packages/netgrep/src` except the integration ones; `browser` takes the `*.integration.spec.ts` files; and a
+third, `tools`, runs the build-time tooling and the example's pure modules in Node, touching neither the
+library nor `pkg/`. The split this record decided is unchanged — the table above is the shape it had on the
+day, before the class that named those two files was deleted.)**
 
 Playwright downloads a Chromium pinned to its own package version, which is pinned in the lockfile. Browser
 and driver ship as one unit and cannot drift — locally or in CI. CI gains one step,

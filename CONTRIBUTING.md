@@ -4,13 +4,14 @@ netgrep is maintained conservatively: fix defects, keep dependencies from rottin
 existing consumers. That is most of the work, and [`docs/BACKLOG.md`](docs/BACKLOG.md) lists what is already
 sanctioned.
 
-**A feature starts as an issue, not as a pull request.** The public API is deliberately small — a boolean per
-URL, plus, on request, the first matching line and each match's position within it — and it has widened
-exactly once, twice if the positions are counted apart from the line. Argue the case in an issue first; if it
-is accepted it lands with a decision record that also says what it does *not* open the door to.
+**A feature starts as an issue, not as a pull request.** The public API is deliberately small — two functions:
+`matches` answers a boolean per URL, and `grep` yields every matching line as it is found, each with its
+file-absolute line number and each match's position within it. Argue the case in an issue first; if it is
+accepted it lands with a decision record that also says what it does *not* open the door to.
 [Decision 0020](docs/decisions/0020-the-matching-line.md) is the worked example;
-[0022](docs/decisions/0022-capture-ranges.md)'s closing table is the **current** list of match details already
-refused, carrying 0020's forward minus the one row it reopened and shipped.
+[0022](docs/decisions/0022-capture-ranges.md)'s closing table, as
+[0027](docs/decisions/0027-streaming-matching-lines.md) amends it, is the **current** list of match details
+already refused — file-absolute byte offsets, match counts, context lines and ranking among them.
 
 [`AGENTS.md`](AGENTS.md) is the authoritative guide to this repository — toolchain pins, the repository map,
 the hard rules, the known correctness caveats. This file is the short human on-ramp; where the two overlap,
@@ -44,10 +45,11 @@ most common way to lose an hour here.
 All from the repository root. [AGENTS.md §4](AGENTS.md#4-commands) has the full list and the caveats.
 
 ```bash
-pnpm test          # Vitest — 77 tests (45 in Node, 32 in headless Chromium)
-pnpm test:unit     # just the Node half — no WASM build and no browser needed
+pnpm test          # Vitest — 197 tests (60 unit and 71 tooling in Node, 66 in headless Chromium)
+pnpm test:unit     # just the unit half — no WASM build and no browser needed
+pnpm test:tools    # the docs generator, the guide renderer and the example's pure modules
 pnpm test:browser  # just the browser half
-pnpm test:rust     # cargo test — 28 tests, native, no browser
+pnpm test:rust     # cargo test — 56 tests, native, no browser
 pnpm typecheck     # tsc --noEmit
 pnpm lint          # Biome (JS/TS) and clippy (-D warnings); lint:js / lint:rust run one each
 pnpm format        # Biome, writes in place
@@ -142,10 +144,11 @@ halves locally. See
 
 Then, in rough order of how likely each is to bite:
 
-- **Some tests assert behaviour that is deliberately wrong.** `Netgrep.integration.spec.ts` ends with a block
-  titled *documented defects*, and `packages/search/tests/search.rs` with a `documented_defects` module. They
-  pin known bugs — a NUL byte discarding a block of lines, a match longer than the 64 KB tail ceiling still
-  spanning a chunk boundary. Several are labelled `(FIXED)` and assert *correct* behaviour, inverted in place
+- **Some tests assert behaviour that is deliberately wrong.** `grep.integration.spec.ts` and
+  `matches.integration.spec.ts` each end with a block titled *documented defects*, and
+  `packages/search/tests/search.rs` has a `documented_defects` module. They pin known bugs — a match longer
+  than the 64 KB tail ceiling still spanning a chunk boundary, `^`/`$` also anchoring to a bare `\r`. Several
+  are labelled `(FIXED)` and assert *correct* behaviour, inverted in place
   with a note about what they used to claim; that is the block recording its own history, not clutter. If one
   fails, something changed the engine; work out what, and if the new behaviour is right, **invert the
   assertion in the same PR** with a note. Do not quietly "fix" the test.

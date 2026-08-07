@@ -68,8 +68,8 @@ Measured 2026-08-05: `@netgrep/netgrep` has 503 npm downloads in the last year, 
 Two consequences, and the first is a refusal to overclaim. **This rewrite is not an adoption lever and
 is not offered as one.** What gates adoption is discovery, and then the requirement that a file be
 readable by an anonymous cross-origin request, which empties most of the addressable set. The cheapest
-real widening of that set is `fetch` options passthrough — BACKLOG item **22** — which lands here as a
-rider rather than as the headline.
+real widening of that set is `fetch` options passthrough — BACKLOG item **22** — which rode along as a
+rider rather than as the headline: it landed in PR 6 on 2026-08-06, and closed item **29** with it.
 
 The second is freedom. Nothing is deployed against the current surface, so this deletes rather than
 deprecates.
@@ -147,11 +147,12 @@ accumulates every hit of a common pattern in a 240 MB log will exhaust the tab r
 library does. The lazy materialisation above is what keeps the honest usage the default one; the
 documentation says the rest.
 
-**Two open defects are closed on the way, and would have been worth closing anyway.** Item **3f** — a NUL
-byte discarding the block that contains it — becomes load-bearing rather than cosmetic once line numbers
-exist, because a discarded block desynchronises the running count for the rest of the file, which is a
-quieter failure than a missed match. Item **17** — `$` never matching on CRLF input — is one line beside
-it. Both ship before any of this record's own code, so that they stand if the rewrite does not.
+**Two open defects were closed on the way, and would have been worth closing anyway.** Item **3f** — a NUL
+byte discarding the block that contains it — became load-bearing rather than cosmetic once line numbers
+existed, because a discarded block desynchronises the running count for the rest of the file, which is a
+quieter failure than a missed match. Item **17** — `$` never matching on CRLF input — was one line beside
+it. Both shipped on 2026-08-05, before any of this record's own code, so that they stand if the rewrite does
+not.
 
 **Two things are deferred with their designs recorded rather than refused.** Context lines
 (`before`/`after`) were the sole reason for the overlap window and match-holding scheme that an earlier

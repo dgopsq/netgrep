@@ -3,7 +3,7 @@
     "id": "long-lines",
     "title": "Inside a line longer than 64 KB, results are approximate",
     "short": "Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.",
-    "body": "netgrep holds back the incomplete last *line* of each chunk and prepends it to the next. That is exact, since a match can never cross a newline, so ordinary text is unaffected no matter how the network splits the response. The exception is a line with no terminator in 64 KB, such as minified JavaScript or a one-line data dump. Past that ceiling the retained bytes become a plain 64 KB window, so a match longer than the window is lost, `^` can match at a window edge where no line actually begins, and a line captured with `capture` is a mid-line fragment rather than a line. That fragment need not contain the match, so `ranges` can come back empty even though `result` is still correct. Newline-free input is also answered more slowly, because nothing can be searched until the ceiling fills or the download ends.",
+    "body": "Inside a single line longer than 64 KB, netgrep searches a sliding window rather than the whole line, and three things follow. The first two hit both functions, and in both directions, because the window is all the engine is given and neither function can be told otherwise. A match longer than the window, or one that spans the seam between two of them, is missed outright — `matches` answers false and `grep` never yields the line. And `^` and `$` can match at the window's edge, which is not where the line begins or ends: `matches` answers true when no line in the file really begins that way, and `grep` yields the line behind that answer, which does not begin where it claims to. The third is `grep`'s alone. It reports a hit inside such a line more than once, with a line number that gains one at every window slide, so numbers after an over-long line are approximate rather than exact. Two lesser effects: the line a hit carries begins at the window's edge rather than where the line begins, so it is a mid-line fragment; and newline-free input is answered more slowly, because nothing can be searched until the window fills or the download ends. Ordinary log lines, source files and prose are nowhere near this; a minified bundle or a single-line data dump is.",
     "kind": "defect",
     "backlog": "3g"
   },
@@ -11,7 +11,7 @@
     "id": "bare-cr-anchors",
     "title": "`^`/`$` also anchor to a bare `\\r`, not just `\\r\\n`",
     "short": "A file with old-Mac or progress-bar `\\r` line endings gets extra anchor matches the returned line doesn't agree with.",
-    "body": "Fixing `$` on CRLF input meant enabling the regex engine's CRLF-aware anchors, and they treat a lone `\\r` as a line boundary too, not only a `\\r\\n` pair. So `foo$` and `^bar` both match `\"foo\\rbar\\n\"`, on either side of the bare `\\r` — matches that did not happen before. The line splitter disagrees: it still only ever breaks on `\\n`, so the line `capture` returns for that match is the whole unsplit text, not `\"foo\"` or `\"bar\"` alone. A caller cannot predict which boundary applies from the documented behaviour of either.",
+    "body": "Fixing `$` on CRLF input meant enabling the regex engine's CRLF-aware anchors, and they treat a lone `\\r` as a line boundary too, not only a `\\r\\n` pair. So `foo$` and `^bar` both match `\"foo\\rbar\\n\"`, on either side of the bare `\\r` — matches that did not happen before. The line splitter disagrees: it still only ever breaks on `\\n`, so the line `grep` yields for that match is the whole unsplit text, not `\"foo\"` or `\"bar\"` alone. A caller cannot predict which boundary applies from the documented behaviour of either.",
     "kind": "defect",
     "backlog": "25"
   },
@@ -19,7 +19,7 @@
     "id": "no-binary-detection",
     "title": "netgrep does not detect binary files",
     "short": "A pattern that occurs inside a `.png` is reported like any other match.",
-    "body": "netgrep searches every byte it is given as text. It does not sniff for binary content and does not decline to search it, so pointing it at an image, an archive or an executable produces matches wherever the pattern's bytes occur, and a captured line is whatever the surrounding bytes decode to — lossily, so anything that is not valid UTF-8 becomes `U+FFFD`. This is deliberate: the alternative ripgrep offers is to abandon the whole block of lines on the first NUL byte, which discarded matches that came *before* it and made a file's answer depend on a byte the caller never looked for. Deciding what a url points at is the caller's job, and it is the one thing the caller can actually do.",
+    "body": "netgrep searches every byte it is given as text. It does not sniff for binary content and does not decline to search it, so pointing it at an image, an archive or an executable produces matches wherever the pattern's bytes occur, and a yielded line is whatever the surrounding bytes decode to — lossily, so anything that is not valid UTF-8 becomes `U+FFFD`. This is deliberate: the alternative ripgrep offers is to abandon the whole block of lines on the first NUL byte, which discarded matches that came *before* it and made a file's answer depend on a byte the caller never looked for. Deciding what a url points at is the caller's job, and it is the one thing the caller can actually do.",
     "kind": "by-design",
     "backlog": null
   },
@@ -33,9 +33,9 @@
   },
   {
     "id": "no-ranking",
-    "title": "Matches are reported per file, not ranked",
-    "short": "netgrep answers whether a pattern occurs in each file, so there is nothing to sort by — no counts, no line numbers, no relevance.",
-    "body": "netgrep answers whether a pattern occurs in a file and, if you ask, the first line it occurs on with each match highlighted within it. It does not rank, and not because ranking was left for later: ranking needs a scoring model, and netgrep has no term statistics, no document frequencies and no index to build one from. There is nothing to rank *with*. Match counts are refused for a different reason — counting means reading every byte of a file, which is exactly what answering before the download finishes avoids. So files come back in the order you asked for them, with no counts, no line numbers and no relevance ordering. If you need results sorted by how well they match, that is what a prebuilt index is for: [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and [FlexSearch](https://github.com/nextapps-de/flexsearch) all do it, and netgrep is not trying to.",
+    "title": "Matches are reported in the order they occur, not ranked",
+    "short": "netgrep reports a file's matches in the order they occur, so there is nothing to sort by — no counts, no relevance.",
+    "body": "netgrep answers whether a pattern occurs in a file, or yields every line it occurs on as that line is found, with each match highlighted within it. It does not rank, and not because ranking was left for later: ranking needs a scoring model, and netgrep has no term statistics, no document frequencies and no index to build one from. There is nothing to rank *with*. Match counts are refused for a different reason again: a consumer holding the hits already has the count, and a second source of truth could only disagree with it. So hits come back in the order they occur in the file, with no counts and no relevance ordering. If you need results sorted by how well they match, that is what a prebuilt index is for: [Pagefind](https://pagefind.app/), [Lunr](https://lunrjs.com/) and [FlexSearch](https://github.com/nextapps-de/flexsearch) all do it, and netgrep is not trying to.",
     "kind": "by-design",
     "backlog": null
   }

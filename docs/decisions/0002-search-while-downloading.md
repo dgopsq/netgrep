@@ -11,7 +11,9 @@ files, that is the difference between feeling instant and feeling broken.
 ## Decision
 
 Consume the response as a stream (`res.body.getReader()`) and call the WASM matcher on **each chunk as it
-arrives**, resolving the promise the moment a chunk matches. See `handleReader` inside `Netgrep.search`.
+arrives**, resolving the promise the moment a chunk matches. ~~See `handleReader` inside `Netgrep.search`.~~
+**(2026-08-06: see `streamBlocks.ts`, which both `grep()` and `matches()` read through. The decision is
+untouched — only the pointer moved.)**
 
 This is why the matching engine has to be ripgrep rather than a JavaScript regex over the assembled string:
 the whole point is to never assemble the string.

@@ -11,6 +11,6 @@ itself uses. **Smart case is hardcoded on**:
 This is not configurable. Lowercase your pattern to search case-insensitively.
 
 An invalid pattern (a stray `(`, or a literal newline from a pasted two-line string) is an ordinary failure:
-`search` rejects, and the batch methods report it as `{ result: false, error: "…" }` like any other error,
-carrying the regex crate's own diagnostic. Nothing needs escaping in advance, and one bad keystroke in a
-search box does not affect the searches after it.
+`matches` rejects and `grep` throws from the first turn of the loop, both carrying the regex crate's own
+diagnostic and both before the connection opens — a typo costs no request at all. Nothing needs escaping in
+advance, and one bad keystroke in a search box does not affect the searches after it.
