@@ -1,7 +1,9 @@
 # 0026 — The demo is a log dashboard over four large files
 
-**Status: ACCEPTED (2026-08-02), amended (2026-08-03)** — the page now also reports bytes read per source, see
-*Amendment* at the end. Supersedes the row labelled `Corpus` in [0017](0017-example-as-hosted-demo.md);
+**Status: ACCEPTED (2026-08-02), amended (2026-08-03), amended by
+[0028](0028-demo-as-live-grep.md) (2026-08-07)** — the page reports bytes read per source, and the dashboard
+this record describes has since been replaced by a live grep over one source at a time. See the two
+*Amendment* sections at the end; this record's corpus and every measurement in it stand. Supersedes the row labelled `Corpus` in [0017](0017-example-as-hosted-demo.md);
 amends [0023](0023-documentation-site.md) and [0025](0025-streaming-grep-over-http.md).
 
 (The split status is deliberate, by the test [0024](0024-remove-the-in-memory-cache.md) states: a record is
@@ -223,3 +225,33 @@ an honest per-stream figure, so a memory number on this page would still be a fa
 this amendment draws is between a quantity the page can observe at its own boundary and one it cannot observe
 at all — bytes in are the first, memory held is the second. **Do not add a number to the page to make it look
 measured** stands exactly as written.
+
+---
+
+## Amendment (2026-08-07) — the dashboard is replaced by a live grep
+
+The page this record describes no longer exists. [0028](0028-demo-as-live-grep.md) replaces the four-row
+membership dashboard with a single-source live grep: one file at a time, every matching line streamed into a
+virtualized feed as it arrives. The reason is not that anything here was wrong — it is that
+[0027](0027-streaming-matching-lines.md) shipped enumeration, and a page that breaks out of `grep()` at the
+first hit argues for `matches()` while calling `grep()`.
+
+**Three positions in this record and the example README are reversed by 0028, each with its premise:**
+
+- **The refused progress bar.** Refused on two grounds — netgrep exposed no progress, and `Content-Length` on
+  a gzipped response is the compressed size, so there was no honest total to divide by. `GrepOptions
+  .onProgress` and the generator's `manifest.json` now supply both. **The rule underneath is untouched:** no
+  fabricated figure, and therefore still no memory figure.
+- **"Every suggestion chip matches something."** Its premise was that a zero-match query was uniquely
+  expensive because it defeated early exit across four files. Under enumeration every query reads its source
+  to the last byte, so the premise is void rather than outweighed.
+- **The `window.fetch` wrapper** documented in the amendment above, `packages/example/src/lib/scan-meter.ts`,
+  is deleted. It reverse-engineered a figure the library now reports directly. The Resource Timing finding
+  recorded above is retained history rather than current mechanism, and is worth keeping so nobody re-probes
+  it.
+
+**None of this record's measurements are retracted.** The ~16 ms early answer, the 8.9%-of-Apache figure, the
+marker rows landing on their planted depths and the ~16× gzip ratio were all correctly measured and remain the
+evidence for the claims they were taken for. What changed is what the page chooses to show, not what was true
+when it was shown. The corpus, the seeds, the generation script, the `.txt` extension and the `Scanned`
+wording all survive into 0028 unchanged.
