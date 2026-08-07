@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="1000" viewBox="0 0 2000 1000" role="img" aria-label="net | grep — grep over HTTP, running in the browser.">
+  <defs>
+    <!-- Full-bleed variant of the header card: same near-black field, faint teal glow top-right. -->
+    <radialGradient id="glow" cx="0.85" cy="0.1" r="1.1">
+      <stop offset="0" stop-color="#10201d" />
+      <stop offset="0.55" stop-color="#0b100f" />
+      <stop offset="1" stop-color="#0a0b0c" />
+    </radialGradient>
+    <linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="550" y1="0" x2="1450" y2="0">
+      <stop offset="0" stop-color="#f4f6f5" />
+      <stop offset="0.4" stop-color="#e9eeec" />
+      <stop offset="0.8" stop-color="#2ee0c9" />
+    </linearGradient>
+  </defs>
+  <rect width="2000" height="1000" fill="url(#glow)" />
+  <text font-family="JetBrains Mono" font-weight="700" font-size="150" text-anchor="middle" x="1000" y="470">
+    <tspan fill="url(#fade)">net</tspan><tspan fill="#2ee0c9"> | </tspan><tspan fill="url(#fade)">grep</tspan>
+  </text>
+  <text font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-weight="500" font-size="52" text-anchor="middle" x="1000" y="590" xml:space="preserve">
+    <tspan fill="#c9d1ce">grep over HTTP, </tspan><tspan fill="#2ee0c9">running in the browser.</tspan>
+  </text>
+</svg>

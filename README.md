@@ -1,4 +1,4 @@
-![The netgrep wordmark: new Netgrep(); set in monospace, fading from white into teal on a dark gradient](assets/header.png)
+![The netgrep wordmark: net | grep set in monospace, fading from white into teal on a dark gradient](assets/header.png)
 
 # netgrep
 
