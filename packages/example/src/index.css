@@ -261,6 +261,44 @@
   );
 }
 
+@utility read-meter-sweep {
+  /*
+   * The share of the file already delivered to the search, painted behind the
+   * run figures.
+   *
+   * A GRADIENT RATHER THAN A FLAT TINT, and that is the difference between this
+   * reading as progress and reading as a status colour. Filled flat, a finished
+   * run is just a card that has turned teal: there is no leading edge to find,
+   * and 100% is indistinguishable from "this box is green". Weighting the tint
+   * toward the head gives the sweep a front to follow and leaves the oldest
+   * bytes nearly clear.
+   */
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--primary), transparent 98%),
+    color-mix(in oklch, var(--primary), transparent 88%)
+  );
+}
+
+@utility read-meter-edge {
+  /*
+   * The meter proper: a rule along the bottom of the figures card, glowing up
+   * into it.
+   *
+   * The glow is what makes 2px read as live rather than as a border someone
+   * forgot to remove. It is a STATIC shadow rather than an animation — it
+   * asserts nothing the measurement behind it does not, which is the standing
+   * rule for anything on this page that looks like an instrument.
+   *
+   * Two shadows: a wide soft one for the bloom and a tight bright one to keep
+   * the line itself crisp inside it.
+   */
+  background-color: var(--primary);
+  box-shadow:
+    0 0 12px 1px color-mix(in oklch, var(--primary), transparent 45%),
+    0 0 4px 0 color-mix(in oklch, var(--primary), transparent 25%);
+}
+
 /*
  * The searching state is conveyed by two pulsing elements and a spinner. Under
  * a reduced-motion preference the state is still legible without them, so they

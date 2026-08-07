@@ -71,10 +71,12 @@ function Stat({
  * two in this one file: they are one statement, and `docs/BACKLOG.md` points
  * here for the WebAssembly figure the note carries.
  *
- * THE READ METER IS THIS CARD'S BACKGROUND, not a bar of its own. It replaced a
- * separate `ScanMeterBar` that cost ~40px of a permanently sticky header to say
- * one thing; filling the container the figures already sit in says the same
- * thing for free. The page refused a progress bar at all until
+ * THE READ METER IS THIS CARD ITSELF, not a bar of its own — a faint gradient
+ * sweep behind the figures and a glowing rule along the bottom border, both
+ * sized by the same measured ratio. It replaced a separate `ScanMeterBar` that
+ * cost ~40px of a permanently sticky header to say one thing; the container the
+ * figures already sit in says the same thing for free. The page refused a
+ * progress bar at all until
  * `GrepOptions.onProgress` and the generator's `manifest.json` supplied a
  * measured numerator and a measured denominator — what was refused was an
  * animation impersonating a measurement, and this fill is a ratio of two known
@@ -120,7 +122,21 @@ export function RunStats({
       <div
         aria-hidden="true"
         className={cn(
-          'bg-primary/10 absolute inset-y-0 left-0',
+          'read-meter-sweep absolute inset-y-0 left-0',
+          share > 0 && 'transition-[width] duration-150 ease-linear',
+        )}
+        style={{ width: `${share * 100}%` }}
+      />
+
+      {/*
+        The meter's leading edge, along the card's bottom border. The sweep
+        above is atmosphere; THIS is the line you actually read a percentage
+        off, which is why it is opaque and the wash behind it is barely there.
+      */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          'read-meter-edge absolute bottom-0 left-0 h-[2px]',
           share > 0 && 'transition-[width] duration-150 ease-linear',
         )}
         style={{ width: `${share * 100}%` }}
