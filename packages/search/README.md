@@ -1,5 +1,5 @@
 <!-- Absolute: npm renders this README off GitHub, where a relative path resolves to nothing. -->
-![The netgrep wordmark: new Netgrep(); set in monospace, fading from white into teal on a dark gradient](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
+![The netgrep wordmark: net | grep set in monospace, fading from white into teal on a dark gradient](https://raw.githubusercontent.com/dgopsq/netgrep/main/assets/header.png)
 
 # @netgrep/search
 

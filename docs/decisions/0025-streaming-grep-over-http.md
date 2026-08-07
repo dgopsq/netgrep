@@ -309,3 +309,15 @@ Also **`@netgrep/search` exports two functions over a byte slice, not three** �
 `search_block`, since `search_bytes_line` and `search_bytes_line_ranges` are deleted. The paragraph's argument
 is untouched: it is still the low-level core with no `fetch`, no stream and no HTTP in it, so "grep over HTTP"
 would still be false about that artefact.
+
+## Amendment (2026-08-07) — the artwork is redrawn, and the retired hero line survives nowhere
+
+The Consequences section above records one surface that still carried the retired hero line: the shared
+artwork behind `assets/header.png` and the demo's `og-image.jpg`, with *Search remote files while they're
+downloading.* baked into the pixels. That artwork is redrawn. The wordmark is now `net | grep` — the API
+rewrite deleted the class, so `new Netgrep();` stopped being a true statement about the library, and the pipe
+states the shell heritage instead of the constructor — and the tagline in the pixels is the current lede,
+*grep over HTTP, running in the browser.* Both renders come from SVG sources committed next to the PNGs
+(`assets/header.svg`, `assets/social-preview.svg`; `og-image.jpg` is cut from the latter per the example's
+README). The three READMEs' alt texts and the demo's `og:image:alt` describe the new artwork, so the old
+wording now survives nowhere, and the paragraph above is a record of the interval, not a locator.
