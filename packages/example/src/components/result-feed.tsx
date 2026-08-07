@@ -102,7 +102,15 @@ export function ResultFeed({
 
       <div ref={listRef}>
         {state.retained === 0 ? (
-          <p className="text-muted-foreground/50 px-4 py-10 text-center text-sm">
+          // ⚠️ THE MIN-HEIGHT IS LOAD-BEARING, NOT DECORATION. A run starts by
+          // publishing an empty state, and an empty feed used to make the whole
+          // document barely taller than the viewport — so the window's scroll
+          // was clamped to a tiny maximum, and `App`'s move to the sticky
+          // anchor could not land. Holding most of a viewport here keeps that
+          // offset reachable through the gap between a run starting and its
+          // first rows arriving. It applies only while the list is empty, so a
+          // feed with three rows in it is still three rows tall.
+          <p className="text-muted-foreground/50 flex min-h-[60vh] items-center justify-center px-4 text-center text-sm">
             {state.running
               ? 'Reading the file…'
               : 'No line in this file matches that pattern.'}
