@@ -100,16 +100,20 @@ export function ResultFeed({
         <span className="font-mono tabular-nums">{countLabel(state)}</span>
       </div>
 
-      <div ref={listRef}>
+      {/*
+        ⚠️ THE MIN-HEIGHT IS LOAD-BEARING, NOT DECORATION, AND IT APPLIES
+        WHATEVER THE ROW COUNT. The document has to stay taller than a viewport
+        for `App`'s move to the sticky anchor to land — below that the browser
+        clamps the window's scroll and the page lurches instead.
+
+        An earlier revision put this on the empty state alone, which fixed only
+        the gap between a run starting and its first row arriving. It left the
+        real case wide open: a pattern matching ONCE collapses the document just
+        as thoroughly as a pattern matching nothing, and `NETGREP-MARKER-75` —
+        which the page offers as a suggestion chip — matches exactly once.
+      */}
+      <div ref={listRef} className="min-h-[60vh]">
         {state.retained === 0 ? (
-          // ⚠️ THE MIN-HEIGHT IS LOAD-BEARING, NOT DECORATION. A run starts by
-          // publishing an empty state, and an empty feed used to make the whole
-          // document barely taller than the viewport — so the window's scroll
-          // was clamped to a tiny maximum, and `App`'s move to the sticky
-          // anchor could not land. Holding most of a viewport here keeps that
-          // offset reachable through the gap between a run starting and its
-          // first rows arriving. It applies only while the list is empty, so a
-          // feed with three rows in it is still three rows tall.
           <p className="text-muted-foreground/50 flex min-h-[60vh] items-center justify-center px-4 text-center text-sm">
             {state.running
               ? 'Reading the file…'
