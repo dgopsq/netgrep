@@ -58,8 +58,9 @@ smaller after it than before.
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │ packages/example  — the public demo, deployed to GitHub Pages   │
-│   Vite + React + Tailwind, four generated logs (408.6 MB),      │
-│   debounced input → grep() per source (decisions 0017, 0026)    │
+│   Vite + React + Tailwind, one of four generated logs           │
+│   (up to 240 MB), debounced input → one grep() at a time        │
+│   (decisions 0017, 0026, 0028)                                  │
 └───────────────────────────┬─────────────────────────────────────┘
                             │ workspace:*
 ┌───────────────────────────▼─────────────────────────────────────┐
@@ -328,7 +329,9 @@ a seam.
 > line was rejected in [decision 0020](decisions/0020-the-matching-line.md). All three need a line longer
 > than 64 KB, so all three are unreachable in hand-written text, and in the demo's log files too: 408.6 MB of
 > real log lines whose longest, across all four sources, is 387 bytes. Size is not what reaches this — line
-> length is.
+> length is. **The demo's line-number gutter now rests on that 387 bytes**: a future seed carrying a 64 KB
+> line would make every number in it a guess, silently, with nothing on the page or in CI to catch it — so
+> this is a constraint on the seeds, not on the page (see [decision 0028](decisions/0028-demo-as-live-grep.md)).
 >
 > **`grep` inherits the same window and adds two consequences of its own**, pinned as `documented defects`
 > in `grep.integration.spec.ts` rather than fixed. A hit inside such a line is **yielded more than once** —
