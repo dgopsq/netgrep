@@ -3,10 +3,12 @@ import { useState } from 'react';
 import { Hero } from '@/components/hero';
 import { ResultFeed } from '@/components/result-feed';
 import { SearchField } from '@/components/search-field';
+import { SourcePicker } from '@/components/source-picker';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { logUrl, sources } from '@/data/logs';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useGrepStream } from '@/hooks/use-grep-stream';
+import { useLogSizes } from '@/hooks/use-log-sizes';
 
 /**
  * A keystroke starts a read of the whole selected file, so the field is
@@ -27,12 +29,12 @@ const DEFAULT_SOURCE_ID = 'apache';
 const DEFAULT_PATTERN = 'Invalid user';
 
 export function App() {
-  // Task 4 replaces this with the source picker's state.
-  const source =
-    sources.find((candidate) => candidate.id === DEFAULT_SOURCE_ID) ??
-    sources[0];
-
+  const [sourceId, setSourceId] = useState(DEFAULT_SOURCE_ID);
   const [query, setQuery] = useState(DEFAULT_PATTERN);
+
+  const sizes = useLogSizes();
+  const source =
+    sources.find((candidate) => candidate.id === sourceId) ?? sources[0];
   const pattern = useDebouncedValue(query.trim(), DEBOUNCE_MS);
   const state = useGrepStream(logUrl(source), pattern);
 
@@ -68,6 +70,14 @@ export function App() {
             onChange={setQuery}
             running={state.running}
           />
+
+          <div className="mt-3">
+            <SourcePicker
+              value={source.id}
+              onChange={setSourceId}
+              bytes={sizes.bytes}
+            />
+          </div>
         </div>
         <div className="hairline-top absolute inset-x-0 bottom-0 h-px" />
       </div>

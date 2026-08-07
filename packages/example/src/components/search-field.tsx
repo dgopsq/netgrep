@@ -6,29 +6,38 @@ import { cn } from '@/lib/utils';
 /**
  * Queries worth trying, chosen to teach something rather than to look busy.
  *
- * Each one demonstrates a different thing about the search. The first two show
- * where a match sits in the file, which is what the elapsed times below make
- * visible; the other two show that the pattern reaches ripgrep as a regex
- * rather than as a substring.
- *
- * EVERY SUGGESTION MATCHES SOMETHING, and that is a rule rather than an
- * accident. A pattern that matches nothing is the expensive case — it reads all
- * four sources to their last byte — and offering it as a chip invites hundreds
- * of megabytes of downloading on the visitor's connection for a row of dashes.
- * The cost is not hidden by leaving it out: the stats bar states the total size
- * of the log files and says in as many words that a query matching nothing
- * reads every byte, and anyone who types one gets exactly that, honestly timed.
+ * THE OLD RULE HERE — "every suggestion matches something" — IS RETIRED, AND
+ * ITS PREMISE IS WHY. It existed because a zero-match query read all four
+ * sources to their last byte, so offering one as a chip spent hundreds of
+ * megabytes to show a row of dashes. Under enumeration there is no early exit
+ * for it to be expensive relative to: `grep` yields every matching line, the
+ * last of which cannot be known before the last byte, so a query matching
+ * nothing costs exactly what a query matching everything costs. The chip that
+ * matches nothing is now the cheapest honest way to show what a full read
+ * costs, which is the other half of the page's argument.
  *
  * The generated logs tile a fixed sample, so anything drawn from the sample
- * recurs near the head of its file. The `NETGREP-MARKER-*` lines are the
- * exception: the generator injects them at fixed fractions of each file, and
- * they are the only way to ask for a match that is genuinely deep.
+ * recurs near the head of its file — and, being tiled, recurs tens of thousands
+ * of times, which is what fills the feed. The `NETGREP-MARKER-<pct>` lines are
+ * the exception: the generator injects them at 25%, 50%, 75% and 99% of every
+ * file, so each is exactly ONE line, and finding it is proof the read reached
+ * that depth.
+ *
+ * Every pattern here is valid against every source, because the picker can
+ * change under a chip that is already selected. A hint naming one service would
+ * be wrong as soon as it did.
  */
 const SUGGESTIONS = [
-  { pattern: 'Invalid user', hint: 'OpenSSH, near the head of the file' },
+  { pattern: 'error', hint: 'smart case — lowercase matches any case' },
   { pattern: 'NETGREP-MARKER-75', hint: 'one line, three quarters in' },
-  { pattern: 'Exception|BREAK-IN', hint: 'alternation, across two services' },
-  { pattern: 'sshd\\[[0-9]+\\]: Failed', hint: 'a real regex' },
+  {
+    pattern: 'Exception|BREAK-IN',
+    hint: 'alternation — this reaches ripgrep as a regex',
+  },
+  {
+    pattern: 'zzz-no-such-line',
+    hint: 'matches nothing: the whole file, read to the last byte',
+  },
 ];
 
 type SearchFieldProps = {
@@ -55,8 +64,8 @@ export function SearchField({ value, onChange, running }: SearchFieldProps) {
           type="search"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Grep the log sources — Invalid user, BREAK-IN, an IP…"
-          aria-label="Search the log sources with a ripgrep pattern"
+          placeholder="Grep this log — Invalid user, BREAK-IN, an IP…"
+          aria-label="Grep the selected log file with a ripgrep pattern"
           // This is the page's only interactive control, so focusing it takes
           // focus from nothing.
           autoFocus
