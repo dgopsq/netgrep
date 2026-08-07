@@ -108,11 +108,12 @@ the whole of one block and again as the head of the next, so each pass reports t
 file-absolute line base **gains a line at every window slide**: on the tested fixture the two lines following
 the over-long one are truly 2 and 3, and `grep` reports 3 and 4 — the drift carries forward into every line
 number after it rather than being spent on the first of them, which is why the fixture has two lines and not
-one. Those last two are pinned rather than fixed, and deliberately: suppressing the repeat would drop the hit outright if the
+one. All three are pinned rather than fixed, and the last two deliberately: suppressing the repeat would drop the hit outright if the
 stream ended inside the window, and a lost hit is worse for a grep than a repeated one; the windowed tail,
 once searched, is never re-searched at EOF, so there is no later pass that could correct the count. Pinned by
-`BACKLOG 3g: a hit inside an over-long line is yielded three times` and
-`BACKLOG 3g: the line number drifts after an over-long line` in `grep.integration.spec.ts`.
+`BACKLOG 3g: a hit inside an over-long line is yielded three times, carrying a fragment` — one fixture for the
+fragment and the repeat both, marking where the line truly begins so that what comes back can be shown not to
+— and `BACKLOG 3g: the line number drifts after an over-long line` in `grep.integration.spec.ts`.
 
 **`matches` hits the same window whole**, since it consumes the same block stream, and both directions of the
 defect survive the reduction to one bit. A match spanning more than 64 KB of an over-long line answers

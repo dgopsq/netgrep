@@ -95,19 +95,25 @@ largest cap the engine can hold, and `NaN` as no request at all.
 
 ## Consequences
 
-- **An empty string is a match.** A pattern matching an empty line returns `""`, which is falsy. `undefined` is
-  the only no-match signal at the boundary, and `runEngine` in `Netgrep.ts` tests for it explicitly. Pinned
-  from both sides: ~~`test_a_match_on_an_empty_line_is_an_empty_string`~~ **(2026-08-07:
-  `a_match_on_an_empty_line_is_an_empty_string_with_a_range`, which now pins the `[0, 0]` range too)** in
-  `packages/search/tests/search.rs` and
-  "treats an EMPTY line as a match, not a miss" in `Netgrep.spec.ts`. This is the sharpest edge in the feature.
+- **An empty string is a match.** A pattern matching an empty line returns `""`, which is falsy. ~~`undefined`
+  is the only no-match signal at the boundary, and `runEngine` in `Netgrep.ts` tests for it explicitly. Pinned
+  from both sides: `test_a_match_on_an_empty_line_is_an_empty_string` in `packages/search/tests/search.rs` and
+  "treats an EMPTY line as a match, not a miss" in `Netgrep.spec.ts`.~~ **(2026-08-07: the class and both those
+  files are gone, and so is `undefined` at the boundary — a block carries its own hit count, so the consumer
+  counts hits rather than testing a line for truthiness. Pinned from both sides still:
+  `a_match_on_an_empty_line_is_an_empty_string_with_a_range` in `packages/search/tests/search.rs`, which now
+  pins the `[0, 0]` range too, and "treats an EMPTY matching line as a hit, not as a miss" in
+  `grep.integration.spec.ts`.)** This is the sharpest edge in the feature.
 - **Lossy decoding.** A latin-1 file, or any invalid UTF-8, yields `U+FFFD` in the line. Acceptable for a
   snippet, and a new class of wrong output that a boolean API could not produce. Documented in the README.
 - **Inside a line longer than 64 KB the "line" is a fragment** — the third consequence of backlog 3g, recorded
   there. Past `MAX_TAIL_BYTES` the retained tail degrades to a byte window, so the block handed to the engine
   starts mid-line and the returned string begins at an arbitrary byte. `result` is still correct. Returning
   `null` in that case was considered and rejected: it would break the `result: true ⇒ line: string` invariant
-  for every consumer, to describe a case only minified input reaches. Pinned in `Netgrep.integration.spec.ts`.
+  for every consumer, to describe a case only minified input reaches. ~~Pinned in
+  `Netgrep.integration.spec.ts`.~~ **(2026-08-07: pinned in `grep.integration.spec.ts`, on the same
+  `documented defects` fixture that pins the repeated yield, which marks where the over-long line truly
+  begins so that what comes back can be shown not to.)**
 - **The published demo now shows the line**, and `CAVEATS[0]` changed from "One boolean per file" to "No
   ranking, no positions". Required by [AGENTS.md §2.3](../../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it):
   the page's only value is that it is accurate, and it was asserting the absence of a feature that now exists.
