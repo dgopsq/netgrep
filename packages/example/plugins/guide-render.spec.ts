@@ -169,7 +169,8 @@ describe('renderGuide', () => {
     const { html } = await renderGuide([
       {
         name: '01-x.md',
-        source: '# X\n\n```ts\nconst NG = new Netgrep();\n```\n',
+        source:
+          "# X\n\n```ts\nconst found = await matches(url, 'error');\n```\n",
       },
     ]);
 

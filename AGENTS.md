@@ -126,10 +126,7 @@ is that it is accurate, so stale honesty is worse than none.
 §2.1 and it fires on the same commits: fixing a defect means inverting its test *and* updating the site, both
 in the PR that fixes it.
 
-**Nothing enforces this.** No test fails, CI stays green, and the site keeps lying until a human notices. That
-is exactly why it is in this section rather than in a comment somewhere.
-
-**This is now enforced, for the caveat list.** Every limitation lives once, in
+**The caveat list enforces itself.** Every limitation lives once, in
 [`docs/guide/caveats.data.json`](docs/guide/caveats.data.json). `pnpm docs:sync` renders it onto the
 guide's Limitations page and the README's defect list, and CI runs `pnpm docs:sync --check` — so the two
 cannot disagree. Fixing a defect means **deleting one entry from that file** and running `pnpm docs:sync`,
@@ -155,27 +152,24 @@ entered into it in the first place. So when you add one to [`docs/BACKLOG.md`](d
 decide whether a visitor is affected: if so, add an entry here; if not, no action — but make it a
 decision, not an omission.
 
-**Still not enforced, and still yours to check:** the `run-stats.tsx` line, which states the 1.17 MB
-WebAssembly download and has to move when the binary does; and the hero copy, which no longer states the
-scope of a result — since [decision 0025](docs/decisions/0025-streaming-grep-over-http.md) its accent
-claims **constant memory**. The second is the harder one, because the page demonstrates nothing about
-memory: the claim holds only while the library retains nothing, so anything that reintroduces retention
-makes the hero wrong with no test failing. **Do not add a number to the page to make it look measured.**
+**Still not enforced, and still yours to check** — for these no test fails and CI stays green; the site
+just lies until a human notices: the `run-stats.tsx` line, which states the 1.17 MB WebAssembly download
+and has to move when the binary does; and the hero copy, which no longer states the scope of a result —
+since [decision 0025](docs/decisions/0025-streaming-grep-over-http.md) its accent claims **constant
+memory**. The second is the harder one, because the page demonstrates nothing about memory: the claim
+holds only while the library retains nothing, so anything that reintroduces retention makes the hero wrong
+with no test failing. **Do not add a number to the page to make it look measured.**
 
 > [!WARNING]
-> **The page measures the network, and that is now true by construction.** This section spent two revisions on
-> the demo's cache flag: first that fixing 3b and 18 would mean switching the cache back on, then that it had
-> to stay off regardless because a warm `Record` lookup timed as a download makes the run figures lie. Neither
-> instruction survives — [decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) deleted the cache,
-> so there is no flag to set either way and nothing the library retains that could be timed instead of a
-> fetch. What survives is the property those revisions were protecting: **the demo's numbers are network
-> numbers, and anything that would answer a repeat query from memory breaks them.** The browser's own HTTP
-> cache is the one thing that still can, and it is not the library's to switch off — GitHub Pages serves the
-> logs with `cache-control: max-age=600` (measured 2026-08-01), so what a repeat costs is the host's answer
-> rather than netgrep's. Read the comment in `packages/example/src/hooks/use-grep-stream.ts` before changing
-> anything about it. See also
-> [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
-> [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md), which record the shape this used to have.
+> **The page measures the network, and that is true by construction.**
+> [Decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) deleted the library's cache, so nothing
+> netgrep retains can be timed instead of a fetch — **the demo's numbers are network numbers, and anything
+> that would answer a repeat query from memory breaks them.** The browser's own HTTP cache is the one thing
+> that still can, and it is not the library's to switch off — GitHub Pages serves the logs with
+> `cache-control: max-age=600` (measured 2026-08-01), so what a repeat costs is the host's answer rather than
+> netgrep's. Read the comment in `packages/example/src/hooks/use-grep-stream.ts` before changing anything
+> about it. [Decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
+> [0019](docs/decisions/0019-in-flight-fetch-registry.md) record the shape this used to have.
 
 **Do not delete a caveat to tidy the guide or the README.** The list is short because the defects are few, not
 because a page is being edited for length — and it is the only reason a visitor has to trust the rest of it.
@@ -225,9 +219,9 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **197 tests**: 60 unit in Node, 66 integration in headless Chromium, 71 tooling in Node |
+| Test TS | `pnpm test` | Vitest — **212 tests**: 60 unit in Node, 66 integration in headless Chromium, 86 tooling in Node |
 | — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
-| Test the tooling | `pnpm test:tools` | **71 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
+| Test the tooling | `pnpm test:tools` | **86 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **56 tests** |
 | Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide and the README. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |

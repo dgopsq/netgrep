@@ -45,7 +45,7 @@ most common way to lose an hour here.
 All from the repository root. [AGENTS.md §4](AGENTS.md#4-commands) has the full list and the caveats.
 
 ```bash
-pnpm test          # Vitest — 197 tests (60 unit and 71 tooling in Node, 66 in headless Chromium)
+pnpm test          # Vitest — 212 tests (60 unit and 86 tooling in Node, 66 in headless Chromium)
 pnpm test:unit     # just the unit half — no WASM build and no browser needed
 pnpm test:tools    # the docs generator, the guide renderer and the example's pure modules
 pnpm test:browser  # just the browser half

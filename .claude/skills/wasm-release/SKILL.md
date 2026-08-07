@@ -80,8 +80,8 @@ pnpm build:wasm        # must run first: the TS package compiles against pkg/ind
 pnpm lint              # Biome + clippy
 pnpm typecheck
 pnpm build
-pnpm test              # 122 tests: 70 unit in Node, 52 integration in headless Chromium
-pnpm test:rust         # 57 tests, native cargo test
+pnpm test              # all three Vitest projects; the counts live in AGENTS.md §4, not here
+pnpm test:rust         # native cargo test, no browser
 pnpm verify:pack       # the tarballs that would actually reach npm
 ```
 

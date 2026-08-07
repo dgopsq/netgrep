@@ -181,21 +181,16 @@
   font-size: 1rem;
 }
 
-/* The nav's small `new Netgrep();` mark — see renderNav's comment for why
-   this is plain CSS rather than Tailwind utilities. Same four-part
-   composition as the hero's <h1>, just subordinate in size. */
-.site-nav-mark-new,
-.site-nav-mark-semi {
-  color: var(--muted-foreground);
-}
-
+/* The nav's small `net | grep` mark — see renderNav's comment for why this is
+   plain CSS rather than Tailwind utilities. Same composition as the hero's
+   <h1>, just subordinate in size. */
 .site-nav-mark-name {
   background-image: var(--wordmark-gradient);
   background-clip: text;
   color: transparent;
 }
 
-.site-nav-mark-paren {
+.site-nav-mark-pipe {
   color: var(--primary);
 }
 
