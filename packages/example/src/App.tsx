@@ -1,55 +1,40 @@
 import { CircleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Hero } from '@/components/hero';
-import { LogPanel, LogPanelHeader } from '@/components/log-panel';
 import { SearchField } from '@/components/search-field';
-import { StatsBar } from '@/components/stats-bar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { sources } from '@/data/logs';
+import { logUrl, sources } from '@/data/logs';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { useLogSearch } from '@/hooks/use-log-search';
-import { useLogSizes } from '@/hooks/use-log-sizes';
-import { formatBytes, formatMs } from '@/lib/format';
+import { useGrepStream } from '@/hooks/use-grep-stream';
+import { highlight } from '@/lib/highlight';
 
 /**
- * Every keystroke starts four downloads totalling hundreds of megabytes, so the
- * field is debounced before it reaches the search rather than after.
+ * A keystroke starts a read of the whole selected file, so the field is
+ * debounced before it reaches the search rather than after.
  */
 const DEBOUNCE_MS = 250;
 
 /**
- * What a screen reader is told about a run.
+ * What the page arrives searching.
  *
- * Deliberately only two announcements per search — one when it starts, one when
- * it finishes. The panels update four times over as much as two seconds, and a
- * live region tracking each of them would talk over itself for the whole run
- * while saying nothing a visitor could act on. Everything else is already
- * readable as text: each row states its own status in words, not in colour.
+ * Apache is 8 MB — the smallest source — and this is deliberate. The page runs
+ * on load, and defaulting that to the 240 MB OpenSSH file would spend a quarter
+ * of a gigabyte of a visitor's connection before they had asked for anything.
+ * The picker is right there, and a visitor who chooses the big one has
+ * demonstrated more to themselves than one who was handed it.
  */
-function announcement(
-  state: ReturnType<typeof useLogSearch>,
-  totalLogBytes: number,
-): string {
-  if (state.error !== null) return 'The pattern did not compile.';
-  if (state.running) return `Searching ${sources.length} log sources.`;
-  if (state.answered === 0) return '';
-
-  const took =
-    state.allAnsweredMs === null ? '' : ` in ${formatMs(state.allAnsweredMs)}`;
-
-  // The scanned total is announced because it is half of what the run proved,
-  // and the columns that show it are the one thing here a screen reader would
-  // otherwise have to walk four rows to add up.
-  const read = `${formatBytes(state.scannedTotal)} of ${formatBytes(totalLogBytes)} read`;
-
-  return `Search finished${took}. ${state.matched} of ${state.answered} sources matched, ${read}.`;
-}
+const DEFAULT_SOURCE_ID = 'apache';
+const DEFAULT_PATTERN = 'Invalid user';
 
 export function App() {
-  const [query, setQuery] = useState('');
+  // Task 4 replaces this with the source picker's state.
+  const source =
+    sources.find((candidate) => candidate.id === DEFAULT_SOURCE_ID) ??
+    sources[0];
+
+  const [query, setQuery] = useState(DEFAULT_PATTERN);
   const pattern = useDebouncedValue(query.trim(), DEBOUNCE_MS);
-  const state = useLogSearch(pattern);
-  const sizes = useLogSizes();
+  const state = useGrepStream(logUrl(source), pattern);
 
   return (
     <div className="relative pb-24">
@@ -68,15 +53,13 @@ export function App() {
       </div>
 
       {/*
-        The field stays sticky. Four panels no longer scroll past it the way 56
-        cards did, but the field is still the page's only control and a search
-        that runs for seconds is a search you may have scrolled away from.
+        The field stays sticky: it is the page's only control, and a feed that
+        fills for seconds is a feed you may have scrolled away from.
 
-        Two things here are deliberate. A gradient fade was tried first and is
-        wrong: its transparent end lets panel borders show through the bar, so
-        rows appear to slide over the chips. And the panel is FULL BLEED,
-        outside the max-width container — constrained to the container it ends
-        mid-viewport, leaving a visible vertical seam where the blur stops.
+        The panel is FULL BLEED, outside the max-width container — constrained
+        to the container it ends mid-viewport, leaving a visible vertical seam
+        where the blur stops. A gradient fade was tried and is wrong: its
+        transparent end lets borders show through the bar.
       */}
       <div className="bg-background sticky top-0 z-20">
         <div className="mx-auto w-full max-w-6xl px-5 pt-4 pb-5">
@@ -89,22 +72,15 @@ export function App() {
         <div className="hairline-top absolute inset-x-0 bottom-0 h-px" />
       </div>
 
-      {/*
-        `pt-6` separates the content from the sticky bar's bottom hairline.
-        Without it the stats panel's own border sits directly against that rule
-        and reads as one heavy double line.
-      */}
       <div className="mx-auto w-full max-w-6xl px-5 pt-6">
-        {/*
-          A pattern that will not compile is reported once per source, so
-          without this the list would carry four copies of the same complaint.
-          The message is the regex crate's own diagnostic, surfaced through the
-          `Result` that `search_bytes` returns.
-        */}
         {state.error && (
           <Alert className="mb-6">
             <CircleAlert />
-            <AlertTitle>That pattern did not compile</AlertTitle>
+            <AlertTitle>
+              {state.partial
+                ? 'The read stopped early — these results are partial'
+                : 'That pattern did not compile'}
+            </AlertTitle>
             <AlertDescription>
               <code className="font-mono text-xs">{state.error}</code>
             </AlertDescription>
@@ -112,42 +88,36 @@ export function App() {
         )}
 
         {/*
-          The one place the page speaks. Results land per source over as much
-          as two seconds, and without this a screen-reader user gets a page
-          that silently rearranges itself and never says it is done.
+          The one place the page speaks. Two announcements per run — one when it
+          starts, one when it settles. A live region tracking a counter that
+          moves every frame would talk over itself for the whole run while
+          saying nothing a visitor could act on.
         */}
         <p className="sr-only" role="status">
-          {announcement(state, sizes.totalBytes)}
+          {state.running
+            ? `Searching ${source.service}.`
+            : state.total > 0
+              ? `${state.total} matching lines in ${source.service}.`
+              : ''}
         </p>
 
-        <StatsBar state={state} totalLogBytes={sizes.totalBytes} />
-
         {/*
-          The panels are listed smallest source first and never reorder. That
-          order is the demonstration: reading down the column of elapsed times
-          against the column of sizes is how a visitor sees that answering is
-          paced by bytes read, not by file count. Sorting by who answered first
-          would scramble exactly that pairing.
+          Task 3 replaces this list with the virtualized feed. Sliced to 200
+          until then, because a plain list of 100,000 rows is exactly the thing
+          the virtualizer is being added to prevent.
         */}
-        <div className="mt-6">
-          <LogPanelHeader />
-
-          <ul className="space-y-1.5">
-            {sources.map((source) => (
-              <li key={source.id}>
-                <LogPanel
-                  source={source}
-                  bytes={sizes.bytes[source.id] ?? source.targetBytes}
-                  status={state.statuses[source.id] ?? 'idle'}
-                  line={state.lines[source.id]}
-                  elapsedMs={state.elapsedMs[source.id]}
-                  scanned={state.scanned[source.id]}
-                  pending={state.pending[source.id]}
-                />
-              </li>
-            ))}
-          </ul>
-        </div>
+        <ul className="font-mono text-[12px] leading-6">
+          {state.hits.slice(0, 200).map((hit) => (
+            <li key={hit.lineNumber} className="flex gap-3">
+              <span className="text-muted-foreground/40 w-16 shrink-0 text-right tabular-nums">
+                {hit.lineNumber}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {highlight(hit.line, hit.ranges)}
+              </span>
+            </li>
+          ))}
+        </ul>
 
         <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
           <p>
