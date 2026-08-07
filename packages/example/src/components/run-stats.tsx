@@ -1,5 +1,10 @@
 import type { GrepStreamState } from '@/hooks/use-grep-stream';
-import { formatBytes, formatMs, formatThroughput } from '@/lib/format';
+import {
+  formatBytes,
+  formatMs,
+  formatShare,
+  formatThroughput,
+} from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -65,8 +70,32 @@ function Stat({
  * adjacent to these figures on first paint, which is when it is read. Keep the
  * two in this one file: they are one statement, and `docs/BACKLOG.md` points
  * here for the WebAssembly figure the note carries.
+ *
+ * THE READ METER IS THIS CARD'S BACKGROUND, not a bar of its own. It replaced a
+ * separate `ScanMeterBar` that cost ~40px of a permanently sticky header to say
+ * one thing; filling the container the figures already sit in says the same
+ * thing for free. The page refused a progress bar at all until
+ * `GrepOptions.onProgress` and the generator's `manifest.json` supplied a
+ * measured numerator and a measured denominator — what was refused was an
+ * animation impersonating a measurement, and this fill is a ratio of two known
+ * numbers. Do not drive it from elapsed time, a guess, or anything that is not
+ * bytes actually delivered.
+ *
+ * ⚠️ IT IS DECOMPRESSED FILE CONTENT, NOT BYTES ON THE WIRE — the logs are
+ * served gzipped at about 16×, so a full card was carried by a fraction of the
+ * transfer. `RunStatsNote` is where the page says so, which is why that note may
+ * not be dropped.
  */
-export function RunStats({ state }: { state: GrepStreamState }) {
+export function RunStats({
+  state,
+  totalBytes,
+}: {
+  state: GrepStreamState;
+  /** The selected file's real size, from the generated manifest. */
+  totalBytes: number;
+}) {
+  const share = totalBytes > 0 ? Math.min(state.bytesRead / totalBytes, 1) : 0;
+
   // A pattern that will not compile fails in milliseconds having read nothing,
   // and every figure below is then true and misleading at once: `0` and `3ms`
   // read as a completed search rather than as a refusal. The alert above says
@@ -76,8 +105,41 @@ export function RunStats({ state }: { state: GrepStreamState }) {
   const dash = (value: string) => (uncompiled ? '—' : value);
 
   return (
-    <div className="border-border/60 bg-card/40 rounded-lg border px-4 py-2.5 backdrop-blur">
-      <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
+    <div className="border-border/60 bg-card/40 relative overflow-hidden rounded-lg border backdrop-blur">
+      {/*
+        Decorative, and `aria-hidden` for it: the accessible reading of this
+        same number is the `progressbar` below, which is a sibling rather than
+        this card's role because `progressbar` makes its children presentational
+        — putting the role here would hide all five figures from a screen reader
+        to announce a percentage.
+
+        Emptying is instant and only advancing is smoothed: a new run publishes
+        `bytesRead` as 0, and easing the fill back would spend 150ms animating a
+        read that is not happening.
+      */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          'bg-primary/10 absolute inset-y-0 left-0',
+          share > 0 && 'transition-[width] duration-150 ease-linear',
+        )}
+        style={{ width: `${share * 100}%` }}
+      />
+
+      <div
+        className="sr-only"
+        role="progressbar"
+        aria-label="File content read"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(share * 100)}
+        aria-valuetext={`${formatBytes(state.bytesRead)} of ${formatBytes(
+          totalBytes,
+        )}, ${formatShare(state.bytesRead, totalBytes)}`}
+      />
+
+      {/* `relative` lifts the figures over the fill behind them. */}
+      <dl className="relative flex flex-wrap items-baseline gap-x-5 gap-y-1.5 px-4 py-2.5">
         <Stat
           label="Matching lines"
           value={dash(state.total.toLocaleString())}

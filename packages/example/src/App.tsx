@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Hero } from '@/components/hero';
 import { ResultFeed } from '@/components/result-feed';
 import { RunStats, RunStatsNote } from '@/components/run-stats';
-import { ScanMeterBar } from '@/components/scan-meter-bar';
 import { SearchField } from '@/components/search-field';
 import { SourcePicker } from '@/components/source-picker';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -101,17 +100,15 @@ export function App() {
 
             Only the VALUES are up here. The prose qualifying them is static for
             the whole run and rides below the bar as `RunStatsNote`, because a
-            sticky header is paid for in feed nobody gets to see.
+            sticky header is paid for in feed nobody gets to see. The read meter
+            is this card's own background for the same reason — see `RunStats`.
           */}
           <div className="mt-3">
-            <RunStats state={state} />
+            <RunStats
+              state={state}
+              totalBytes={sizes.bytes[source.id] ?? source.targetBytes}
+            />
           </div>
-
-          <ScanMeterBar
-            bytesRead={state.bytesRead}
-            totalBytes={sizes.bytes[source.id] ?? source.targetBytes}
-            running={state.running}
-          />
         </div>
         <div className="hairline-top absolute inset-x-0 bottom-0 h-px" />
       </div>

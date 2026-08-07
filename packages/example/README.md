@@ -74,10 +74,11 @@ wrapper this app owned, deleted once the library reported it directly — and th
 Resource Timing entries report zero for an aborted transfer is **retained history rather than current
 mechanism**, kept so nobody re-probes it.
 
-**There is now a progress bar, and the rule that refused one is unchanged.** It was refused on two grounds:
-netgrep exposed no progress, and `Content-Length` on a gzipped response is the compressed size, so there was
-no honest total to divide by. `onProgress` supplies the numerator and the generated `manifest.json` the real
-uncompressed size as the denominator, so the bar divides one measured number by another. What was refused was
+**There is now a read meter, and the rule that refused a progress bar is unchanged.** It was refused on two
+grounds: netgrep exposed no progress, and `Content-Length` on a gzipped response is the compressed size, so
+there was no honest total to divide by. `onProgress` supplies the numerator and the generated `manifest.json`
+the real uncompressed size as the denominator, so the meter — the fill behind the run figures, rather than a
+bar of its own — divides one measured number by another. What was refused was
 *an animation impersonating a measurement*, and that is still refused — which is why there is still **no
 memory figure**, because a tab cannot honestly measure one. Do not add a number here to make the page look
 more instrumented; a fabricated figure on the one page whose entire value is that it is accurate costs more
