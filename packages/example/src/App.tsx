@@ -77,13 +77,13 @@ export function App() {
           />
 
           {/*
-            `mt-5` against the chips' `mt-2.5` above them. The two rows are both
-            pills and would otherwise read as one list — but the chips write a
-            pattern into the field and this chooses which file that pattern runs
-            against, which are not the same question. The gap is the answer, and
-            halving it puts the ambiguity straight back.
+            Even spacing with the chips above, because the SourcePicker's own
+            "Search in" label is what distinguishes the two rows now. An earlier
+            revision pushed them apart instead and it bought nothing once both
+            rows said what they were — a labelled row does not also need to be
+            held at arm's length.
           */}
-          <div className="mt-5">
+          <div className="mt-3">
             <SourcePicker
               value={source.id}
               onChange={setSourceId}

@@ -54,12 +54,16 @@ export function SourcePicker({
             <label
               key={source.id}
               className={cn(
-                'focus-within:ring-ring cursor-pointer rounded-lg border px-3 py-1.5 text-left transition-colors focus-within:ring-2',
+                'focus-within:ring-ring inline-flex cursor-pointer items-baseline gap-1.5 rounded-lg border px-3 py-1.5 transition-colors focus-within:ring-2',
                 selected
                   ? 'border-primary/40 bg-primary/10 text-primary'
                   : 'border-border/80 bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-primary',
               )}
             >
+              {/*
+                `sr-only` is absolutely positioned, so the real radio does not
+                take part in this flex row and the two spans sit alone on it.
+              */}
               <input
                 type="radio"
                 name="log-source"
@@ -68,10 +72,8 @@ export function SourcePicker({
                 onChange={() => onChange(source.id)}
                 className="sr-only"
               />
-              <span className="block text-sm leading-tight font-medium">
-                {source.service}
-              </span>
-              <span className="block font-mono text-[11px] leading-tight tabular-nums opacity-70">
+              <span className="text-sm font-medium">{source.service}</span>
+              <span className="font-mono text-[11px] tabular-nums opacity-70">
                 {formatBytes(bytes[source.id] ?? source.targetBytes)}
               </span>
             </label>

@@ -89,13 +89,7 @@ export function SearchField({ value, onChange, running }: SearchFieldProps) {
         )}
       </div>
 
-      {/*
-        Tight to the input above, because these chips WRITE INTO IT and belong
-        to it. The source picker that follows is a different control entirely,
-        and the gap under this row is deliberately wider than the gap over it —
-        proximity is what says which of the two these pills answer to.
-      */}
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <span className="text-muted-foreground/70 mr-1 text-xs">Try</span>
 
         {SUGGESTIONS.map((suggestion) => (
