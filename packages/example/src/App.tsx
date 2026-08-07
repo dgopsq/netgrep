@@ -1,12 +1,12 @@
 import { CircleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Hero } from '@/components/hero';
+import { ResultFeed } from '@/components/result-feed';
 import { SearchField } from '@/components/search-field';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { logUrl, sources } from '@/data/logs';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useGrepStream } from '@/hooks/use-grep-stream';
-import { highlight } from '@/lib/highlight';
 
 /**
  * A keystroke starts a read of the whole selected file, so the field is
@@ -101,23 +101,7 @@ export function App() {
               : ''}
         </p>
 
-        {/*
-          Task 3 replaces this list with the virtualized feed. Sliced to 200
-          until then, because a plain list of 100,000 rows is exactly the thing
-          the virtualizer is being added to prevent.
-        */}
-        <ul className="font-mono text-[12px] leading-6">
-          {state.hits.slice(0, 200).map((hit) => (
-            <li key={hit.lineNumber} className="flex gap-3">
-              <span className="text-muted-foreground/40 w-16 shrink-0 text-right tabular-nums">
-                {hit.lineNumber}
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                {highlight(hit.line, hit.ranges)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <ResultFeed state={state} service={source.service} />
 
         <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
           <p>
