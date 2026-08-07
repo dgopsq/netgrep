@@ -282,21 +282,21 @@
 
 @utility read-meter-edge {
   /*
-   * The meter proper: a rule along the bottom of the figures card, glowing up
-   * into it.
+   * The filled part of the meter, running along the bottom of the figures card.
    *
-   * The glow is what makes 2px read as live rather than as a border someone
-   * forgot to remove. It is a STATIC shadow rather than an animation — it
-   * asserts nothing the measurement behind it does not, which is the standing
-   * rule for anything on this page that looks like an instrument.
+   * ⚠️ IT NEEDS THE TRACK BEHIND IT TO READ AS A METER AT ALL. Drawn alone this
+   * is a filled length with nothing to be a fraction OF: at 100% it is a bottom
+   * border and at 0% it is absent, and neither says "progress". The track is
+   * what makes the same line a proportion, so the two ship together.
    *
-   * Two shadows: a wide soft one for the bloom and a tight bright one to keep
-   * the line itself crisp inside it.
+   * The glow is deliberately faint — one soft shadow, no bright inner one. An
+   * earlier revision stacked two and the card looked like it was radioactive;
+   * this only has to lift the line off the track. It stays a STATIC shadow
+   * rather than an animation, because everything on this page that looks like
+   * an instrument has to be a measurement.
    */
   background-color: var(--primary);
-  box-shadow:
-    0 0 12px 1px color-mix(in oklch, var(--primary), transparent 45%),
-    0 0 4px 0 color-mix(in oklch, var(--primary), transparent 25%);
+  box-shadow: 0 0 6px 0 color-mix(in oklch, var(--primary), transparent 70%);
 }
 
 /*

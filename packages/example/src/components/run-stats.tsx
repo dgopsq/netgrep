@@ -107,7 +107,11 @@ export function RunStats({
   const dash = (value: string) => (uncompiled ? '—' : value);
 
   return (
-    <div className="border-border/60 bg-card/40 relative overflow-hidden rounded-lg border backdrop-blur">
+    // SQUARE ALONG THE BOTTOM, rounded everywhere else. The meter is pinned to
+    // that edge, and a radius there clips its ends into tapering stubs — the
+    // fill stops looking like it reaches 100% because the corner eats the last
+    // few pixels of it. Flat corners let the track run the full width.
+    <div className="border-border/60 bg-card/40 relative overflow-hidden rounded-t-lg border backdrop-blur">
       {/*
         Decorative, and `aria-hidden` for it: the accessible reading of this
         same number is the `progressbar` below, which is a sibling rather than
@@ -129,14 +133,25 @@ export function RunStats({
       />
 
       {/*
-        The meter's leading edge, along the card's bottom border. The sweep
-        above is atmosphere; THIS is the line you actually read a percentage
-        off, which is why it is opaque and the wash behind it is barely there.
+        THE TRACK. Full width, always drawn, and the reason the line on top of
+        it reads as a proportion rather than as a border: a bar needs a visible
+        remainder to be a fraction of. Without it a finished run just looks like
+        a card with a teal underline.
+      */}
+      <div
+        aria-hidden="true"
+        className="bg-border/70 absolute inset-x-0 bottom-0 h-[3px]"
+      />
+
+      {/*
+        The filled part. The sweep above is atmosphere; THIS is what a
+        percentage is actually read off, which is why it is opaque and the wash
+        behind it is barely there.
       */}
       <div
         aria-hidden="true"
         className={cn(
-          'read-meter-edge absolute bottom-0 left-0 h-[2px]',
+          'read-meter-edge absolute bottom-0 left-0 h-[3px]',
           share > 0 && 'transition-[width] duration-150 ease-linear',
         )}
         style={{ width: `${share * 100}%` }}
