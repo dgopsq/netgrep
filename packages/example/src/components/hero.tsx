@@ -23,11 +23,16 @@ export function Hero() {
         ripgrep's real engine, running in this tab
       </Badge>
 
+      {/*
+        The wordmark. `new Netgrep();` stopped being a true statement when the
+        API rewrite deleted the class; the pipe states the shell heritage
+        instead. Must agree with assets/header.svg and the nav mark in
+        plugins/guide-render.ts.
+      */}
       <h1 className="font-mono text-5xl font-semibold tracking-tight sm:text-6xl">
-        <span className="text-muted-foreground/60">new </span>
-        <span className="text-gradient">Netgrep</span>
-        <span className="text-primary">()</span>
-        <span className="text-muted-foreground/60">;</span>
+        <span className="text-gradient">net</span>
+        <span className="text-primary">{' | '}</span>
+        <span className="text-gradient">grep</span>
       </h1>
 
       <p className="text-foreground/90 mt-6 max-w-2xl text-xl leading-relaxed text-balance sm:text-2xl">

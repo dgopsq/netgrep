@@ -62,10 +62,9 @@ real line does not contain.
 ## What is absent, and by choice
 
 No byte offsets into the file, no match counts, no ranking. Each is refused for its own stated reason
-rather than by blanket policy — see [decision 0020](../decisions/0020-the-matching-line.md),
+rather than by blanket policy — [decision 0020](../decisions/0020-the-matching-line.md),
 [0022](../decisions/0022-capture-ranges.md) and
-[0027](../decisions/0027-streaming-matching-lines.md), which restates all three while withdrawing the two
-refusals either side of them: every matching line, and its number, are now unconditional.
+[0027](../decisions/0027-streaming-matching-lines.md) record them.
 
 Surrounding context lines are the one thing deferred rather than refused. 0027 records the design and
 nothing here forecloses it.

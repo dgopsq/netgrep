@@ -70,9 +70,11 @@ describe('the guide', () => {
   it.each(files)('%s never mentions the captureLine flag', async (name) => {
     const source = await readFile(join(GUIDE, name), 'utf8');
 
-    // `captureLine` never shipped under that name — `capture: 'line'` is
-    // simply the API. The guide describes only the current shape, with no
-    // migration notes, so the string should not appear anywhere in it.
+    // `captureLine` never shipped under that name, and the `capture` option
+    // it renamed is gone entirely — `grep` always yields the line. The guide
+    // describes only the current shape, with no migration notes, so neither
+    // name should appear anywhere in it.
     expect(source).not.toContain('captureLine');
+    expect(source).not.toContain("capture: '");
   });
 });
