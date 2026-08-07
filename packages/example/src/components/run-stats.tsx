@@ -3,11 +3,16 @@ import { formatBytes, formatMs, formatThroughput } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
- * One figure and its label, as a cell in the grid below.
+ * One figure and its label, on a single baseline.
  *
  * A `dt`/`dd` pair rather than two spans: these are five name/value pairs, and
  * the markup may as well say so — a screen reader then reads "first match,
  * 27ms" instead of two unrelated strings.
+ *
+ * LABEL BESIDE THE VALUE, NOT ABOVE IT, AND THAT IS THE HEIGHT DECISION. This
+ * row is sticky for the whole run, so every pixel it takes is a pixel of feed a
+ * visitor never sees. Stacked labels made each figure two lines tall and the
+ * card ~155px; inline they are one line that wraps only on narrow screens.
  */
 function Stat({
   label,
@@ -19,13 +24,13 @@ function Stat({
   accent?: boolean;
 }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-muted-foreground/60 truncate text-[10px] leading-none tracking-wider uppercase">
+    <div className="flex min-w-0 items-baseline gap-1.5">
+      <dt className="text-muted-foreground/60 shrink-0 text-[10px] tracking-wider uppercase">
         {label}
       </dt>
       <dd
         className={cn(
-          'mt-1.5 font-mono text-lg leading-none tabular-nums',
+          'truncate font-mono text-sm tabular-nums',
           accent ? 'text-primary' : 'text-foreground',
         )}
       >
@@ -53,8 +58,13 @@ function Stat({
  * an honest per-stream figure, so a number there would be a fabrication rather
  * than a measurement. Do not add one to make the page look instrumented.
  *
- * The 1.17 MB WebAssembly figure lives in the note and has to move when the
- * binary does — `docs/BACKLOG.md` points at this file for it.
+ * ⚠️ THE NOTE THAT QUALIFIES THESE FIGURES IS `RunStatsNote`, BELOW, AND IT IS
+ * PART OF THEM. It is a separate component only because this row is sticky and
+ * that prose is not — three static lines held on screen for a whole run cost
+ * more than they give. It renders directly beneath the sticky bar, so it is
+ * adjacent to these figures on first paint, which is when it is read. Keep the
+ * two in this one file: they are one statement, and `docs/BACKLOG.md` points
+ * here for the WebAssembly figure the note carries.
  */
 export function RunStats({ state }: { state: GrepStreamState }) {
   // A pattern that will not compile fails in milliseconds having read nothing,
@@ -66,8 +76,8 @@ export function RunStats({ state }: { state: GrepStreamState }) {
   const dash = (value: string) => (uncompiled ? '—' : value);
 
   return (
-    <div className="border-border/60 bg-card/40 rounded-xl border px-5 py-4 backdrop-blur">
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3 lg:grid-cols-5 lg:gap-x-4">
+    <div className="border-border/60 bg-card/40 rounded-lg border px-4 py-2.5 backdrop-blur">
+      <dl className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
         <Stat
           label="Matching lines"
           value={dash(state.total.toLocaleString())}
@@ -87,16 +97,36 @@ export function RunStats({ state }: { state: GrepStreamState }) {
           value={dash(formatThroughput(state.bytesRead, state.elapsedMs))}
         />
       </dl>
-
-      <p className="border-border/60 text-muted-foreground/70 mt-4 border-t pt-2.5 text-xs leading-relaxed">
-        Streamed from a static file, plus a 1.17 MB WebAssembly download once
-        per page load. <strong className="font-medium">Scanned</strong> is
-        uncompressed log content reaching the search, not bytes on the wire —
-        these files are served gzipped at about 16×.{' '}
-        <strong className="font-medium">Throughput</strong> is end to end, so it
-        measures the network as much as the engine. Every query reads the file
-        to its last byte: the last matching line cannot be known before it.
-      </p>
     </div>
+  );
+}
+
+/**
+ * What the figures above mean, and what they are not.
+ *
+ * ⚠️ THIS IS A TERM OF THE MEASUREMENT, NOT A CAPTION, AND IT MAY NOT BE
+ * SHORTENED PAST THE POINT WHERE IT DISTINGUISHES DECOMPRESSED CONTENT FROM
+ * BYTES ON THE WIRE. The logs are served gzipped at about 16×, so a `Scanned`
+ * reading of 240.2 MB was carried by roughly 15 MB of transfer; drop this
+ * sentence and the page overstates bandwidth by a factor of sixteen. The same
+ * goes for the throughput clause: end-to-end over a CDN is not a benchmark of
+ * the engine, and presenting it as one would put someone else's network under
+ * this library's name.
+ *
+ * It renders immediately below the sticky bar rather than inside it — see the
+ * note on `RunStats`. The 1.17 MB WebAssembly figure is a hand-written literal
+ * and has to move when the binary does; `docs/BACKLOG.md` points at this file.
+ */
+export function RunStatsNote() {
+  return (
+    <p className="text-muted-foreground/70 text-xs leading-relaxed">
+      Streamed from a static file, plus a 1.17 MB WebAssembly download once per
+      page load. <strong className="font-medium">Scanned</strong> is
+      uncompressed log content reaching the search, not bytes on the wire —
+      these files are served gzipped at about 16×.{' '}
+      <strong className="font-medium">Throughput</strong> is end to end, so it
+      measures the network as much as the engine. Every query reads the file to
+      its last byte: the last matching line cannot be known before it.
+    </p>
   );
 }

@@ -2,7 +2,7 @@ import { CircleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Hero } from '@/components/hero';
 import { ResultFeed } from '@/components/result-feed';
-import { RunStats } from '@/components/run-stats';
+import { RunStats, RunStatsNote } from '@/components/run-stats';
 import { ScanMeterBar } from '@/components/scan-meter-bar';
 import { SearchField } from '@/components/search-field';
 import { SourcePicker } from '@/components/source-picker';
@@ -91,8 +91,12 @@ export function App() {
             watch `Elapsed` climb against a `First match` that settled in
             milliseconds — which is the page's whole argument, and was
             previously visible only from the top of the document.
+
+            Only the VALUES are up here. The prose qualifying them is static for
+            the whole run and rides below the bar as `RunStatsNote`, because a
+            sticky header is paid for in feed nobody gets to see.
           */}
-          <div className="mt-4">
+          <div className="mt-3">
             <RunStats state={state} />
           </div>
 
@@ -133,6 +137,15 @@ export function App() {
               ? `${state.total} matching lines in ${source.service}.`
               : ''}
         </p>
+
+        {/*
+          Directly under the sticky bar, so it sits with the figures it
+          qualifies on first paint — which is when it is read — and scrolls away
+          once the visitor is reading results instead of reading about them.
+        */}
+        <div className="mb-5">
+          <RunStatsNote />
+        </div>
 
         <ResultFeed state={state} service={source.service} />
 
