@@ -52,10 +52,17 @@ export function ScanMeterBar({
           step between chunks — it is never animated toward a value that has not
           been read. `duration-150` is under one chunk's arrival interval, so the
           bar never runs ahead of the number beside it.
+
+          THE TRANSITION IS DROPPED AT ZERO, WHICH IS THE RESET. A new run
+          republishes `bytesRead` as 0, and a bar that eased back to empty would
+          spend 150ms animating a read that is not happening — the one thing the
+          comment above says this bar never does. Emptying is a state change,
+          not progress, so it is instant; only advancing is smoothed.
         */}
         <div
           className={cn(
-            'bg-primary h-full rounded-full transition-[width] duration-150 ease-linear',
+            'bg-primary h-full rounded-full',
+            share > 0 && 'transition-[width] duration-150 ease-linear',
             running && 'animate-pulse',
           )}
           style={{ width: `${share * 100}%` }}
