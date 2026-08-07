@@ -76,7 +76,14 @@ export function App() {
             running={state.running}
           />
 
-          <div className="mt-3">
+          {/*
+            `mt-5` against the chips' `mt-2.5` above them. The two rows are both
+            pills and would otherwise read as one list — but the chips write a
+            pattern into the field and this chooses which file that pattern runs
+            against, which are not the same question. The gap is the answer, and
+            halving it puts the ambiguity straight back.
+          */}
+          <div className="mt-5">
             <SourcePicker
               value={source.id}
               onChange={setSourceId}
