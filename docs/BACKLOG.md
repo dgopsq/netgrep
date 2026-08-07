@@ -206,9 +206,10 @@ both. A row that reverses an earlier row is worth measuring rather than negating
 The bulk is upstream — newer `regex-automata` carries larger DFA and Unicode tables — and is not really
 reducible without giving up the modern crates. Roughly 502 KB gzipped over the wire.
 
-The demo's `StatsBar` states this number to visitors, so it moves when this does — see
+The demo's run figures state this number to visitors, so it moves when this does — see
 [`../AGENTS.md` §2.3](../AGENTS.md#23-️-fixing-a-defect-is-not-finished-until-the-demo-site-stops-warning-about-it).
-It states a **rounded** figure, `1.17 MB`, as a literal in `stats-bar.tsx` rather than reading a constant, and
+It states a **rounded** figure, `1.17 MB`, as a literal in
+`packages/example/src/components/run-stats.tsx` rather than reading a constant, and
 1,169,038 still rounds there — so nothing on the page moved this time. That is luck, not insulation: the next
 change of this size needs the literal edited by hand.
 

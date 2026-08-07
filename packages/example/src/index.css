@@ -261,6 +261,35 @@
   );
 }
 
+@utility read-meter-sweep {
+  /*
+   * The share of the file already delivered to the search, painted behind the
+   * run figures.
+   *
+   * A gradient rather than a flat tint: filled flat there is no leading edge to
+   * follow, and a finished run is just a card that has turned teal. Weighting
+   * the tint toward the head gives the sweep a front.
+   */
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--primary), transparent 98%),
+    color-mix(in oklch, var(--primary), transparent 88%)
+  );
+}
+
+@utility read-meter-edge {
+  /*
+   * The filled part of the meter, along the bottom of the figures card.
+   *
+   * ⚠️ NEEDS THE TRACK BEHIND IT TO READ AS A METER AT ALL — alone it is a
+   * length with nothing to be a fraction of, a bottom border at 100% and absent
+   * at 0%. The glow only has to lift the line off that track, and stays a
+   * static shadow: anything here that looks like an instrument is a measurement.
+   */
+  background-color: var(--primary);
+  box-shadow: 0 0 6px 0 color-mix(in oklch, var(--primary), transparent 70%);
+}
+
 /*
  * The searching state is conveyed by two pulsing elements and a spinner. Under
  * a reduced-motion preference the state is still legible without them, so they

@@ -155,7 +155,7 @@ entered into it in the first place. So when you add one to [`docs/BACKLOG.md`](d
 decide whether a visitor is affected: if so, add an entry here; if not, no action — but make it a
 decision, not an omission.
 
-**Still not enforced, and still yours to check:** the `StatsBar` line, which states the 1.17 MB
+**Still not enforced, and still yours to check:** the `run-stats.tsx` line, which states the 1.17 MB
 WebAssembly download and has to move when the binary does; and the hero copy, which no longer states the
 scope of a result — since [decision 0025](docs/decisions/0025-streaming-grep-over-http.md) its accent
 claims **constant memory**. The second is the harder one, because the page demonstrates nothing about
@@ -165,14 +165,14 @@ makes the hero wrong with no test failing. **Do not add a number to the page to 
 > [!WARNING]
 > **The page measures the network, and that is now true by construction.** This section spent two revisions on
 > the demo's cache flag: first that fixing 3b and 18 would mean switching the cache back on, then that it had
-> to stay off regardless because a warm `Record` lookup timed as a download makes the `StatsBar` lie. Neither
+> to stay off regardless because a warm `Record` lookup timed as a download makes the run figures lie. Neither
 > instruction survives — [decision 0024](docs/decisions/0024-remove-the-in-memory-cache.md) deleted the cache,
 > so there is no flag to set either way and nothing the library retains that could be timed instead of a
 > fetch. What survives is the property those revisions were protecting: **the demo's numbers are network
 > numbers, and anything that would answer a repeat query from memory breaks them.** The browser's own HTTP
 > cache is the one thing that still can, and it is not the library's to switch off — GitHub Pages serves the
 > logs with `cache-control: max-age=600` (measured 2026-08-01), so what a repeat costs is the host's answer
-> rather than netgrep's. Read the comment in `packages/example/src/hooks/use-log-search.ts` before changing
+> rather than netgrep's. Read the comment in `packages/example/src/hooks/use-grep-stream.ts` before changing
 > anything about it. See also
 > [decision 0018](docs/decisions/0018-line-oriented-tail-buffer.md) and
 > [decision 0019](docs/decisions/0019-in-flight-fetch-registry.md), which record the shape this used to have.
@@ -437,16 +437,19 @@ packages/
     → published as @netgrep/netgrep
 
   example/           THE PUBLIC DEMO — https://netgrep.diegopasquali.com/
-                     Vite + React + Tailwind v4 + shadcn, a dashboard over four
-                     generated log files totalling 408.6 MB (decision 0026). Not
-                     published to npm; deployed to Pages on release.
-    src/hooks/use-log-search.ts      the whole netgrep integration. Its timings are
+                     Vite + React + Tailwind v4 + shadcn, a live grep over one of
+                     four generated log files, up to 240 MB (decisions 0026, 0028).
+                     Not published to npm; deployed to Pages on release.
+    src/hooks/use-grep-stream.ts     the whole netgrep integration. Its timings are
                                      network timings — read the comment before
-                                     changing what a repeat query costs
-    src/lib/scan-meter.ts            DEMO-ONLY INSTRUMENTATION. Wraps window.fetch to
-                                     count bytes per log file, because netgrep exposes
-                                     no counter. Counts DECOMPRESSED content, not wire
-                                     bytes — the page must keep saying which
+                                     changing what a repeat query costs. Hits
+                                     accumulate in a ref and publish once per
+                                     animation frame; a setState per hit is 100,000
+                                     renders and takes the tab down
+    src/lib/hit-buffer.ts            the 100,000-hit retention ceiling. THE PAGE'S
+                                     budget, not the library's bound — netgrep still
+                                     holds one chunk however large the file is, and
+                                     the page states the difference on screen
     src/data/logs.ts                 the sources, read from logs.config.json, and the
                                      ONLY module that knows the base path
     src/App.tsx                      the demo page. It states no limitation of its

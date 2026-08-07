@@ -2,12 +2,14 @@
 
 The public demo for `@netgrep/netgrep`, live at **<https://netgrep.diegopasquali.com/>**.
 
-Vite + React + Tailwind v4 + shadcn/ui. It is a dashboard over four generated log files — Apache httpd
-8.3 MB, ZooKeeper 40.0 MB, Hadoop YARN 120.1 MB and OpenSSH 240.2 MB, 408.6 MB together — and shows each one
-resolving individually, as it downloads. See the [main README](https://github.com/dgopsq/netgrep) for what
+Vite + React + Tailwind v4 + shadcn/ui. It greps **one** generated log file at a time — Apache httpd 8.3 MB,
+ZooKeeper 40.0 MB, Hadoop YARN 120.1 MB or OpenSSH 240.2 MB — and streams every matching line into a
+virtualized feed as the file downloads. See the [main README](https://github.com/dgopsq/netgrep) for what
 netgrep is, [decision 0017](../../docs/decisions/0017-example-as-hosted-demo.md) for why this app looks the
-way it does, and [decision 0026](../../docs/decisions/0026-demo-as-log-dashboard.md) for why it searches
-these files rather than something smaller.
+way it does, [decision 0026](../../docs/decisions/0026-demo-as-log-dashboard.md) for why it searches these
+files rather than something smaller, and
+[decision 0028](../../docs/decisions/0028-demo-as-live-grep.md) for why it enumerates rather than answering a
+yes/no question over all four at once.
 
 It runs against the **local workspace source**, not a published release, so changes to `packages/netgrep` or
 `packages/search` show up here after a rebuild.
@@ -56,30 +58,37 @@ The DNS record itself is a CNAME in Cloudflare pointing at `dgopsq.github.io`.
 
 ## Things worth knowing before editing
 
-**The numbers this page shows are network numbers.** Every timing in the `StatsBar` is the cost of actually
+**The numbers this page shows are network numbers.** Every timing in the run figures is the cost of actually
 fetching a file, and that is the page's only evidence for the claim it makes. netgrep used to keep downloaded
 bytes in memory and this app switched that off, precisely so a repeat query could not be timed as a download;
 [decision 0024](../../docs/decisions/0024-remove-the-in-memory-cache.md) removed the cache from the library
 altogether, so there is no flag to set either way and nothing retained that could be timed instead of a
 fetch. **What remains yours to protect is the property, not the flag** — do not add a layer here that answers
 a repeat query from memory. What a repeat actually costs is the host's business now, and visible in devtools.
-Read the comment in `src/hooks/use-log-search.ts` first; it also explains why overlapping runs still
-double-fetch, and why that is accepted.
+Read the comment in `src/hooks/use-grep-stream.ts` first.
 
-**Every number on this page is measured, and the two it refuses are refused because they cannot be.** Elapsed
-time comes from the search; bytes read come from `src/lib/scan-meter.ts`, which wraps the demo's own
-`window.fetch` and pipes each log response through a counting stream — the library reports nothing of the
-kind, and the browser's Resource Timing entries report zero for an aborted transfer, which is the case worth
-showing. There is still **no progress bar**, because netgrep exposes no progress and a bar would be an
-animation impersonating a measurement, and **no memory figure**, because a tab cannot honestly measure one. Do
-not add a number here to make the page look more instrumented; a fabricated figure on the one page whose
-entire value is that it is accurate costs more than the gap does.
+**Every number on this page is measured, and the one it refuses is refused because it cannot be.** Elapsed
+time comes from the search; bytes read come from `GrepOptions.onProgress`, which reports cumulative
+decompressed bytes after each network chunk. That figure used to be reverse-engineered by a `window.fetch`
+wrapper this app owned, deleted once the library reported it directly — and the finding that the browser's
+Resource Timing entries report zero for an aborted transfer is **retained history rather than current
+mechanism**, kept so nobody re-probes it.
+
+**There is now a read meter, and the rule that refused a progress bar is unchanged.** It was refused on two
+grounds: netgrep exposed no progress, and `Content-Length` on a gzipped response is the compressed size, so
+there was no honest total to divide by. `onProgress` supplies the numerator and the generated `manifest.json`
+the real uncompressed size as the denominator, so the meter — the fill behind the run figures, rather than a
+bar of its own — divides one measured number by another. What was refused was
+*an animation impersonating a measurement*, and that is still refused — which is why there is still **no
+memory figure**, because a tab cannot honestly measure one. Do not add a number here to make the page look
+more instrumented; a fabricated figure on the one page whose entire value is that it is accurate costs more
+than the gap does.
 
 ⚠️ **The bytes-read figure is decompressed file content, not bandwidth.** The logs are served gzipped and
-compress about 16×, so a row reading `240.2 MB` was carried by roughly 15 MB on the wire. It is labelled
-**Scanned** precisely because that word cannot be mistaken for a transfer figure, and the sentence in the
-stats bar that spells the difference out is a term of the measurement rather than a caption. Do not shorten it
-to the point where it stops distinguishing the two.
+compress about 16×, so a full read reading `240.2 MB` was carried by roughly 15 MB on the wire. It is labelled
+**Scanned** precisely because that word cannot be mistaken for a transfer figure, and the sentence under the
+run figures that spells the difference out is a term of the measurement rather than a caption. Do not shorten
+it to the point where it stops distinguishing the two.
 
 **`logs.config.json` is the one place that decides what the page searches.** Both `scripts/build-logs.mjs` and
 `src/data/logs.ts` read it, so a source's id, service name, seed, size target and filename are stated once.
@@ -90,16 +99,20 @@ clean clone. A missing manifest is not an error; the page falls back to the targ
 
 **The log files are repetitive, and the page's honesty depends on not pretending otherwise.** Each file is one
 ~512 KB seed concatenated to itself until it passes its target, so every term in it recurs within the first
-megabyte. The exceptions are the four `NETGREP-MARKER-<pct>` lines the generator injects at 25%, 50%, 75% and
+megabyte. **That tiling is also what fills the feed**: a common term does not match once but tens of thousands
+of times, which is the workload the 100,000-line retention ceiling in `src/lib/hit-buffer.ts` exists for. The
+exceptions are the four `NETGREP-MARKER-<pct>` lines the generator injects at 25%, 50%, 75% and
 99% of each file — they are the only genuinely deep needles in 408 MB, and the only honest way to demonstrate
 a match that is not near the head. The lines themselves are real output from real systems, which is what keeps
 the regex examples on the page real; the volume is manufactured.
 
-**Every suggestion chip matches something, deliberately.** A pattern that matches nothing reads all four
-sources to their last byte, and offering that as a one-click chip spends hundreds of megabytes of a visitor's
-connection to show a row of dashes. The cost is not hidden by leaving it out — the stats bar states the total
-size of the log files and says in as many words that a query matching nothing reads every byte, and anyone
-who types one gets exactly that, honestly timed. Keep both halves.
+**The "every suggestion chip matches something" rule is retired, and its premise is why.** It existed because
+a zero-match query read all four sources to their last byte, so offering one as a one-click chip spent
+hundreds of megabytes of a visitor's connection to show a row of dashes. Under enumeration there is no early
+exit for it to be expensive relative to: `grep()` yields every matching line, and the last one cannot be known
+before the last byte, so a query matching nothing costs exactly what a query matching everything costs. The
+`zzz-no-such-line` chip is now the cheapest honest way to show what a full read costs — the other half of the
+page's argument. See [decision 0028](../../docs/decisions/0028-demo-as-live-grep.md).
 
 **The seeds are committed and the attribution is a licence term.** `seeds/*.log` are ~512 KB prefixes of
 loghub-2.0 under CC BY 4.0; `seeds/NOTICE.md` carries the citation. The footer line crediting loghub and

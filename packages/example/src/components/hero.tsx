@@ -39,10 +39,9 @@ export function Hero() {
       </p>
 
       <p className="text-muted-foreground mt-4 max-w-xl leading-relaxed text-balance">
-        ripgrep's real regex engine over a streaming fetch. It answers the
-        moment a matching line arrives — without waiting for the last byte, and
-        without holding the file in memory. No index to build, no backend to
-        run.
+        ripgrep's real regex engine over a streaming fetch. Matching lines
+        arrive while the file is still downloading — each with its line number,
+        none of it held in memory. No index to build, no backend to run.
       </p>
 
       <div className="mt-7 flex flex-wrap items-center justify-center gap-2 text-sm">
