@@ -29,7 +29,7 @@ One source at a time, streaming every matching line into a virtualized feed.
 | | |
 |---|---|
 | Sources | unchanged — Apache 8.3 MB · ZooKeeper 40.0 MB · Hadoop YARN 120.1 MB · OpenSSH 240.2 MB, chosen one at a time |
-| Default | **Apache, 8.3 MB**, searching `Invalid user` on load |
+| Default | **Apache, 8.3 MB**, searching `error` on load — a pattern that matches all four sources, so the default pair can never open on an empty feed |
 | Reads | the whole file, every query, with no `break` and no early exit |
 | Retained | the first `MAX_RETAINED_HITS = 100,000` matching lines; every one past that is **counted and not stored** |
 | Rendered | `@tanstack/react-virtual`, ~60 row elements in the DOM whatever the match count |

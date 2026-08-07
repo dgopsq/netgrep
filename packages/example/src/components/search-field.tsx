@@ -64,7 +64,7 @@ export function SearchField({ value, onChange, running }: SearchFieldProps) {
           type="search"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="Grep this log — Invalid user, BREAK-IN, an IP…"
+          placeholder="Grep this log — error, File does not exist, an IP…"
           aria-label="Grep the selected log file with a ripgrep pattern"
           // This is the page's only interactive control, so focusing it takes
           // focus from nothing.
