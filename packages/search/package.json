@@ -1,6 +1,6 @@
 {
   "name": "@netgrep/search",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "ripgrep's search engine compiled to WebAssembly — the core of @netgrep/netgrep",
   "license": "MIT",
   "repository": {

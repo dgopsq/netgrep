@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.0](https://github.com/dgopsq/netgrep/compare/search-0.4.0...search-0.5.0) (2026-08-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **netgrep:** search_bytes_line, search_bytes_line_ranges and the LineWithRanges carrier are removed from @netgrep/search. Use search_block.
+
+### Features
+
+* **assets:** the wordmark becomes net | grep ([#53](https://github.com/dgopsq/netgrep/issues/53)) ([4997dc3](https://github.com/dgopsq/netgrep/commit/4997dc3e1bb82b6f3156b7fc9f3a4870675b9bd2))
+* **netgrep:** grep() and matches() replace the class ([#51](https://github.com/dgopsq/netgrep/issues/51)) ([893a344](https://github.com/dgopsq/netgrep/commit/893a344ee0657caed95588675ec6c2c9674d04ef))
+* **search:** return every matching line in a block ([#47](https://github.com/dgopsq/netgrep/issues/47)) ([d519fd1](https://github.com/dgopsq/netgrep/commit/d519fd1c3e4fceb7d9a6340741b3bb6dc67385a5))
+
+
+### Bug fixes
+
+* **search:** make $ match on CRLF input (re-land of [#44](https://github.com/dgopsq/netgrep/issues/44)) ([#46](https://github.com/dgopsq/netgrep/issues/46)) ([418421c](https://github.com/dgopsq/netgrep/commit/418421cdd362eb6f1f7e73eb79dce8ae10c3ed37))
+* **search:** search NUL-containing input instead of discarding the block ([#43](https://github.com/dgopsq/netgrep/issues/43)) ([a2b8806](https://github.com/dgopsq/netgrep/commit/a2b88065301d0bf0aaecf129354b1865744e7406))
+
 ## [0.4.0](https://github.com/dgopsq/netgrep/compare/search-0.3.0...search-0.4.0) (2026-08-03)
 
 
