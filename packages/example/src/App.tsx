@@ -2,6 +2,8 @@ import { CircleAlert } from 'lucide-react';
 import { useState } from 'react';
 import { Hero } from '@/components/hero';
 import { ResultFeed } from '@/components/result-feed';
+import { RunStats } from '@/components/run-stats';
+import { ScanMeterBar } from '@/components/scan-meter-bar';
 import { SearchField } from '@/components/search-field';
 import { SourcePicker } from '@/components/source-picker';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -111,7 +113,17 @@ export function App() {
               : ''}
         </p>
 
-        <ResultFeed state={state} service={source.service} />
+        <RunStats state={state} />
+
+        <ScanMeterBar
+          bytesRead={state.bytesRead}
+          totalBytes={sizes.bytes[source.id] ?? source.targetBytes}
+          running={state.running}
+        />
+
+        <div className="mt-6">
+          <ResultFeed state={state} service={source.service} />
+        </div>
 
         <footer className="text-muted-foreground/60 mt-16 space-y-1.5 text-center text-xs">
           <p>
