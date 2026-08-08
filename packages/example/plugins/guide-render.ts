@@ -209,8 +209,9 @@ export function renderNav(current: 'demo' | 'docs', base: string): string {
   // one the eye had to rule out.
   const docsCurrent = current === 'docs' ? ' aria-current="page"' : '';
 
-  // A small version of the hero's `net | grep` wordmark (see hero.tsx):
-  // gradient name either side of a primary-coloured pipe, at nav size. Plain
+  // A small version of the hero's `net | grep` wordmark (see hero.tsx): one
+  // gradient across the anchor, showing through the two transparent name spans
+  // either side of a primary-coloured pipe, at nav size. Plain
   // classes rather than Tailwind utilities: this HTML is generated at build
   // time, outside Tailwind's scanner, so utilities here would work in dev and
   // vanish from the production build. Styled in index.css beside .site-nav.

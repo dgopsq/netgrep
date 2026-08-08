@@ -28,11 +28,13 @@ export function Hero() {
         API rewrite deleted the class; the pipe states the shell heritage
         instead. Must agree with assets/header.svg and the nav mark in
         plugins/guide-render.ts.
+
+        `text-gradient` sits on the <h1> so one fade crosses the whole lockup,
+        as it does in the image: white through `net`, the accent by `grep`. On
+        the spans it was two fades, and `grep` started over at white.
       */}
-      <h1 className="font-mono text-5xl font-semibold tracking-tight sm:text-6xl">
-        <span className="text-gradient">net</span>
-        <span className="text-primary">{' | '}</span>
-        <span className="text-gradient">grep</span>
+      <h1 className="text-gradient font-mono text-5xl font-semibold tracking-tight sm:text-6xl">
+        net<span className="text-primary">{' | '}</span>grep
       </h1>
 
       <p className="text-foreground/90 mt-6 max-w-2xl text-xl leading-relaxed text-balance sm:text-2xl">
