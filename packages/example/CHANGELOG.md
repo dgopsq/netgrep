@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.0](https://github.com/dgopsq/netgrep/compare/example-0.3.0...example-0.4.0) (2026-08-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **netgrep:** search_bytes_line, search_bytes_line_ranges and the LineWithRanges carrier are removed from @netgrep/search. Use search_block.
+
+### Features
+
+* **assets:** the wordmark becomes net | grep ([#53](https://github.com/dgopsq/netgrep/issues/53)) ([4997dc3](https://github.com/dgopsq/netgrep/commit/4997dc3e1bb82b6f3156b7fc9f3a4870675b9bd2))
+* **example:** the demo becomes a live grep ([#52](https://github.com/dgopsq/netgrep/issues/52)) ([88183a7](https://github.com/dgopsq/netgrep/commit/88183a75c1527cda1282ccfdf20dfcf41637d724))
+* **netgrep:** grep() and matches() replace the class ([#51](https://github.com/dgopsq/netgrep/issues/51)) ([893a344](https://github.com/dgopsq/netgrep/commit/893a344ee0657caed95588675ec6c2c9674d04ef))
+
+
+### Bug fixes
+
+* **example:** render the net | grep wordmark on the page, not new Netgrep(); ([#54](https://github.com/dgopsq/netgrep/issues/54)) ([12ea3c1](https://github.com/dgopsq/netgrep/commit/12ea3c1e91d7265fc23d0fae5ba66e38a1056ebd))
+
 ## [0.3.0](https://github.com/dgopsq/netgrep/compare/example-0.2.0...example-0.3.0) (2026-08-03)
 
 
