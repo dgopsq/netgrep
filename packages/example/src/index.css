@@ -86,13 +86,21 @@
 
   /*
    * The wordmark treatment: white falling off to teal. Defined once here so
-   * the hero's `.text-gradient` utility and the nav mark's `.site-nav-mark-name`
-   * below share one definition instead of two copies drifting apart.
+   * the hero's `.text-gradient` utility and the nav mark below share one
+   * definition instead of two copies drifting apart.
+   *
+   * Geometry copied from assets/header.svg, which is the wordmark of record:
+   * horizontal, `net` held white to 40%, full teal by 80% so `grep` lands on
+   * the accent. Both carriers must paint this across the WHOLE `net|grep`
+   * lockup — put it on the two name spans instead and the fade restarts on
+   * `grep`, which is what made the site disagree with the image. Carry it on
+   * an INLINE box: a block one is only as tall as its line-height, which crops
+   * the background off the descenders.
    */
   --wordmark-gradient: linear-gradient(
-    100deg,
-    oklch(0.99 0 0) 20%,
-    oklch(0.812 0.128 181) 85%
+    to right,
+    oklch(0.99 0 0) 40%,
+    var(--primary) 80%
   );
 }
 
@@ -181,10 +189,13 @@
   font-size: 1rem;
 }
 
-/* The nav's small `net | grep` mark — see renderNav's comment for why this is
+/* The nav's small `net|grep` mark — see renderNav's comment for why this is
    plain CSS rather than Tailwind utilities. Same composition as the hero's
-   <h1>, just subordinate in size. */
-.site-nav-mark-name {
+   <h1>, just subordinate in size: one fade across an inline span wrapping the
+   whole lockup. Not the anchor — that is a flex item of .site-nav, so it
+   blockifies, and `.site-nav a` and its :hover would both outrank a colour
+   set on it. */
+.site-nav-mark-lockup {
   background-image: var(--wordmark-gradient);
   background-clip: text;
   color: transparent;
@@ -212,8 +223,9 @@
 @utility text-gradient {
   /* Wordmark treatment: white falling off to teal. The README banner is a
      screenshot of it, so this rule is the wordmark rather than a copy of one.
-     The gradient itself lives in --wordmark-gradient on :root, shared with
-     the nav mark's .site-nav-mark-name. */
+     Goes on the inline span holding the whole lockup, not on the names inside
+     it, and not on the <h1> — see --wordmark-gradient on :root for both
+     reasons. The gradient itself lives there too, shared with the nav mark. */
   background-image: var(--wordmark-gradient);
   background-clip: text;
   color: transparent;

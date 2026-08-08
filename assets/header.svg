@@ -15,7 +15,10 @@
   </defs>
   <rect width="1800" height="520" rx="48" fill="url(#glow)" />
   <text font-family="JetBrains Mono" font-weight="700" font-size="170" text-anchor="middle" x="900" y="248">
-    <tspan fill="url(#fade)">net</tspan><tspan fill="#2ee0c9"> | </tspan><tspan fill="url(#fade)">grep</tspan>
+    <!-- No spaces around the pipe: rsvg-convert, which renders the PNG beside
+         this file, strips them under xml:space="default", so the committed
+         artwork is `net|grep` and the spaces only ever showed in a browser. -->
+    <tspan fill="url(#fade)">net</tspan><tspan fill="#2ee0c9">|</tspan><tspan fill="url(#fade)">grep</tspan>
   </text>
   <text font-family="-apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif" font-weight="500" font-size="48" text-anchor="middle" x="900" y="368" xml:space="preserve">
     <tspan fill="#c9d1ce">grep over HTTP, </tspan><tspan fill="#2ee0c9">running in the browser.</tspan>
