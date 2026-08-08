@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/dgopsq/netgrep/compare/example-0.4.0...example-0.4.1) (2026-08-08)
+
+
+### Bug fixes
+
+* **example:** one wordmark fade across the lockup, as in the artwork ([#55](https://github.com/dgopsq/netgrep/issues/55)) ([436f537](https://github.com/dgopsq/netgrep/commit/436f53730b501e16025b2a93b300484497a7497e))
+
 ## [0.4.0](https://github.com/dgopsq/netgrep/compare/example-0.3.0...example-0.4.0) (2026-08-07)
 
 
