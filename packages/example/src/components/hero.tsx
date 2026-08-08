@@ -29,12 +29,20 @@ export function Hero() {
         instead. Must agree with assets/header.svg and the nav mark in
         plugins/guide-render.ts.
 
-        `text-gradient` sits on the <h1> so one fade crosses the whole lockup,
-        as it does in the image: white through `net`, the accent by `grep`. On
-        the spans it was two fades, and `grep` started over at white.
+        `text-gradient` wraps the whole lockup so one fade crosses it, as it
+        does in the image: white through `net`, the accent by `grep`. On the
+        two name spans it was two fades, and `grep` started over at white. The
+        carrier has to be this inline span and not the <h1>: `text-6xl` sets
+        line-height 1, so the block box is 1em tall and clips the background
+        off the descenders of `g` and `p`, while an inline box is sized from
+        the font's own metrics.
+
+        No spaces around the pipe — the artwork has none, and a monospace
+        pipe's side bearings are the gap.
       */}
-      <h1 className="text-gradient font-mono text-5xl font-semibold tracking-tight sm:text-6xl">
-        net<span className="text-primary">{' | '}</span>grep
+      <h1 className="font-mono text-5xl font-semibold tracking-tight sm:text-6xl">
+        {/* biome-ignore format: spaces here would land in the wordmark */}
+        <span className="text-gradient">net<span className="text-primary">|</span>grep</span>
       </h1>
 
       <p className="text-foreground/90 mt-6 max-w-2xl text-xl leading-relaxed text-balance sm:text-2xl">

@@ -91,9 +91,11 @@
    *
    * Geometry copied from assets/header.svg, which is the wordmark of record:
    * horizontal, `net` held white to 40%, full teal by 80% so `grep` lands on
-   * the accent. Both carriers must paint this across the WHOLE `net | grep`
+   * the accent. Both carriers must paint this across the WHOLE `net|grep`
    * lockup — put it on the two name spans instead and the fade restarts on
-   * `grep`, which is what made the site disagree with the image.
+   * `grep`, which is what made the site disagree with the image. Carry it on
+   * an INLINE box: a block one is only as tall as its line-height, which crops
+   * the background off the descenders.
    */
   --wordmark-gradient: linear-gradient(
     to right,
@@ -181,22 +183,21 @@
  * comment in App.tsx — and two stacked sticky bars need offset coordination
  * that buys nothing on a page you scroll once.
  */
-/* The nav's small `net | grep` mark — see renderNav's comment for why this is
-   plain CSS rather than Tailwind utilities. Same composition as the hero's
-   <h1>, just subordinate in size: the gradient spans the whole lockup, and the
-   anchor is a flex item of .site-nav, so its box is exactly the mark's width. */
 .site-nav-mark {
   font-family: var(--font-mono);
   font-weight: 600;
   font-size: 1rem;
-  background-image: var(--wordmark-gradient);
-  background-clip: text;
 }
 
-/* The transparency stays on the spans rather than the anchor: `.site-nav a`
-   and its :hover both set a colour, and either would outrank a rule on
-   .site-nav-mark and paint the gradient over. */
-.site-nav-mark-name {
+/* The nav's small `net|grep` mark — see renderNav's comment for why this is
+   plain CSS rather than Tailwind utilities. Same composition as the hero's
+   <h1>, just subordinate in size: one fade across an inline span wrapping the
+   whole lockup. Not the anchor — that is a flex item of .site-nav, so it
+   blockifies, and `.site-nav a` and its :hover would both outrank a colour
+   set on it. */
+.site-nav-mark-lockup {
+  background-image: var(--wordmark-gradient);
+  background-clip: text;
   color: transparent;
 }
 
@@ -222,10 +223,9 @@
 @utility text-gradient {
   /* Wordmark treatment: white falling off to teal. The README banner is a
      screenshot of it, so this rule is the wordmark rather than a copy of one.
-     Goes on the element holding the whole lockup — the hero <h1>, whose box is
-     the mark's width because it is a centred flex item — not on the names
-     inside it. The gradient itself lives in --wordmark-gradient on :root,
-     shared with the nav mark. */
+     Goes on the inline span holding the whole lockup, not on the names inside
+     it, and not on the <h1> — see --wordmark-gradient on :root for both
+     reasons. The gradient itself lives there too, shared with the nav mark. */
   background-image: var(--wordmark-gradient);
   background-clip: text;
   color: transparent;

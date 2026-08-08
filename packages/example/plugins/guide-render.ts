@@ -209,13 +209,14 @@ export function renderNav(current: 'demo' | 'docs', base: string): string {
   // one the eye had to rule out.
   const docsCurrent = current === 'docs' ? ' aria-current="page"' : '';
 
-  // A small version of the hero's `net | grep` wordmark (see hero.tsx): one
-  // gradient across the anchor, showing through the two transparent name spans
-  // either side of a primary-coloured pipe, at nav size. Plain
-  // classes rather than Tailwind utilities: this HTML is generated at build
-  // time, outside Tailwind's scanner, so utilities here would work in dev and
-  // vanish from the production build. Styled in index.css beside .site-nav.
-  const mark = `<a class="site-nav-mark" href="${base}"><span class="site-nav-mark-name">net</span><span class="site-nav-mark-pipe"> | </span><span class="site-nav-mark-name">grep</span></a>`;
+  // A small version of the hero's `net|grep` wordmark (see hero.tsx): one
+  // gradient across the lockup span, with a primary-coloured pipe painting
+  // over it, at nav size. No spaces around the pipe — the artwork has none.
+  // Plain classes rather than Tailwind utilities: this HTML is generated at
+  // build time, outside Tailwind's scanner, so utilities here would work in
+  // dev and vanish from the production build. Styled in index.css beside
+  // .site-nav.
+  const mark = `<a class="site-nav-mark" href="${base}"><span class="site-nav-mark-lockup">net<span class="site-nav-mark-pipe">|</span>grep</span></a>`;
 
   return `<header class="site-nav">
   ${mark}
