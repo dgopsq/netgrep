@@ -16,7 +16,7 @@ import { netgrepTheme } from './shiki-theme';
 
 const REPO_BLOB = 'https://github.com/dgopsq/netgrep/blob/main';
 
-export type TocEntry = { id: string; text: string; level: 2 | 3 };
+export type TocEntry = { id: string; text: string; level: 1 | 2 | 3 };
 export type RenderedGuide = { html: string; toc: TocEntry[] };
 export type GuideFile = { name: string; source: string };
 
@@ -164,8 +164,11 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
     seen.set(base, count);
     const id = count === 1 ? base : `${base}-${count}`;
 
-    if (token.tag === 'h2' || token.tag === 'h3') {
-      toc.push({ id, text, level: token.tag === 'h2' ? 2 : 3 });
+    // h1 included: each file's title is a section of the one page they
+    // concatenate into, and a TOC starting at h2 named none of them.
+    if (token.tag === 'h1' || token.tag === 'h2' || token.tag === 'h3') {
+      const level = token.tag === 'h1' ? 1 : token.tag === 'h2' ? 2 : 3;
+      toc.push({ id, text, level });
     }
 
     if (token.tag === 'h1' && !h1Ids.has(currentFile)) {
@@ -187,11 +190,17 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
 }
 
 export function renderToc(toc: TocEntry[]): string {
+  // Every entry names the section it sits in, so the page can show one
+  // section's subsections at a time — the whole list overflows its column. An
+  // entry with no h1 above it names nothing, and is never hidden.
+  let section = '';
+
   const items = toc
-    .map(
-      (entry) =>
-        `<li data-level="${entry.level}"><a href="#${entry.id}">${entry.text.replace(/`/g, '')}</a></li>`,
-    )
+    .map((entry) => {
+      if (entry.level === 1) section = entry.id;
+
+      return `<li data-level="${entry.level}"${section ? ` data-section="${section}"` : ''}><a href="#${entry.id}">${entry.text.replace(/`/g, '')}</a></li>`;
+    })
     .join('');
 
   return `<nav class="toc" aria-label="On this page"><p class="toc-label">On this page</p><ul>${items}</ul></nav>`;
