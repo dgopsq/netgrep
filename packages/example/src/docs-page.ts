@@ -4,13 +4,11 @@ import './docs.css';
 
 /**
  * Highlights the table-of-contents entry for the section currently on screen,
- * and opens that section — the seven section titles are always listed, their
- * subsections only while they are being read.
+ * and opens that section's subsections.
  *
  * Pure progressive enhancement: the page, its navigation and every anchor work
- * with this script absent, which is the reason /docs ships no framework. With
- * it absent the whole list shows, which is long but leaves every link
- * reachable — see the `.is-collapsible` rule in docs.css.
+ * with this script absent, which is the reason /docs ships no framework —
+ * absent, the contents simply lists every entry.
  */
 // Paired rather than two parallel arrays, so a link whose target is missing
 // is dropped without shifting every later link's index out of sync with its

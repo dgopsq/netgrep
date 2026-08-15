@@ -164,9 +164,8 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
     seen.set(base, count);
     const id = count === 1 ? base : `${base}-${count}`;
 
-    // h1 included: each guide file's title is a top-level section of the one
-    // page they concatenate into, so a TOC that started at h2 named none of
-    // the seven sections it was listing subsections of.
+    // h1 included: each file's title is a section of the one page they
+    // concatenate into, and a TOC starting at h2 named none of them.
     if (token.tag === 'h1' || token.tag === 'h2' || token.tag === 'h3') {
       const level = token.tag === 'h1' ? 1 : token.tag === 'h2' ? 2 : 3;
       toc.push({ id, text, level });
@@ -191,12 +190,9 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
 }
 
 export function renderToc(toc: TocEntry[]): string {
-  // Every entry names the section it sits in — the id of the nearest h1 at or
-  // above it — because the full list runs past thirty entries and overflows
-  // the sticky column it lives in. docs-page.ts opens the section being read and
-  // the stylesheet hides the subsections of the others. An entry with no h1
-  // above it names nothing, which is what keeps it visible: nothing can open
-  // a section that does not exist.
+  // Every entry names the section it sits in, so the page can show one
+  // section's subsections at a time — the whole list overflows its column. An
+  // entry with no h1 above it names nothing, and is never hidden.
   let section = '';
 
   const items = toc

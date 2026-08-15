@@ -39,21 +39,15 @@ html {
   }
 
   /*
-   * Thirty-odd entries — seven sections and their subsections — are taller
-   * than the column they sit in, so only the section being read shows its own.
-   * The seven stay put, which is what keeps the list a map of the page rather
-   * than a window onto part of it.
+   * Thirty-odd entries are taller than the column, so only the section being
+   * read shows its subsections; the seven section titles always stay.
    *
-   * Deliberately confined to this breakpoint. Below it the layout is one
-   * column and the table of contents sits ABOVE the prose, so a section
-   * opening or closing while the reader scrolls would move the text under
-   * their eyes — everywhere scroll anchoring does not save it. There is no
-   * sticky column down there to overflow either.
+   * This breakpoint only: below it the contents sits ABOVE the prose, where a
+   * section opening mid-scroll moves the text under the reader.
    *
-   * `.is-collapsible` is added by docs-page.ts, so a reader without
-   * JavaScript gets the whole list rather than seven links that never open;
-   * and `[data-section]` is absent from any entry no h1 precedes, which is
-   * what keeps such an entry visible.
+   * `.is-collapsible` comes from docs-page.ts, so without JavaScript the whole
+   * list shows rather than seven links that never open. An entry with no h1
+   * above it has no `data-section`, and stays visible.
    */
   .toc.is-collapsible li[data-section]:not([data-level="1"]):not(.is-open) {
     display: none;
@@ -76,13 +70,9 @@ html {
   text-transform: uppercase;
 }
 
-/*
- * Three ranks, because the page is seven guide files concatenated: each file's
- * <h1> is a section, its <h2>s the subsections, its <h3>s below those. The h1
- * is ranked by weight and by the space above it rather than by colour, so the
- * `.is-current` foreground below stays the one signal for "you are here" at
- * every level.
- */
+/* Three ranks: the page is seven guide files, so each file's <h1> is a
+   section. Weight and space rather than colour, leaving the `.is-current`
+   foreground below as the one "you are here" signal at every level. */
 .toc li[data-level="1"] {
   margin-top: 1.125rem;
   font-weight: 600;
