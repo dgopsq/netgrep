@@ -37,6 +37,21 @@ html {
     max-height: calc(100vh - 4rem);
     overflow-y: auto;
   }
+
+  /*
+   * Thirty-odd entries are taller than the column, so only the section being
+   * read shows its subsections; the seven section titles always stay.
+   *
+   * This breakpoint only: below it the contents sits ABOVE the prose, where a
+   * section opening mid-scroll moves the text under the reader.
+   *
+   * `.is-collapsible` comes from docs-page.ts, so without JavaScript the whole
+   * list shows rather than seven links that never open. An entry with no h1
+   * above it has no `data-section`, and stays visible.
+   */
+  .toc.is-collapsible li[data-section]:not([data-level="1"]):not(.is-open) {
+    display: none;
+  }
 }
 
 .toc ul {
@@ -55,8 +70,24 @@ html {
   text-transform: uppercase;
 }
 
+/* Three ranks: the page is seven guide files, so each file's <h1> is a
+   section. Weight and space rather than colour, leaving the `.is-current`
+   foreground below as the one "you are here" signal at every level. */
+.toc li[data-level="1"] {
+  margin-top: 1.125rem;
+  font-weight: 600;
+}
+
+.toc li[data-level="1"]:first-child {
+  margin-top: 0;
+}
+
+.toc li[data-level="2"] {
+  padding-left: 0.75rem;
+}
+
 .toc li[data-level="3"] {
-  padding-left: 0.875rem;
+  padding-left: 1.625rem;
 }
 
 .toc a {

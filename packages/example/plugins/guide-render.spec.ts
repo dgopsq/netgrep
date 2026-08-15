@@ -141,7 +141,10 @@ describe('renderGuide', () => {
     expect(html).toContain('id="when-it-fills"');
   });
 
-  it('collects h2 and h3 into the TOC, and nothing else', async () => {
+  it('collects h1, h2 and h3 into the TOC, and nothing else', async () => {
+    // The h1s are the seven guide files' titles, and on the site those are the
+    // page's top-level sections — a TOC starting at h2 lists the subsections of
+    // sections it never names.
     const { toc } = await renderGuide([
       {
         name: '01-patterns.md',
@@ -150,6 +153,7 @@ describe('renderGuide', () => {
     ]);
 
     expect(toc).toEqual([
+      { id: 'patterns', text: 'Patterns', level: 1 },
       { id: 'smart-case', text: 'Smart case', level: 2 },
       { id: 'details', text: 'Details', level: 3 },
     ]);
@@ -238,14 +242,41 @@ describe('renderGuide', () => {
 });
 
 describe('renderToc', () => {
-  it('marks nesting level so the stylesheet can indent h3s', () => {
+  it('marks nesting level so the stylesheet can rank the three depths', () => {
     const out = renderToc([
+      { id: 'patterns', text: 'Patterns', level: 1 },
       { id: 'smart-case', text: 'Smart case', level: 2 },
       { id: 'details', text: 'Details', level: 3 },
     ]);
 
     expect(out).toContain('href="#smart-case"');
+    expect(out).toContain('data-level="1"');
     expect(out).toContain('data-level="3"');
+  });
+
+  it('names the section each entry belongs to, so one can be open at a time', () => {
+    // The whole list is 30 entries and overflows the sticky column. The
+    // stylesheet shows the subsections of the section being read and hides the
+    // rest, which needs each entry to carry the id of the h1 above it.
+    const out = renderToc([
+      { id: 'patterns', text: 'Patterns', level: 1 },
+      { id: 'smart-case', text: 'Smart case', level: 2 },
+      { id: 'caching', text: 'Caching', level: 1 },
+      { id: 'when-it-fills', text: 'When it fills', level: 2 },
+    ]);
+
+    expect(out).toContain('data-level="2" data-section="patterns"');
+    expect(out).toContain('data-level="2" data-section="caching"');
+    // The h1 belongs to its own section, so it opens along with its children.
+    expect(out).toContain('data-level="1" data-section="patterns"');
+  });
+
+  it('leaves an entry before the first h1 without a section', () => {
+    // Nothing can open it, so it has to stay visible unconditionally — the
+    // stylesheet hides only entries that name a section.
+    const out = renderToc([{ id: 'orphan', text: 'Orphan', level: 2 }]);
+
+    expect(out).not.toContain('data-section');
   });
 
   it('strips backticks, which a heading carries as raw markdown', () => {
