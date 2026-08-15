@@ -55,8 +55,28 @@ html {
   text-transform: uppercase;
 }
 
+/*
+ * Three ranks, because the page is seven guide files concatenated: each file's
+ * <h1> is a section, its <h2>s the subsections, its <h3>s below those. The h1
+ * is ranked by weight and by the space above it rather than by colour, so the
+ * `.is-current` foreground below stays the one signal for "you are here" at
+ * every level.
+ */
+.toc li[data-level="1"] {
+  margin-top: 1.125rem;
+  font-weight: 600;
+}
+
+.toc li[data-level="1"]:first-child {
+  margin-top: 0;
+}
+
+.toc li[data-level="2"] {
+  padding-left: 0.75rem;
+}
+
 .toc li[data-level="3"] {
-  padding-left: 0.875rem;
+  padding-left: 1.625rem;
 }
 
 .toc a {

@@ -141,7 +141,10 @@ describe('renderGuide', () => {
     expect(html).toContain('id="when-it-fills"');
   });
 
-  it('collects h2 and h3 into the TOC, and nothing else', async () => {
+  it('collects h1, h2 and h3 into the TOC, and nothing else', async () => {
+    // The h1s are the seven guide files' titles, and on the site those are the
+    // page's top-level sections — a TOC starting at h2 lists the subsections of
+    // sections it never names.
     const { toc } = await renderGuide([
       {
         name: '01-patterns.md',
@@ -150,6 +153,7 @@ describe('renderGuide', () => {
     ]);
 
     expect(toc).toEqual([
+      { id: 'patterns', text: 'Patterns', level: 1 },
       { id: 'smart-case', text: 'Smart case', level: 2 },
       { id: 'details', text: 'Details', level: 3 },
     ]);
@@ -238,13 +242,15 @@ describe('renderGuide', () => {
 });
 
 describe('renderToc', () => {
-  it('marks nesting level so the stylesheet can indent h3s', () => {
+  it('marks nesting level so the stylesheet can rank the three depths', () => {
     const out = renderToc([
+      { id: 'patterns', text: 'Patterns', level: 1 },
       { id: 'smart-case', text: 'Smart case', level: 2 },
       { id: 'details', text: 'Details', level: 3 },
     ]);
 
     expect(out).toContain('href="#smart-case"');
+    expect(out).toContain('data-level="1"');
     expect(out).toContain('data-level="3"');
   });
 

@@ -16,7 +16,7 @@ import { netgrepTheme } from './shiki-theme';
 
 const REPO_BLOB = 'https://github.com/dgopsq/netgrep/blob/main';
 
-export type TocEntry = { id: string; text: string; level: 2 | 3 };
+export type TocEntry = { id: string; text: string; level: 1 | 2 | 3 };
 export type RenderedGuide = { html: string; toc: TocEntry[] };
 export type GuideFile = { name: string; source: string };
 
@@ -164,8 +164,12 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
     seen.set(base, count);
     const id = count === 1 ? base : `${base}-${count}`;
 
-    if (token.tag === 'h2' || token.tag === 'h3') {
-      toc.push({ id, text, level: token.tag === 'h2' ? 2 : 3 });
+    // h1 included: each guide file's title is a top-level section of the one
+    // page they concatenate into, so a TOC that started at h2 named none of
+    // the seven sections it was listing subsections of.
+    if (token.tag === 'h1' || token.tag === 'h2' || token.tag === 'h3') {
+      const level = token.tag === 'h1' ? 1 : token.tag === 'h2' ? 2 : 3;
+      toc.push({ id, text, level });
     }
 
     if (token.tag === 'h1' && !h1Ids.has(currentFile)) {
