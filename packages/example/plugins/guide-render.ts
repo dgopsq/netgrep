@@ -191,11 +191,20 @@ export async function renderGuide(files: GuideFile[]): Promise<RenderedGuide> {
 }
 
 export function renderToc(toc: TocEntry[]): string {
+  // Every entry names the section it sits in — the id of the nearest h1 at or
+  // above it — because the full list runs past thirty entries and overflows
+  // the sticky column it lives in. docs-page.ts opens the section being read and
+  // the stylesheet hides the subsections of the others. An entry with no h1
+  // above it names nothing, which is what keeps it visible: nothing can open
+  // a section that does not exist.
+  let section = '';
+
   const items = toc
-    .map(
-      (entry) =>
-        `<li data-level="${entry.level}"><a href="#${entry.id}">${entry.text.replace(/`/g, '')}</a></li>`,
-    )
+    .map((entry) => {
+      if (entry.level === 1) section = entry.id;
+
+      return `<li data-level="${entry.level}"${section ? ` data-section="${section}"` : ''}><a href="#${entry.id}">${entry.text.replace(/`/g, '')}</a></li>`;
+    })
     .join('');
 
   return `<nav class="toc" aria-label="On this page"><p class="toc-label">On this page</p><ul>${items}</ul></nav>`;

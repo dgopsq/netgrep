@@ -3,15 +3,32 @@ import './index.css';
 import './docs.css';
 
 /**
- * Highlights the table-of-contents entry for the section currently on screen.
+ * Highlights the table-of-contents entry for the section currently on screen,
+ * and opens that section — the seven section titles are always listed, their
+ * subsections only while they are being read.
  *
  * Pure progressive enhancement: the page, its navigation and every anchor work
- * with this script absent, which is the reason /docs ships no framework.
+ * with this script absent, which is the reason /docs ships no framework. With
+ * it absent the whole list shows, which is long but leaves every link
+ * reachable — see the `.is-collapsible` rule in docs.css.
  */
 // Paired rather than two parallel arrays, so a link whose target is missing
 // is dropped without shifting every later link's index out of sync with its
 // heading.
 type Entry = { link: HTMLAnchorElement; heading: HTMLElement };
+
+// getAttribute rather than dataset: `noPropertyAccessFromIndexSignature` wants
+// `dataset['section']` and Biome's useLiteralKeys wants `dataset.section`, and
+// this satisfies both.
+function openSection(items: HTMLElement[], current: string | null) {
+  for (const item of items) {
+    item.classList.toggle(
+      'is-open',
+      item.getAttribute('data-section') === current,
+    );
+  }
+}
+
 const entries: Entry[] = [
   ...document.querySelectorAll<HTMLAnchorElement>('.toc a'),
 ]
@@ -30,10 +47,18 @@ if (entries.length > 0) {
   const documentTop = (heading: HTMLElement) =>
     heading.getBoundingClientRect().top + window.scrollY;
 
+  // The <li> is what carries `data-section`, and hiding the row rather than
+  // the link is what removes the gap it would otherwise leave behind.
+  const items = entries.map(({ link }) => link.closest('li') as HTMLElement);
+
+  document.querySelector('.toc')?.classList.add('is-collapsible');
+
   const paint = (index: number) => {
     for (const [i, { link }] of entries.entries()) {
       link.classList.toggle('is-current', i === index);
     }
+
+    openSection(items, items[index]?.getAttribute('data-section') ?? null);
   };
 
   // A clicked link jumps its heading to the top of the viewport, and the

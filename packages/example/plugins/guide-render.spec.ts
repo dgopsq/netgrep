@@ -254,6 +254,31 @@ describe('renderToc', () => {
     expect(out).toContain('data-level="3"');
   });
 
+  it('names the section each entry belongs to, so one can be open at a time', () => {
+    // The whole list is 30 entries and overflows the sticky column. The
+    // stylesheet shows the subsections of the section being read and hides the
+    // rest, which needs each entry to carry the id of the h1 above it.
+    const out = renderToc([
+      { id: 'patterns', text: 'Patterns', level: 1 },
+      { id: 'smart-case', text: 'Smart case', level: 2 },
+      { id: 'caching', text: 'Caching', level: 1 },
+      { id: 'when-it-fills', text: 'When it fills', level: 2 },
+    ]);
+
+    expect(out).toContain('data-level="2" data-section="patterns"');
+    expect(out).toContain('data-level="2" data-section="caching"');
+    // The h1 belongs to its own section, so it opens along with its children.
+    expect(out).toContain('data-level="1" data-section="patterns"');
+  });
+
+  it('leaves an entry before the first h1 without a section', () => {
+    // Nothing can open it, so it has to stay visible unconditionally — the
+    // stylesheet hides only entries that name a section.
+    const out = renderToc([{ id: 'orphan', text: 'Orphan', level: 2 }]);
+
+    expect(out).not.toContain('data-section');
+  });
+
   it('strips backticks, which a heading carries as raw markdown', () => {
     // `heading_open` reads the inline token's source text, so a heading like
     // "`$` does not match on CRLF files" arrives with its backticks intact.

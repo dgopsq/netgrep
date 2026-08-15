@@ -37,6 +37,27 @@ html {
     max-height: calc(100vh - 4rem);
     overflow-y: auto;
   }
+
+  /*
+   * Thirty-odd entries — seven sections and their subsections — are taller
+   * than the column they sit in, so only the section being read shows its own.
+   * The seven stay put, which is what keeps the list a map of the page rather
+   * than a window onto part of it.
+   *
+   * Deliberately confined to this breakpoint. Below it the layout is one
+   * column and the table of contents sits ABOVE the prose, so a section
+   * opening or closing while the reader scrolls would move the text under
+   * their eyes — everywhere scroll anchoring does not save it. There is no
+   * sticky column down there to overflow either.
+   *
+   * `.is-collapsible` is added by docs-page.ts, so a reader without
+   * JavaScript gets the whole list rather than seven links that never open;
+   * and `[data-section]` is absent from any entry no h1 precedes, which is
+   * what keeps such an entry visible.
+   */
+  .toc.is-collapsible li[data-section]:not([data-level="1"]):not(.is-open) {
+    display: none;
+  }
 }
 
 .toc ul {
