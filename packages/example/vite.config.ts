@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { guidePlugin } from './plugins/guide';
+import { wasmPreloadPlugin } from './plugins/wasm-preload';
 
 export default defineConfig({
   // The site is served from https://netgrep.diegopasquali.com, a custom domain,
@@ -31,7 +32,7 @@ export default defineConfig({
     },
   },
 
-  plugins: [react(), tailwindcss(), guidePlugin()],
+  plugins: [react(), tailwindcss(), guidePlugin(), wasmPreloadPlugin()],
 
   resolve: {
     alias: {

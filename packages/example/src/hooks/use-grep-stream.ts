@@ -37,6 +37,17 @@ export type GrepStreamState = {
    * rendering it must name it as file content read.
    */
   bytesRead: number;
+  /**
+   * Milliseconds from the run's start to the first bytes of the file arriving.
+   *
+   * ⚠️ THE HOST'S NUMBER, NOT THE ENGINE'S — on a cold CDN object it is seconds
+   * on the large files, and left inside `firstMatchMs` it reads as the engine
+   * being slow to start.
+   *
+   * Measured at the first `onProgress`, so it carries one chunk's transfer with
+   * it: a ceiling on time-to-first-byte, not the bare handshake.
+   */
+  firstByteMs: number | null;
   /** Milliseconds from the run's start to its first matching line. */
   firstMatchMs: number | null;
   /** Milliseconds since the run started; frozen when it ends. */
@@ -65,6 +76,7 @@ function idleState(): GrepStreamState {
     total: 0,
     truncated: false,
     bytesRead: 0,
+    firstByteMs: null,
     firstMatchMs: null,
     elapsedMs: 0,
     running: false,
@@ -103,6 +115,7 @@ export function useGrepStream(url: string, pattern: string): GrepStreamState {
     const startedAt = performance.now();
 
     let bytesRead = 0;
+    let firstByteMs: number | null = null;
     let firstMatchMs: number | null = null;
     let elapsedMs = 0;
     let error: string | null = null;
@@ -120,6 +133,7 @@ export function useGrepStream(url: string, pattern: string): GrepStreamState {
         total: buffer.total,
         truncated: buffer.truncated,
         bytesRead,
+        firstByteMs,
         firstMatchMs,
         elapsedMs,
         running: !done,
@@ -143,6 +157,9 @@ export function useGrepStream(url: string, pattern: string): GrepStreamState {
           fetch: { signal: controller.signal },
           maxLineBytes: MAX_LINE_BYTES,
           onProgress: (read) => {
+            // First call, so the wait that precedes it is the host's.
+            if (firstByteMs === null)
+              firstByteMs = performance.now() - startedAt;
             bytesRead = read;
             schedule();
           },

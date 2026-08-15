@@ -49,6 +49,11 @@ function Stat({
  * line lands while the file is almost entirely undownloaded, and the run
  * continues to the last byte because that is what enumeration costs.
  *
+ * "First byte" sits before both and is not the library's: it is the pause
+ * before the feed moves, seconds on the large files when the host has to fetch
+ * one before it can serve it. Unreported, that wait is charged to "First match"
+ * and read as the engine being slow to start.
+ *
  * ⚠️ THROUGHPUT IS END-TO-END, NOT AN ENGINE BENCHMARK, and `RunStatsNote` is
  * where the page says so — which is why that note may not be dropped. It is a
  * separate component only because this row is sticky and static prose need not
@@ -141,6 +146,12 @@ export function RunStats({
           accent={!uncompiled && state.total > 0}
         />
         <Stat
+          label="First byte"
+          value={dash(
+            state.firstByteMs === null ? '—' : formatMs(state.firstByteMs),
+          )}
+        />
+        <Stat
           label="First match"
           value={dash(
             state.firstMatchMs === null ? '—' : formatMs(state.firstMatchMs),
@@ -164,8 +175,9 @@ export function RunStats({
  * ⚠️ A TERM OF THE MEASUREMENT, NOT A CAPTION. It may not be shortened past the
  * point where it separates decompressed content from bytes on the wire: the
  * logs are gzipped at ~16×, so a `Scanned` of 240.2 MB moved roughly 15 MB, and
- * dropping this overstates bandwidth sixteenfold. Same for the throughput
- * clause, which keeps a CDN measurement from wearing the library's name.
+ * dropping this overstates bandwidth sixteenfold. Same for the throughput and
+ * first-byte clauses, which keep a CDN measurement from wearing the library's
+ * name.
  *
  * The 1.17 MB WebAssembly figure is a hand-written literal and has to move when
  * the binary does; `docs/BACKLOG.md` points at this file for it.
@@ -177,6 +189,9 @@ export function RunStatsNote() {
       page load. <strong className="font-medium">Scanned</strong> is
       uncompressed log content reaching the search, not bytes on the wire —
       these files are served gzipped at about 16×.{' '}
+      <strong className="font-medium">First byte</strong> is the host's wait
+      before any content arrives — seconds on the larger files when the CDN has
+      to fetch them before it can serve them, and nothing netgrep controls.{' '}
       <strong className="font-medium">Throughput</strong> is end to end, so it
       measures the network as much as the engine. Every query reads the file to
       its last byte: the last matching line cannot be known before it.
