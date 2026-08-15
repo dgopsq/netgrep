@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.2](https://github.com/dgopsq/netgrep/compare/example-0.4.1...example-0.4.2) (2026-08-15)
+
+
+### Bug fixes
+
+* **example:** the docs contents lists the sections, one open at a time ([#57](https://github.com/dgopsq/netgrep/issues/57)) ([6f5e17c](https://github.com/dgopsq/netgrep/commit/6f5e17c7bbecb8e9b3cc83bee761bc814099d55a))
+
+
+### Performance
+
+* **example:** preload the engine, and report the host's wait as its own figure ([#58](https://github.com/dgopsq/netgrep/issues/58)) ([344f750](https://github.com/dgopsq/netgrep/commit/344f7505c1dd1954c17951e664c6e06be347d85f))
+
 ## [0.4.1](https://github.com/dgopsq/netgrep/compare/example-0.4.0...example-0.4.1) (2026-08-08)
 
 
