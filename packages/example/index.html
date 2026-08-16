@@ -13,10 +13,10 @@
       (see `logUrl` in src/data/logs.ts). That cannot be done here: `canonical`, `og:url`
       and `og:image` are required to be absolute, and Vite's `base` is a path with
       no origin in it. So if the domain moves again, these have to be edited by
-      hand — grep this file for `netgrep.diegopasquali.com`, and do not forget
+      hand — grep this file for `www.netgrep.dev`, and do not forget
       public/sitemap.xml and public/robots.txt, which have the same problem.
     -->
-    <link rel="canonical" href="https://netgrep.diegopasquali.com/" />
+    <link rel="canonical" href="https://www.netgrep.dev/" />
 
     <title>netgrep — grep over HTTP, in the browser</title>
     <meta
@@ -49,7 +49,7 @@
     <!-- Open Graph: what Slack, Discord, LinkedIn and iMessage unfurl. -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="netgrep" />
-    <meta property="og:url" content="https://netgrep.diegopasquali.com/" />
+    <meta property="og:url" content="https://www.netgrep.dev/" />
     <meta
       property="og:title"
       content="netgrep — grep over HTTP, in the browser"
@@ -60,7 +60,7 @@
     />
     <meta
       property="og:image"
-      content="https://netgrep.diegopasquali.com/og-image.jpg"
+      content="https://www.netgrep.dev/og-image.jpg"
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -86,7 +86,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://netgrep.diegopasquali.com/og-image.jpg"
+      content="https://www.netgrep.dev/og-image.jpg"
     />
 
     <!--
@@ -107,24 +107,24 @@
         "@graph": [
           {
             "@type": "WebSite",
-            "@id": "https://netgrep.diegopasquali.com/#website",
-            "url": "https://netgrep.diegopasquali.com/",
+            "@id": "https://www.netgrep.dev/#website",
+            "url": "https://www.netgrep.dev/",
             "name": "netgrep",
             "description": "grep over HTTP, running in the browser: search a remote file with ripgrep's real regex engine while it downloads.",
             "inLanguage": "en",
-            "publisher": { "@id": "https://netgrep.diegopasquali.com/#author" }
+            "publisher": { "@id": "https://www.netgrep.dev/#author" }
           },
           {
             "@type": "Person",
-            "@id": "https://netgrep.diegopasquali.com/#author",
+            "@id": "https://www.netgrep.dev/#author",
             "name": "Diego Pasquali",
             "url": "https://github.com/dgopsq"
           },
           {
             "@type": "WebApplication",
-            "@id": "https://netgrep.diegopasquali.com/#demo",
+            "@id": "https://www.netgrep.dev/#demo",
             "name": "netgrep demo",
-            "url": "https://netgrep.diegopasquali.com/",
+            "url": "https://www.netgrep.dev/",
             "applicationCategory": "DeveloperApplication",
             "browserRequirements": "Requires JavaScript and WebAssembly",
             "operatingSystem": "Any",
@@ -135,19 +135,19 @@
               "priceCurrency": "USD"
             },
             "description": "A live demo grepping a system log over HTTP — Apache, ZooKeeper, Hadoop YARN or OpenSSH, up to 240 MB — and streaming every matching line into the page as the file downloads.",
-            "author": { "@id": "https://netgrep.diegopasquali.com/#author" },
-            "about": { "@id": "https://netgrep.diegopasquali.com/#library" }
+            "author": { "@id": "https://www.netgrep.dev/#author" },
+            "about": { "@id": "https://www.netgrep.dev/#library" }
           },
           {
             "@type": "SoftwareSourceCode",
-            "@id": "https://netgrep.diegopasquali.com/#library",
+            "@id": "https://www.netgrep.dev/#library",
             "name": "@netgrep/netgrep",
             "description": "A JavaScript library that searches a remote file while it downloads, by streaming each HTTP chunk through ripgrep's regex engine compiled to WebAssembly. Answers before the last byte, in constant memory, with no index to build and no backend to run.",
             "codeRepository": "https://github.com/dgopsq/netgrep",
             "programmingLanguage": ["TypeScript", "Rust"],
             "runtimePlatform": "WebAssembly",
             "license": "https://opensource.org/licenses/MIT",
-            "author": { "@id": "https://netgrep.diegopasquali.com/#author" }
+            "author": { "@id": "https://www.netgrep.dev/#author" }
           }
         ]
       }

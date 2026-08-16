@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 import { guidePlugin } from './plugins/guide';
 
 export default defineConfig({
-  // The site is served from https://netgrep.diegopasquali.com, a custom domain,
+  // The site is served from https://www.netgrep.dev, a custom domain,
   // so it sits at the root and this is `/`. It used to be `/netgrep/`, for the
   // project page at dgopsq.github.io/netgrep.
   //
