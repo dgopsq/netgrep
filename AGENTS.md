@@ -57,7 +57,10 @@ friction is the point and it is kept. So:
   widened, taking the class, its two batch methods and the `capture` option with it. **File-absolute byte
   offsets, match counts, context lines and ranking are still refused** — see
   [0022](docs/decisions/0022-capture-ranges.md)'s table, which carries 0020's forward and which 0027 amends,
-  before re-opening any of them. Node support is untouched by this and remains a design conversation.
+  before re-opening any of them. Node, Deno and Workers support shipped in
+  [0029](docs/decisions/0029-run-outside-the-browser.md), which widened *where* the API runs without
+  widening the API — the two functions and their results are unchanged, and 0029's own refusals list is
+  what keeps it that way.
 - **If it changes what a result contains or costs, §2.3 applies**: the published demo has to agree with it.
 
 ---

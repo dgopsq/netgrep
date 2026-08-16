@@ -35,7 +35,7 @@ It is not the only gate, but the second one is now the caller's to open. `grep` 
 cooperates, which for credentials means `Access-Control-Allow-Credentials` and a named origin rather than
 `*`.
 
-**Non-goals:** indexing, ranking, positions in the *file*, Node.js support, filesystem search, a CLI.
+**Non-goals:** indexing, ranking, positions in the *file*, filesystem search, a CLI.
 (Positions within a returned line are in scope since 0022 and line numbers since 0027; file-wide byte
 offsets are not.)
 
@@ -592,6 +592,12 @@ through its own real, fetch-based `init()` — the same loader a consumer gets, 
 relative to `import.meta.url` over HTTP. There is no separate Node-target build to drift from what consumers
 receive, and no `initSync`-from-disk accommodation either: that was a Node limitation, and the loader it hid
 is precisely the part that failed silently under Vite in [decision 0005](decisions/0005-esm-only-distribution.md).
+Decision [0029](decisions/0029-run-outside-the-browser.md) ships an `initSync`-from-disk boot for Node,
+which is not a reversal of that: what was removed was a *test* accommodation, and the objection was that
+it left the browser suite exercising a loader no consumer used. The suite still loads `pkg/` through the
+real fetch-based `init()` over HTTP, and the Node path is exercised separately by a suite that runs the
+built package. Both loaders now ship, and both are now tested by the runtime that receives them — which
+is strictly more coverage than the arrangement this paragraph describes, not less.
 
 Why a browser at all, and why Playwright rather than ChromeDriver:
 [decision 0013](decisions/0013-playwright-for-browser-tests.md).

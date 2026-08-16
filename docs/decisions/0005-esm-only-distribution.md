@@ -33,6 +33,10 @@ a bundler like Webpack is required to use it."* (Removed in 2026 — see the ame
   work, but it does not remove the bundler requirement, which comes from the WASM import, not the module
   format.
 
+**Superseded in part by [0029](0029-run-outside-the-browser.md) (2026-08-16):** "no Node.js consumption"
+no longer holds. ESM-only does, and so does everything else here — 0029 changes where the package runs,
+not how it is packaged.
+
 
 ---
 
