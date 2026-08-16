@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { cloudflareTest } from '@cloudflare/vitest-pool-workers';
 import { defineConfig } from 'vitest/config';
 
@@ -41,10 +42,15 @@ export default defineConfig({
           {
             name: fixtureOrigin,
             modules: true,
-            scriptPath: new URL(
-              './packages/netgrep/tests/workerd-origin.js',
-              import.meta.url,
-            ).pathname,
+            // `fileURLToPath`, not `.pathname`: the latter keeps Windows drive
+            // letters behind a leading slash and leaves percent-escapes
+            // encoded, so a checkout path containing a space breaks it.
+            scriptPath: fileURLToPath(
+              new URL(
+                './packages/netgrep/tests/workerd-origin.js',
+                import.meta.url,
+              ),
+            ),
             compatibilityDate: '2026-08-11',
           },
         ],

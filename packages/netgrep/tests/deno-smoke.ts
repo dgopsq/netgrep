@@ -3,7 +3,13 @@
 // the browser uses. This script exists to keep that true.
 //
 // Run with: deno run --allow-read --allow-net
+
+// Resolved through the same `imports` map a consumer's resolver reads — this
+// script sits inside `packages/netgrep`, so `#wasm-boot` here is that
+// specifier. See the identity check below.
+import * as boot from '#wasm-boot';
 import { grep, matches } from '../dist/index.js';
+import * as fetchBoot from '../dist/lib/boot/fetch.js';
 
 const LINES = 200_000;
 const out: string[] = [];
@@ -27,6 +33,15 @@ const server = Deno.serve(
 
 const url = `http://localhost:${server.addr.port}/log.txt`;
 const failures: string[] = [];
+
+// The three result checks below cannot see the thing this script is for. Deno
+// implements `node:fs` and `import.meta.resolve` too, so if the `deno` row were
+// deleted or reordered below `node`, Deno would take the NODE boot, read the
+// binary off disk, and answer all three correctly. Only namespace identity
+// separates "works" from "works through the boot we claim it uses".
+if (boot !== fetchBoot) {
+  failures.push('#wasm-boot did not resolve to the fetch boot module');
+}
 
 const seen: number[] = [];
 

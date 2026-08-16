@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 import { dripServer } from './vitest.drip-server.js';
@@ -10,11 +11,15 @@ import { dripServer } from './vitest.drip-server.js';
 // Both projects get it, not just `unit`: the integration specs import
 // `./grep.js` too. Pointing `browser` at the fetch boot is also what keeps the
 // integration suite on the real loader (ARCHITECTURE.md:593).
+//
+// `fileURLToPath` rather than `.pathname`: the latter is not a file-URL-to-path
+// conversion. It leaves a leading slash on Windows drive letters (`/C:/…`) and
+// leaves every percent-escape encoded, so a checkout under a path with a space
+// in it yields `%20` and the alias resolves to nothing.
 const wasmBootSourceAlias = {
-  '#wasm-boot': new URL(
-    './packages/netgrep/src/lib/boot/fetch.ts',
-    import.meta.url,
-  ).pathname,
+  '#wasm-boot': fileURLToPath(
+    new URL('./packages/netgrep/src/lib/boot/fetch.ts', import.meta.url),
+  ),
 };
 
 export default defineConfig({
