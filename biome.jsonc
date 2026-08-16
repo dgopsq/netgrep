@@ -61,6 +61,18 @@
           }
         }
       }
+    },
+    {
+      // The Deno smoke test is a standalone CLI script run outside Vitest —
+      // console output is its entire pass/fail interface, same as scripts/.
+      "includes": ["packages/netgrep/tests/deno-smoke.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
     }
   ]
 }
