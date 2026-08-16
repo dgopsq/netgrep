@@ -39,7 +39,7 @@ netgrep searches every byte it is given as text. It does not sniff for binary co
 
 ### Concurrent searches of one URL each download it
 
-netgrep retains nothing between searches, so there is no buffer for a second caller to be handed. Two searches of one URL that overlap therefore both download it. The answers are correct; the second request is wasted. Sharing the download would mean either keeping the whole file in memory — the cost that retaining nothing exists to avoid — or teeing the response stream, which would give the second caller the first one's cancellation as well, turning a wasted request into a wrong answer. The browser's own HTTP cache still applies, so what a repeat costs is whatever the host's response headers say.
+netgrep retains nothing between searches, so there is no buffer for a second caller to be handed. Two searches of one URL that overlap therefore both download it. The answers are correct; the second request is wasted. Sharing the download would mean either keeping the whole file in memory — the cost that retaining nothing exists to avoid — or teeing the response stream, which would give the second caller the first one's cancellation as well, turning a wasted request into a wrong answer. In a browser the HTTP cache still applies, so what a repeat costs is whatever the host's response headers say; in Node there is no such cache by default, and the second request is a second download.
 
 <a id="no-ranking"></a>
 

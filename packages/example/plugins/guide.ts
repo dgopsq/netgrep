@@ -33,7 +33,7 @@ async function readGuide(): Promise<GuideFile[]> {
 export function guidePlugin(): Plugin {
   let base = '/';
 
-  // The seven guide files are read and re-rendered (markdown-it + Shiki) on
+  // The eight guide files are read and re-rendered (markdown-it + Shiki) on
   // every /docs request in dev, which is the other half of what made it slow
   // — see getShikiPlugin's comment in guide-render.ts for the first half.
   // Filled on first request, cleared by the watcher below on a guide edit.
