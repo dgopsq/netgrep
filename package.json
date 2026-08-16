@@ -21,6 +21,7 @@
     "test:browser": "vitest run --project browser",
     "test:node": "vitest run --project node",
     "test:deno": "deno run --allow-read --allow-net packages/netgrep/tests/deno-smoke.ts",
+    "test:workerd": "vitest run -c vitest.workerd.config.ts",
     "test:rust": "pnpm --filter @netgrep/search test",
     "verify:pack": "node scripts/verify-pack.mjs",
     "lint": "pnpm lint:js && pnpm lint:rust",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
+    "@cloudflare/vitest-pool-workers": "0.21.3",
     "@types/node": "^26.1.2",
     "@vitest/browser-playwright": "4.1.10",
     "playwright": "1.62.0",

@@ -1,0 +1,5 @@
+# The Workers test leg's own config. There is no deployed Worker here — the
+# tests ARE the Worker — so this carries nothing but the runtime's identity.
+name = "netgrep-workerd-test"
+compatibility_date = "2026-08-11"
+compatibility_flags = ["nodejs_compat"]

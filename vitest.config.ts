@@ -112,6 +112,10 @@ export default defineConfig({
           name: 'node',
           environment: 'node',
           include: ['packages/netgrep/tests/*.spec.ts'],
+          // The Workers leg sits in the same directory and looks like one of
+          // these, but it needs workerd and its own config file — see
+          // `vitest.workerd.config.ts` for why it cannot be a project here.
+          exclude: ['packages/netgrep/tests/workerd.spec.ts'],
         },
       },
     ],
