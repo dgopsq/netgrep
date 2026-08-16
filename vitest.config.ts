@@ -100,6 +100,20 @@ export default defineConfig({
           hookTimeout: 30_000,
         },
       },
+      {
+        // The server-runtime leg. Unlike `unit` and `browser` this runs the
+        // BUILT package, because what it is testing is the condition map: which
+        // boot module Node resolves. Aliasing `#wasm-boot` here would test the
+        // browser's loader under Node and prove nothing.
+        //
+        // Needs `pnpm build:wasm` and `pnpm build` first, which is why it is not
+        // part of `pnpm test:unit`'s promise in AGENTS.md §2.2.
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['packages/netgrep/tests/*.spec.ts'],
+        },
+      },
     ],
   },
 });
