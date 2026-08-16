@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.6.0](https://github.com/dgopsq/netgrep/compare/search-0.5.0...search-0.6.0) (2026-08-16)
+
+
+* **search:** Synchronize netgrep versions
+
 ## [0.5.0](https://github.com/dgopsq/netgrep/compare/search-0.4.0...search-0.5.0) (2026-08-07)
 
 
