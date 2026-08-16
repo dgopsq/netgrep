@@ -13,7 +13,7 @@ export const GENERATED_BY =
 export const BEGIN = '<!-- BEGIN GENERATED CAVEATS -->';
 export const END = '<!-- END GENERATED CAVEATS -->';
 
-const DOCS_URL = 'https://netgrep.diegopasquali.com/docs/';
+const DOCS_URL = 'https://www.netgrep.dev/docs/';
 
 /**
  * The data file's `backlog` field is deliberately read by nothing. It records

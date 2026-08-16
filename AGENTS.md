@@ -127,7 +127,7 @@ only `build:wasm`, and `test:unit` needs neither.
 
 ### 2.3 ⚠️ Fixing a defect is not finished until the DEMO SITE stops warning about it
 
-The example is a **published two-page site** — <https://netgrep.diegopasquali.com/> — and its `/docs` page
+The example is a **published two-page site** — <https://www.netgrep.dev/> — and its `/docs` page
 tells visitors what netgrep cannot do. A fix that leaves that list alone puts the project in the worst possible
 position: a live site confidently warning the world about a bug that no longer exists. The site's only value
 is that it is accurate, so stale honesty is worse than none.
@@ -356,10 +356,10 @@ that fails *after* the tag was created cannot be retried by re-running `release.
 `release_created: false` the second time and every publish job skips. Each therefore refuses a manual run
 whose ref is not `main`.
 
-The demo's domain, `netgrep.diegopasquali.com`, is **not configured anywhere in this repository** — it is a
+The demo's domain, `www.netgrep.dev`, is **not configured anywhere in this repository** — it is a
 repository setting (Settings → Pages → Custom domain) plus a DNS record, and a `CNAME` file in the deployed
 artefact would be ignored, because that mechanism is only for branch-based publishing. See
-[decision 0017](docs/decisions/0017-example-as-hosted-demo.md#amendment-the-site-moved-to-netgrepdiegopasqualicom).
+[decision 0017](docs/decisions/0017-example-as-hosted-demo.md#amendment-the-site-moved-to-wwwnetgrepdev).
 
 The WASM is built once and downloaded by the two jobs that need it. The two that need nothing from Rust do
 not wait for it.
@@ -450,7 +450,7 @@ packages/
     dist/              BUILD OUTPUT, gitignored
     → published as @netgrep/netgrep
 
-  example/           THE PUBLIC DEMO — https://netgrep.diegopasquali.com/
+  example/           THE PUBLIC DEMO — https://www.netgrep.dev/
                      Vite + React + Tailwind v4 + shadcn, a live grep over one of
                      four generated log files, up to 240 MB (decisions 0026, 0028).
                      Not published to npm; deployed to Pages on release.
@@ -582,7 +582,7 @@ manifests cannot drift, and **deletes the `.gitignore` wasm-pack writes into `pk
    than deliberate periodic review. Revisit only if the pinned versions start going stale in practice.
 
 3. **The example is the public demo, and its dependencies ARE maintained.** It is published to GitHub Pages
-   at <https://netgrep.diegopasquali.com/> **when a release is cut**, and CI typechecks and builds it on
+   at <https://www.netgrep.dev/> **when a release is cut**, and CI typechecks and builds it on
    every PR. This **reverses** the exemption the package used to carry — the note in its `package.json`
    saying its dependencies were deliberately frozen is gone, not overlooked. See
    [decision 0017](docs/decisions/0017-example-as-hosted-demo.md).

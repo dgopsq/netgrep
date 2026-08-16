@@ -34,7 +34,7 @@ export const sources: LogSource[] = config.sources;
  * whatever Vite's `base` option was set to and always ends in a slash, so it
  * composes by plain concatenation.
  *
- * The site now serves from the root of `https://netgrep.diegopasquali.com`, so
+ * The site now serves from the root of `https://www.netgrep.dev`, so
  * that value is `/` and this function currently does nothing a hard-coded
  * `/logs/x.txt` would not. It stays anyway: under the old project page at
  * `dgopsq.github.io/netgrep/` the base was `/netgrep/`, and the original example

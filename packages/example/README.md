@@ -1,6 +1,6 @@
 # Netgrep demo
 
-The public demo for `@netgrep/netgrep`, live at **<https://netgrep.diegopasquali.com/>**.
+The public demo for `@netgrep/netgrep`, live at **<https://www.netgrep.dev/>**.
 
 Vite + React + Tailwind v4 + shadcn/ui. It greps **one** generated log file at a time — Apache httpd 8.3 MB,
 ZooKeeper 40.0 MB, Hadoop YARN 120.1 MB or OpenSSH 240.2 MB — and streams every matching line into a
@@ -131,7 +131,7 @@ log URLs going through `logUrl()`.
 
 **The domain is hard-coded in three files, and nothing checks them.** `index.html` (canonical, `og:url`,
 `og:image`, and the `@id`s in the JSON-LD), `public/sitemap.xml` and `public/robots.txt` all spell out
-`https://netgrep.diegopasquali.com` in full, because canonical and Open Graph URLs must be absolute and Vite's
+`https://www.netgrep.dev` in full, because canonical and Open Graph URLs must be absolute and Vite's
 `base` carries no origin. If the domain moves, grep for it. A stale canonical is the worst of these to get
 wrong: it tells Google the real page is somewhere else.
 
