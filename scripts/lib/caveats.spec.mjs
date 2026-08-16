@@ -79,7 +79,7 @@ describe('renderReadmeList', () => {
 
   it('links each entry to its anchor on the docs site', () => {
     expect(renderReadmeList(CAVEATS)).toContain(
-      'https://netgrep.diegopasquali.com/docs/#nul-byte',
+      'https://www.netgrep.dev/docs/#nul-byte',
     );
   });
 });

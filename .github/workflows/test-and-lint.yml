@@ -166,7 +166,7 @@ jobs:
       # has a real dependency on its predecessor and is skipped if it fails.
       - run: pnpm verify:pack
 
-      # The example is the public demo at netgrep.diegopasquali.com now, so a
+      # The example is the public demo at www.netgrep.dev now, so a
       # type error or a broken import in it breaks a deploy rather than a
       # developer's afternoon. Checking it here means that shows up on the PR.
       #

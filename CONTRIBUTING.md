@@ -153,7 +153,7 @@ Then, in rough order of how likely each is to bite:
   fails, something changed the engine; work out what, and if the new behaviour is right, **invert the
   assertion in the same PR** with a note. Do not quietly "fix" the test.
   [AGENTS.md §2.1](AGENTS.md#21-some-tests-assert-behaviour-that-is-wrong-on-purpose) has the full story.
-- **Fixing a defect also means updating the demo site.** <https://netgrep.diegopasquali.com/docs/> lists the
+- **Fixing a defect also means updating the demo site.** <https://www.netgrep.dev/docs/> lists the
   defects that affect its visitors, so a fix that leaves the list alone ships a page warning about a bug
   that no longer exists. Every limitation lives once, in `docs/guide/caveats.data.json`: delete the entry and
   run `pnpm docs:sync`, in the same PR. **CI catches this now** — `pnpm docs:sync --check` fails if the guide

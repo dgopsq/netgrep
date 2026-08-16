@@ -625,7 +625,7 @@ remaining bytes have not been sent and nothing else could end either of them.
 either. Those blocks have already earned their place: modernizing the ripgrep dependencies silently *fixed*
 the `^`-anchoring bug, and nothing else would have noticed.
 
-The example is the public demo at <https://netgrep.diegopasquali.com/>. It runs against local workspace
+The example is the public demo at <https://www.netgrep.dev/>. It runs against local workspace
 source, so it is honest, and CI typechecks and builds it — but nothing asserts what it *renders*, so it
 establishes no correctness. Its timings measure the network, and since
 [decision 0024](decisions/0024-remove-the-in-memory-cache.md) that is true by construction rather than by

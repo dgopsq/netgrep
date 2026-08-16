@@ -9,7 +9,7 @@ mid-word substrings — and answers the moment a matching line arrives, without 
 byte and without holding the file in memory. There is no index to build and no backend to run, so it
 works on files you don't control and can't preprocess, and the query never leaves the tab.
 
-**[Try it →](https://netgrep.diegopasquali.com/)** · **[Documentation →](https://netgrep.diegopasquali.com/docs/)**
+**[Try it →](https://www.netgrep.dev/)** · **[Documentation →](https://www.netgrep.dev/docs/)**
 
 ## Requirements
 
@@ -47,17 +47,17 @@ for await (const hit of grep('https://example.com/app.log', 'ECONNREFUSED')) {
 `matches` answers whether a pattern occurs; `grep` yields every matching line, with each match's
 position within it and the line's number in the file. That is the whole answer: no ranking, no match
 counts, no context lines, no byte offsets into the file. Cancellation, request options, caching and the regex dialect are all in the
-[documentation](https://netgrep.diegopasquali.com/docs/).
+[documentation](https://www.netgrep.dev/docs/).
 
 ## Known limitations
 
 These are documented rather than fixed. Each is pinned by a test, so none of them can change
 unnoticed, and each is explained in full in the
-[documentation](https://netgrep.diegopasquali.com/docs/#limitations).
+[documentation](https://www.netgrep.dev/docs/#limitations).
 
 <!-- BEGIN GENERATED CAVEATS -->
-- **[Inside a line longer than 64 KB, results are approximate](https://netgrep.diegopasquali.com/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.
-- **[`^`/`$` also anchor to a bare `\r`, not just `\r\n`](https://netgrep.diegopasquali.com/docs/#bare-cr-anchors)** — A file with old-Mac or progress-bar `\r` line endings gets extra anchor matches the returned line doesn't agree with.
+- **[Inside a line longer than 64 KB, results are approximate](https://www.netgrep.dev/docs/#long-lines)** — Past a 64 KB line with no terminator, a longer match is lost and `^` can match at a window edge.
+- **[`^`/`$` also anchor to a bare `\r`, not just `\r\n`](https://www.netgrep.dev/docs/#bare-cr-anchors)** — A file with old-Mac or progress-bar `\r` line endings gets extra anchor matches the returned line doesn't agree with.
 <!-- END GENERATED CAVEATS -->
 
 Fixes land on `main` before they reach npm; [`CHANGELOG.md`](https://github.com/dgopsq/netgrep/blob/main/packages/netgrep/CHANGELOG.md)
@@ -67,7 +67,7 @@ shows which of them have been released.
 
 | | |
 |---|---|
-| [netgrep.diegopasquali.com/docs](https://netgrep.diegopasquali.com/docs/) | How to use it, in full |
+| [www.netgrep.dev/docs](https://www.netgrep.dev/docs/) | How to use it, in full |
 | [`docs/guide/`](https://github.com/dgopsq/netgrep/tree/main/docs/guide) | The same, as markdown in this repository |
 | [`docs/ARCHITECTURE.md`](https://github.com/dgopsq/netgrep/blob/main/docs/ARCHITECTURE.md) | How it works inside |
 | [`docs/decisions/`](https://github.com/dgopsq/netgrep/tree/main/docs/decisions) | Why it is shaped this way |

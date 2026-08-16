@@ -50,7 +50,7 @@ means inverting its assertion in the same PR.**
 
 > [!IMPORTANT]
 > **Moving an item to _Done_ is not finished until the demo site stops warning about it.** The published
-> documentation at <https://netgrep.diegopasquali.com/docs/> names the defects a visitor is affected by, and
+> documentation at <https://www.netgrep.dev/docs/> names the defects a visitor is affected by, and
 > every one of them lives once in [`guide/caveats.data.json`](guide/caveats.data.json). Delete the entry and
 > run `pnpm docs:sync`, or the site goes on warning the world about a bug you just fixed.
 >
