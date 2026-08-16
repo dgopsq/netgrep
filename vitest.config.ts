@@ -2,6 +2,21 @@ import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 import { dripServer } from './vitest.drip-server.js';
 
+// Vite does not read tsconfig's `customConditions`, so the projects that run
+// the library FROM SOURCE need `#wasm-boot` pointed at the source boot module
+// explicitly. Without it they resolve into `dist/`, and `pnpm test:unit` would
+// start requiring a build — which AGENTS.md §2.2 says it must never do.
+//
+// Both projects get it, not just `unit`: the integration specs import
+// `./grep.js` too. Pointing `browser` at the fetch boot is also what keeps the
+// integration suite on the real loader (ARCHITECTURE.md:593).
+const wasmBootSourceAlias = {
+  '#wasm-boot': new URL(
+    './packages/netgrep/src/lib/boot/fetch.ts',
+    import.meta.url,
+  ).pathname,
+};
+
 export default defineConfig({
   test: {
     projects: [
@@ -16,6 +31,7 @@ export default defineConfig({
           include: ['packages/netgrep/src/**/*.spec.ts'],
           exclude: ['**/*.integration.spec.ts'],
         },
+        resolve: { alias: wasmBootSourceAlias },
       },
       {
         // The integration suite drives the real WASM engine, so it runs in a
@@ -40,6 +56,7 @@ export default defineConfig({
             instances: [{ browser: 'chromium' }],
           },
         },
+        resolve: { alias: wasmBootSourceAlias },
         // `@netgrep/search` must reach the browser as the file wasm-pack
         // emitted it. Vite's dependency pre-bundling would rewrite it into
         // `.vite/deps/`, and the loader resolves the binary RELATIVE to its

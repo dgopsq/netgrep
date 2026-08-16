@@ -14,6 +14,16 @@
     "dist"
   ],
   "sideEffects": false,
+  "imports": {
+    "#wasm-boot": {
+      "netgrep-source": "./src/lib/boot/fetch.ts",
+      "types": "./dist/lib/boot/fetch.d.ts",
+      "workerd": "./dist/lib/boot/workerd.js",
+      "deno": "./dist/lib/boot/fetch.js",
+      "node": "./dist/lib/boot/node.js",
+      "default": "./dist/lib/boot/fetch.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.lib.json"
   },

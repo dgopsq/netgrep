@@ -1,5 +1,3 @@
-import init from '@netgrep/search';
-
 /**
  * The WASM module has to be instantiated before any engine call.
  *
@@ -13,5 +11,11 @@ import init from '@netgrep/search';
  *
  * Kept out of `index.ts` on purpose — callers should not have to know the
  * engine needs booting.
+ *
+ * WHICH boot runs is chosen by the runtime, through the `#wasm-boot` condition
+ * map in this package's manifest: a browser fetches the binary, Node reads it
+ * from disk and a Worker receives it from its bundler. The boot is eager in
+ * all three, so nothing here defers and no caller has to opt in. See decision
+ * 0029.
  */
-export const wasmReady = init();
+export { wasmReady } from '#wasm-boot';
