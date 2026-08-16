@@ -18,9 +18,9 @@ along with why the rest stay refused.
 The distinguishing property is *when* it answers: the search runs against each chunk of the HTTP response
 **as it arrives**, so a match in the first kilobyte resolves without waiting for the remaining megabytes.
 
-It runs wherever `fetch` gives it a readable response body stream — a browser, Node 18+, Deno and
-Cloudflare Workers — with the same two functions and the same results in each; only the WebAssembly boot
-differs, and it is selected by the runtime's own condition rather than by the caller
+It runs wherever `fetch` gives it a readable response body stream — a browser, Node 18.19+ or 20.6+, Deno
+and Cloudflare Workers — with the same two functions and the same results in each; only the WebAssembly
+boot differs, and it is selected by the runtime's own condition rather than by the caller
 ([decision 0029](decisions/0029-run-outside-the-browser.md)). It needs **no bundler configuration**:
 since 0.2.0 the WASM is loaded through a standard
 `new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all

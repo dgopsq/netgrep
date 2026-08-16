@@ -9,8 +9,10 @@ memory. There is no index to build and no backend to run.
 ## Requirements
 
 - **A runtime with streaming `fetch`.** netgrep needs `fetch` with a readable response body stream:
-  a browser, Node 18+, Deno, or Cloudflare Workers. Each boots the WebAssembly the way its own runtime
-  allows, and the API is identical in all four.
+  a browser, **Node 18.19+ or 20.6+**, Deno, or Cloudflare Workers. Each boots the WebAssembly the way
+  its own runtime allows, and the API is identical in all four. The Node floor is set by the boot module
+  rather than by `fetch`: it resolves the binary through a synchronous, unflagged `import.meta.resolve`,
+  which arrived in 18.19.0 and 20.6.0.
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
 - **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load in a browser. Most
   of it is the regex engine's Unicode tables. It is the main cost of the approach. On a server or in a
