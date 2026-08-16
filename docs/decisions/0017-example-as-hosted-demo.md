@@ -1,6 +1,8 @@
 # 0017 — The example becomes the hosted demo, and goes back on the maintenance path
 
-**Status:** Accepted (2026-07-29), amended the same day — [the site moved to a custom domain](#amendment-the-site-moved-to-netgrepdiegopasqualicom).
+**Status:** Accepted (2026-07-29), amended the same day — [the site moved to a custom
+domain](#amendment-the-site-moved-to-netgrepdiegopasqualicom) — and again on 2026-08-16, when
+[it moved to `www.netgrep.dev`](#amendment-the-site-moved-to-wwwnetgrepdev), which is where it is now.
 
 ## Context
 
@@ -265,3 +267,58 @@ dependencies are maintained, ~~`searchBatchWithCallback` is still what makes eac
 own~~ **(2026-08-06: the class and its batch methods are deleted; each source now resolves visibly on its own
 because the demo drives one `grep()` per source, which is the same property from a different mechanism.)** The passages above are left as written, because a record that quietly agreed with whatever was done last
 would be worth nothing.
+
+---
+
+## Amendment: the site moved to `www.netgrep.dev`
+
+**2026-08-16.** The demo is served from **<https://www.netgrep.dev/>**. Hosting is unchanged again —
+GitHub Pages, `deploy-pages.yml`, gated on the full test graph. Only the name in front of it moved, for the
+second time.
+
+**This finishes the argument the first amendment started.** That one said a project page's URL is not the
+project's to keep, because it is tied to a GitHub account name and a repository name. Moving to
+`netgrep.diegopasquali.com` did not remove that dependency so much as relocate it: the demo then lived under
+the maintainer's personal domain, and a project that outlives its maintainer's interest in that domain has
+the same problem in a new place. `netgrep.dev` is the project's own name, and a link written down against it
+survives a rename, a move off GitHub, and a change of maintainer.
+
+**`www` is canonical, not the apex.** This is GitHub's own recommendation for a custom domain and it is
+worth the four characters: a `www` host is a single `CNAME` to `dgopsq.github.io`, is served through their
+CDN with the DDoS protection that implies, and keeps working if the Pages IP addresses ever change. The apex
+`netgrep.dev` carries `A` and `AAAA` records to those addresses **only so that GitHub redirects it to
+`www`** — it is not a second canonical origin, and nothing in the repository should name it.
+
+**The base path does not change.** A `www` host serves at the root exactly as the old subdomain did, so
+`base` in `vite.config.ts` is still `/` and `src/data/logs.ts` still composes log URLs from
+`import.meta.env.BASE_URL`. The hazard retired by the first amendment stays retired.
+
+**There is still deliberately no `CNAME` file** in `packages/example/public/`, for the reason recorded
+above: a deployment driven by a workflow ignores it.
+
+**So the domain still lives in two places, neither of them this repository** — but one of them is a
+different zone now:
+
+- **Settings → Pages → Custom domain** on the repository, set to `www.netgrep.dev`.
+- **DNS in a Cloudflare zone for `netgrep.dev`**, registered at Namecheap with its nameservers pointed at
+  Cloudflare. `www` is a `CNAME` to `dgopsq.github.io`; the apex holds the four `A` and four `AAAA` records
+  described above.
+
+**`netgrep.diegopasquali.com` now 301s to `https://www.netgrep.dev/`**, path preserved, as a Cloudflare
+Redirect Rule in the `diegopasquali.com` zone. Pages answers for one custom domain per repository, so the
+old name stopped being served the moment the setting changed; the rule is what keeps every link anyone has
+written down working. It requires the old record to be **proxied**, which is the opposite of the rule below
+and is safe because the redirect is answered at Cloudflare's edge and never reaches GitHub. Keep it
+indefinitely — it costs nothing, and the argument for the move was precisely that written-down links should
+survive.
+
+Two operational wrinkles, the first repeated from last time and the second new:
+
+- **Leave the new records DNS-only (grey cloud) until the certificate is issued.** GitHub provisions TLS by
+  resolving the name itself, so a proxied record shows it Cloudflare rather than Pages and "Enforce HTTPS"
+  cannot be enabled.
+- **`.dev` is on the HSTS preload list**, so browsers refuse plain HTTP to it outright. Unlike 2026-07-29
+  there is no "serves over HTTP, warns about the certificate" phase: until the certificate exists the site
+  is **unreachable rather than insecure**. That is worth recording because it changes what a broken
+  migration looks like — and because the instinct it provokes, turning the proxy on to get *something*
+  answering, is exactly what prevents the certificate being issued.

@@ -12,4 +12,4 @@ Allow: /
 # types a query, which Googlebot does not do.
 Disallow: /logs/
 
-Sitemap: https://netgrep.diegopasquali.com/sitemap.xml
+Sitemap: https://www.netgrep.dev/sitemap.xml

@@ -6,15 +6,16 @@
 
   `lastmod` is hand-maintained and only worth updating when the page's CONTENT
   changes — not on every deploy. A lastmod that always says "today" is ignored,
-  because Google learns to distrust the signal.
+  because Google learns to distrust the signal. The 2026-08-16 date is the
+  domain move: these are new URLs awaiting a first crawl, not edited pages.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://netgrep.diegopasquali.com/</loc>
-    <lastmod>2026-08-02</lastmod>
+    <loc>https://www.netgrep.dev/</loc>
+    <lastmod>2026-08-16</lastmod>
   </url>
   <url>
-    <loc>https://netgrep.diegopasquali.com/docs/</loc>
-    <lastmod>2026-08-02</lastmod>
+    <loc>https://www.netgrep.dev/docs/</loc>
+    <lastmod>2026-08-16</lastmod>
   </url>
 </urlset>
