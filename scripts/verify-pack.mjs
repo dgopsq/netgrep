@@ -87,6 +87,30 @@ try {
       }
     }
 
+    // Every target named by `exports` or `imports` must actually be in the
+    // tarball. A condition pointing at a file that was never published fails
+    // only in the runtime that selects it, which is the one place nothing
+    // here runs — so it would ship green and break for exactly one audience.
+    const targets = [
+      ...Object.values(packed.exports ?? {}),
+      ...Object.values(packed.imports ?? {}),
+    ].flatMap((entry) =>
+      typeof entry === 'string' ? [entry] : Object.values(entry),
+    );
+
+    for (const target of targets) {
+      // The source condition is for this repo's toolchain and is not packed.
+      if (target.startsWith('./src/')) continue;
+
+      const file = target.replace(/^\.\//, '');
+
+      if (!entries.includes(file)) {
+        failures.push(
+          `${manifest.name}: ${target} is named by the manifest but not in the tarball`,
+        );
+      }
+    }
+
     console.log(`${manifest.name}@${packed.version}: ${entries.length} files`);
   }
 

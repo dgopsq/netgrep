@@ -177,6 +177,34 @@ jobs:
       - run: pnpm typecheck:example
       - run: pnpm build:example
 
+  # The server runtimes. A job of its own because it is the only one that pays
+  # for the Deno toolchain, which is what decision 0015 says a job is for.
+  # Builds dist/ rather than receiving it: these legs test what a consumer
+  # resolves, so the build has to be the real one.
+  runtimes:
+    name: Runtimes (Node, Deno, Workers)
+    needs: wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: packages/search/pkg
+
+      - run: pnpm build
+      - run: pnpm test:node
+        if: '!cancelled()'
+      - run: pnpm test:deno
+        if: '!cancelled()'
+      - run: pnpm test:workerd
+        if: '!cancelled()'
+
   # One check to require on the branch, and one for `workflow_call` callers to
   # depend on, so that neither has to be edited when a job is added above.
   ci:
@@ -188,6 +216,7 @@ jobs:
       - js
       - browser
       - bundle
+      - runtimes
     runs-on: ubuntu-latest
     steps:
       - name: Report
