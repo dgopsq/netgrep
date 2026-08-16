@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/dgopsq/netgrep/compare/netgrep-0.5.0...netgrep-0.6.0) (2026-08-16)
+
+
+### Features
+
+* **netgrep:** run outside the browser (Node, Deno, Workers) ([#61](https://github.com/dgopsq/netgrep/issues/61)) ([d1df667](https://github.com/dgopsq/netgrep/commit/d1df667a064fb0d4f98d0b0dc18093893a9e78de))
+
 ## [0.5.0](https://github.com/dgopsq/netgrep/compare/netgrep-0.4.0...netgrep-0.5.0) (2026-08-07)
 
 
