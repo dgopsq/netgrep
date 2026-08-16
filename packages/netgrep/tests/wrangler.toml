@@ -2,4 +2,8 @@
 # tests ARE the Worker — so this carries nothing but the runtime's identity.
 name = "netgrep-workerd-test"
 compatibility_date = "2026-08-11"
-compatibility_flags = ["nodejs_compat"]
+# Deliberately no `nodejs_compat`. The workerd boot uses no `node:*` API, and a
+# default Worker has none — so granting it here would let a regression that
+# pulls a `node:` import into the boot path pass this leg and break every
+# consumer. The guard must not be laxer than the runtime it guards.
+compatibility_flags = []
