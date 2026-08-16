@@ -22,8 +22,8 @@ concurrency:
 permissions:
   contents: read
 
-# FIVE JOBS, GROUPED BY WHAT THEY NEED INSTALLED
-# ----------------------------------------------
+# SIX JOBS, GROUPED BY WHAT THEY NEED INSTALLED
+# ---------------------------------------------
 # This was a single job running eight commands in sequence. A red build said
 # "Test and lint failed" and you opened the log to find out what, and a clippy
 # warning in the first minute hid every later result because nothing after it
@@ -34,7 +34,8 @@ permissions:
 # the runner time. At this repository's size the parallelism buys nothing; the
 # naming does. So the grouping is by *toolchain*, which is the thing a job
 # actually pays for: a Rust job, a Node-only job, the WASM build, the browser,
-# and the packaging. Five jobs install five sets of tools instead of nine.
+# the packaging, and the server runtimes. Six jobs install six sets of tools
+# instead of one per command.
 #
 # The one cost of grouping is that a failing step could hide the ones after it,
 # which is half of what the split was for. `if: '!cancelled()'` on every
@@ -177,6 +178,34 @@ jobs:
       - run: pnpm typecheck:example
       - run: pnpm build:example
 
+  # The server runtimes. A job of its own because it is the only one that pays
+  # for the Deno toolchain, which is what decision 0015 says a job is for.
+  # Builds dist/ rather than receiving it: these legs test what a consumer
+  # resolves, so the build has to be the real one.
+  runtimes:
+    name: Runtimes (Node, Deno, Workers)
+    needs: wasm
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/node
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: packages/search/pkg
+
+      - run: pnpm build
+      - run: pnpm test:node
+        if: '!cancelled()'
+      - run: pnpm test:deno
+        if: '!cancelled()'
+      - run: pnpm test:workerd
+        if: '!cancelled()'
+
   # One check to require on the branch, and one for `workflow_call` callers to
   # depend on, so that neither has to be edited when a job is added above.
   ci:
@@ -188,6 +217,7 @@ jobs:
       - js
       - browser
       - bundle
+      - runtimes
     runs-on: ubuntu-latest
     steps:
       - name: Report

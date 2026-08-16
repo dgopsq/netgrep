@@ -5,6 +5,9 @@ packages:
 # esbuild's links its platform binary; it arrives via webpack's minimizer.
 allowBuilds:
   esbuild: true
+  # workerd's postinstall links the platform-specific runtime binary; without
+  # it the Workers test pool has no runtime to start.
+  workerd: true
 
 minimumReleaseAgeExclude:
   - '@biomejs/biome@2.5.6'

@@ -1,6 +1,26 @@
+import { fileURLToPath } from 'node:url';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 import { dripServer } from './vitest.drip-server.js';
+
+// Vite does not read tsconfig's `customConditions`, so the projects that run
+// the library FROM SOURCE need `#wasm-boot` pointed at the source boot module
+// explicitly. Without it they resolve into `dist/`, and `pnpm test:unit` would
+// start requiring a build — which AGENTS.md §2.2 says it must never do.
+//
+// Both projects get it, not just `unit`: the integration specs import
+// `./grep.js` too. Pointing `browser` at the fetch boot is also what keeps the
+// integration suite on the real loader (ARCHITECTURE.md:593).
+//
+// `fileURLToPath` rather than `.pathname`: the latter is not a file-URL-to-path
+// conversion. It leaves a leading slash on Windows drive letters (`/C:/…`) and
+// leaves every percent-escape encoded, so a checkout under a path with a space
+// in it yields `%20` and the alias resolves to nothing.
+const wasmBootSourceAlias = {
+  '#wasm-boot': fileURLToPath(
+    new URL('./packages/netgrep/src/lib/boot/fetch.ts', import.meta.url),
+  ),
+};
 
 export default defineConfig({
   test: {
@@ -16,6 +36,7 @@ export default defineConfig({
           include: ['packages/netgrep/src/**/*.spec.ts'],
           exclude: ['**/*.integration.spec.ts'],
         },
+        resolve: { alias: wasmBootSourceAlias },
       },
       {
         // The integration suite drives the real WASM engine, so it runs in a
@@ -40,6 +61,7 @@ export default defineConfig({
             instances: [{ browser: 'chromium' }],
           },
         },
+        resolve: { alias: wasmBootSourceAlias },
         // `@netgrep/search` must reach the browser as the file wasm-pack
         // emitted it. Vite's dependency pre-bundling would rewrite it into
         // `.vite/deps/`, and the loader resolves the binary RELATIVE to its
@@ -81,6 +103,24 @@ export default defineConfig({
           // rather than a budget to spend.
           testTimeout: 30_000,
           hookTimeout: 30_000,
+        },
+      },
+      {
+        // The server-runtime leg. Unlike `unit` and `browser` this runs the
+        // BUILT package, because what it is testing is the condition map: which
+        // boot module Node resolves. Aliasing `#wasm-boot` here would test the
+        // browser's loader under Node and prove nothing.
+        //
+        // Needs `pnpm build:wasm` and `pnpm build` first, which is why it is not
+        // part of `pnpm test:unit`'s promise in AGENTS.md §2.2.
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: ['packages/netgrep/tests/*.spec.ts'],
+          // The Workers leg sits in the same directory and looks like one of
+          // these, but it needs workerd and its own config file — see
+          // `vitest.workerd.config.ts` for why it cannot be a project here.
+          exclude: ['packages/netgrep/tests/workerd.spec.ts'],
         },
       },
     ],

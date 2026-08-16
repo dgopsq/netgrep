@@ -33,7 +33,7 @@ function stripFences(source) {
 const files = (await readdir(GUIDE)).filter((name) => name.endsWith('.md'));
 
 describe('the guide', () => {
-  it('has the six hand-written files and the generated one', () => {
+  it('has the seven hand-written files and the generated one', () => {
     expect(files.sort()).toEqual([
       '01-getting-started.md',
       '02-searching.md',
@@ -42,6 +42,7 @@ describe('the guide', () => {
       '05-cancelling.md',
       '06-caching.md',
       '07-limitations.md',
+      '08-runtimes.md',
     ]);
   });
 

@@ -57,7 +57,10 @@ friction is the point and it is kept. So:
   widened, taking the class, its two batch methods and the `capture` option with it. **File-absolute byte
   offsets, match counts, context lines and ranking are still refused** — see
   [0022](docs/decisions/0022-capture-ranges.md)'s table, which carries 0020's forward and which 0027 amends,
-  before re-opening any of them. Node support is untouched by this and remains a design conversation.
+  before re-opening any of them. Node, Deno and Workers support shipped in
+  [0029](docs/decisions/0029-run-outside-the-browser.md), which widened *where* the API runs without
+  widening the API — the two functions and their results are unchanged, and 0029's own refusals list is
+  what keeps it that way.
 - **If it changes what a result contains or costs, §2.3 applies**: the published demo has to agree with it.
 
 ---
@@ -112,6 +115,13 @@ pnpm build:wasm
 
 `pnpm install` works without it, and so do the unit tests (they mock the engine). Everything else does not.
 This is the first thing to try when something fails inexplicably on a clean checkout.
+
+**And `pnpm test` now needs `pnpm build` on top of it.** The `node` project runs the *built* package —
+that is the point of it, since what it checks is which boot module the condition map selects — so it
+imports `../dist/index.js`. On a checkout that ran `build:wasm` but not `build`, `pnpm test` fails with a
+module-not-found on that path rather than with anything about WASM. The same is true of `pnpm test:node`,
+`pnpm test:deno` and `pnpm test:workerd`. `test:unit`, `test:browser` and `test:tools` are unchanged:
+only `build:wasm`, and `test:unit` needs neither.
 
 `pnpm bootstrap` does this step for you, along with the install and Playwright's Chromium — see §4.1.
 
@@ -219,9 +229,12 @@ pnpm build:wasm        # REQUIRED FIRST — see §2.2
 | Lint | `pnpm lint` | Biome (JS/TS) **and** clippy (`-D warnings`); `lint:js` / `lint:rust` run one each |
 | Format | `pnpm format` | Biome, writes in place |
 | Typecheck | `pnpm typecheck` | `tsc --noEmit`, TypeScript 7 |
-| Test TS | `pnpm test` | Vitest — **212 tests**: 60 unit in Node, 66 integration in headless Chromium, 86 tooling in Node |
-| — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` | The three Vitest projects separately. Only `test:browser` needs WASM or a browser |
+| Test TS | `pnpm test` | Vitest — **216 tests over 17 files**: 60 unit in Node, 66 integration in headless Chromium, 86 tooling in Node, 4 in Node against the built package. **Needs `pnpm build:wasm` and `pnpm build`** — see §2.2 |
+| — one suite | `pnpm test:unit` / `pnpm test:browser` / `pnpm test:tools` / `pnpm test:node` | The four Vitest projects separately. `test:browser` needs WASM and a browser; `test:node` needs WASM and `pnpm build` |
 | Test the tooling | `pnpm test:tools` | **86 tests** over the docs generator, the guide renderer and the example's pure modules. Touches neither the library nor `pkg/` |
+| Test under Node | `pnpm test:node` | **4 tests** against `dist/`, pinning that the `node` condition selects the disk-reading boot. **Needs `pnpm build`** |
+| Test under Deno | `pnpm test:deno` | A smoke script, not Vitest: `packages/netgrep/tests/deno-smoke.ts` over the built package. Needs the Deno toolchain and `pnpm build` |
+| Test under Workers | `pnpm test:workerd` | Real workerd through `@cloudflare/vitest-pool-workers`, its own config — see the header of `vitest.workerd.config.ts` for why it cannot be a project in `vitest.config.ts`. **Needs `pnpm build`** |
 | Test Rust | `pnpm test:rust` | `cargo test`, native, no browser — **56 tests** |
 | Regenerate the caveat surfaces | `pnpm docs:sync` | Renders `docs/guide/caveats.data.json` onto the guide and the README. `--check` writes nothing and exits 1 when they disagree — §2.3 |
 | Verify packaging | `pnpm verify:pack` | Packs both packages and inspects the tarballs. **Needs `pnpm build` first** |
@@ -235,7 +248,13 @@ which resolves to this workspace and points at the gitignored `packages/netgrep/
 `typecheck:example` is a separate script rather than part of `pnpm typecheck` — that one runs *before*
 `pnpm build` in CI's `bundle` job.
 
-CI groups these into five jobs by toolchain (§4.3). A red check names the group; the step list inside it
+**`packages/netgrep/tests/` is outside `pnpm typecheck`, and deliberately so.** That tsconfig includes
+`src/**` only, so the runtime test files — the Node specs, the Deno smoke script, the workerd spec — are
+never type-checked. They all import `../dist/index.js`, so including them would make `typecheck` depend
+on `build`, and CI runs typecheck first, in the same job, before the build exists. The cost is real: a
+type error in those files surfaces when the suite runs rather than when the compiler does.
+
+CI groups these into six jobs by toolchain (§4.3). A red check names the group; the step list inside it
 names the command, and that command is one of the above.
 
 ### 4.1 Working in a git worktree
@@ -294,7 +313,7 @@ now ship as one pinned unit. See [decision 0013](docs/decisions/0013-playwright-
 
 ### 4.3 What CI runs, and where a red check comes from
 
-`test-and-lint.yml` is **five jobs grouped by toolchain**, so the check that goes red names the tools
+`test-and-lint.yml` is **six jobs grouped by toolchain**, so the check that goes red names the tools
 involved and the step list inside it names the command:
 
 | Job | Shows as | Waits for | Commands |
@@ -304,6 +323,7 @@ involved and the step list inside it names the command:
 | `js` | JS (Biome + unit tests + docs) | — | `pnpm lint:js`, `pnpm test:unit`, `pnpm test:tools`, `pnpm docs:sync --check` |
 | `browser` | Browser tests | `wasm` | `pnpm exec playwright install --with-deps chromium`, `pnpm test:browser` |
 | `bundle` | Typecheck, build & package | `wasm` | `pnpm typecheck`, `pnpm build`, `pnpm verify:pack`, `pnpm typecheck:example`, `pnpm build:example` |
+| `runtimes` | Runtimes (Node, Deno, Workers) | `wasm` | `pnpm build`, then `pnpm test:node`, `pnpm test:deno`, `pnpm test:workerd`. The only job that pays for the Deno toolchain |
 | `ci` | CI | all | Aggregate — **this is the check to require on the branch** |
 
 **`test-and-lint.yml` no longer triggers on `push: main`.** It runs on pull requests, and `release.yml` calls

@@ -72,7 +72,7 @@ export function styleAlerts(html: string): string {
 /**
  * Guide files link to each other and to the repo using paths relative to
  * `docs/guide/`, which is what GitHub resolves correctly when the same file is
- * read there. On the site the seven files are ONE page, so a sibling link
+ * read there. On the site the eight files are ONE page, so a sibling link
  * becomes an in-page anchor and everything else becomes an absolute repo URL.
  *
  * `h1Ids` maps each file's name to the id its `<h1>` was given, which is what a

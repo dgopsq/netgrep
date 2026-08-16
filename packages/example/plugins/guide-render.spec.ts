@@ -17,7 +17,7 @@ const GUIDE_DIR = join(
   '../../../docs/guide',
 );
 
-/** The seven published files, in the order the plugin concatenates them. */
+/** The eight published files, in the order the plugin concatenates them. */
 async function readRealGuide(): Promise<GuideFile[]> {
   const names = (await readdir(GUIDE_DIR))
     .filter((name) => /^\d{2}-.*\.md$/.test(name))
@@ -69,7 +69,7 @@ describe('rewriteRepoLinks', () => {
   });
 
   it('turns a link to a sibling guide file into an in-page anchor', () => {
-    // The seven files render into ONE page, so a cross-file link that stayed a
+    // The eight files render into ONE page, so a cross-file link that stayed a
     // file link would leave the site and land on GitHub.
     const html = '<a href="07-limitations.md#nul-byte">limitations</a>';
 
