@@ -62,12 +62,20 @@ A true positive **and** a true negative in each, because [0005](0005-esm-only-di
 mode was a broken build answering `false` — indistinguishable from "no matches" — and only the pair
 excludes it. The line numbers are what prove the real engine ran rather than a stub.
 
-Two figures beyond the table. **Node's heap grew by −0.3 MB across the whole search**, so the property
-the 128 MB argument rests on survives off the browser and is not being asserted from the browser's
-behaviour. And `wrangler deploy --dry-run` bundled to **1156.12 KiB / gzip 493.25 KiB**: the size *is*
-the evidence, because it is only reached if the `.wasm` was resolved from inside a dependency and inlined
-into the script rather than silently dropped. The deployed Worker then answered
+One figure beyond the table: `wrangler deploy --dry-run` bundled to **1156.12 KiB / gzip 493.25 KiB**.
+The size *is* the evidence there, because it is only reached if the `.wasm` was resolved from inside a
+dependency and inlined into the script rather than silently dropped. The deployed Worker then answered
 `{"hits":[137,200001],"truePositive":true,"trueNegative":false}` under real workerd.
+
+**The memory property is argued architecturally rather than measured, and that is deliberate.** The
+engine runs on one 64 KB block plus the incomplete trailing line, however large the file and whichever
+runtime it is, because netgrep retains nothing between chunks
+([0018](0018-line-oriented-tail-buffer.md), [0024](0024-remove-the-in-memory-cache.md)). That is a
+property of the pipeline, and it does not become browser-specific by leaving the browser — which is what
+the 128 MB argument above actually needs. **No suite in this repository pins a memory figure**, so none
+is quoted here: [0026](0026-demo-as-log-dashboard.md) and [0028](0028-demo-as-live-grep.md) both keep a
+memory number off the demo rather than show one nothing reproduces, and a heap reading in a record is the
+same figure with a longer half-life.
 
 **Deno needed no boot module at all.** Its `fetch` reads the `file:` URL the default loader builds, so
 the path it takes is byte for byte the browser's. The issue listed it as "possibly nothing"; it is
@@ -139,8 +147,9 @@ an `exports` field, which is how the probes found it.
 that package says so.** The Node and Workers boots both resolve it as a subpath, which works *precisely
 because* no `exports` map restricts that package. Adding one later — a reasonable-looking tidy-up — would
 break both runtimes, and the coupling is invisible from `packages/search/package.json` — a manifest that
-is plain JSON and cannot carry the warning inline. Recording it here is half the mitigation;
-`verify-pack`, which walks every `imports` and `exports` target, is the other half.
+is plain JSON and cannot carry the warning inline. Recording it here is the whole mitigation for now:
+`scripts/verify-pack.mjs` checks a hardcoded list and resolves nothing from either manifest, and the
+walk over every `imports` and `exports` target is one of the things PR 2 adds.
 
 **The `unit` project's no-build promise survives, through one alias.** `#wasm-boot` names `./dist/…`, and
 AGENTS.md §2.2 promises `pnpm test:unit` runs with no `pnpm build:wasm` and no `pnpm build`. Vite does not

@@ -18,16 +18,21 @@ along with why the rest stay refused.
 The distinguishing property is *when* it answers: the search runs against each chunk of the HTTP response
 **as it arrives**, so a match in the first kilobyte resolves without waiting for the remaining megabytes.
 
-It is a browser-targeted library. It requires `fetch` with a readable response body stream. It needs **no
-bundler configuration**: since 0.2.0 the WASM is loaded through a standard
+It runs wherever `fetch` gives it a readable response body stream — a browser, Node 18+, Deno and
+Cloudflare Workers — with the same two functions and the same results in each; only the WebAssembly boot
+differs, and it is selected by the runtime's own condition rather than by the caller
+([decision 0029](decisions/0029-run-outside-the-browser.md)). It needs **no bundler configuration**:
+since 0.2.0 the WASM is loaded through a standard
 `new URL('index_bg.wasm', import.meta.url)`, which Vite, webpack 5, Rollup, esbuild, Parcel and Bun all
 understand out of the box.
 
-It also requires a URL the browser is allowed to read: a cross-origin file must be served with
+In a browser it also requires a URL the page is allowed to read: a cross-origin file must be served with
 `Access-Control-Allow-Origin`, or the fetch rejects before a byte is searched, and it rejects with an opaque
-network error rather than anything netgrep can explain. That is the first gate a remote file has to pass, so
-it is a requirement rather than a caveat — and it bounds the *file you do not control* claim below to files
-whose **host** cooperates.
+network error rather than anything netgrep can explain. That is the first gate a remote file has to pass in
+a tab, so it is a requirement rather than a caveat — and it bounds the *file you do not control* claim below
+to files whose **host** cooperates. Cross-origin permission is a **browser** rule and does not apply off the
+browser: a server, a Worker or a Deno process can read a URL whose host sends no such header at all, which
+is why the same claim is unbounded there.
 
 It is not the only gate, but the second one is now the caller's to open. `grep` and `matches` both take a
 `fetch` option handed to the request unchanged, so an `Authorization` header, an API key or

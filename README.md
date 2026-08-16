@@ -18,16 +18,17 @@ issues it.
   a browser, Node 18+, Deno, or Cloudflare Workers. Each boots the WebAssembly the way its own runtime
   allows, and the API is identical in all four.
 - **ESM.** The package is ESM only. There is no CommonJS `require` entry point.
-- **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load. Most of it is
-  the regex engine's Unicode tables, and it is the main cost of the approach. On a server or in a
-  Worker it is compiled once when the code loads, not per request.
-- **A URL the browser is allowed to fetch.** A cross-origin file needs `Access-Control-Allow-Origin`
-  from its host, and nothing is set on the request by default — no headers, no API key, and no cookies
-  cross-origin. `grep` and `matches` take per-call `fetch` options, so a file behind a header, an API key
-  or a cookie is reachable — but the host still has to answer the cross-origin request.
-  Cross-origin permission is a **browser** rule, so off the browser it does not apply — a server, a
-  Worker or a Deno process can read a URL whose host sends no `Access-Control-Allow-Origin` at all.
-  Whatever authorization the host itself requires still applies, and still has to be passed in.
+- **A ~1.17 MB WebAssembly download** (~500 KB gzipped), fetched once per page load in a browser. Most
+  of it is the regex engine's Unicode tables, and it is the main cost of the approach. On a server or in
+  a Worker it is compiled once when the code loads, not per request.
+- **A URL the runtime is allowed to fetch — in a browser, a CORS rule.** A cross-origin file needs
+  `Access-Control-Allow-Origin` from its host, and nothing is set on the request by default — no
+  headers, no API key, and no cookies cross-origin. `grep` and `matches` take per-call `fetch` options,
+  so a file behind a header, an API key or a cookie is reachable — but the host still has to answer the
+  cross-origin request. Cross-origin permission is a **browser** rule, so off the browser it does not
+  apply — a server, a Worker or a Deno process can read a URL whose host sends no
+  `Access-Control-Allow-Origin` at all. Whatever authorization the host itself requires still applies,
+  and still has to be passed in.
 
 ## Install
 
