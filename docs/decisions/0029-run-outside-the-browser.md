@@ -19,7 +19,8 @@ denies it is a contradiction rather than a sequencing detail.
 in the engine or the streaming path is browser-specific: `packages/search/src/lib.rs` imports
 `wasm_bindgen::prelude::*` and nothing else — no `web_sys`, no `js_sys`, no clock, no filesystem — and the
 TypeScript touches exactly two web APIs, `fetch` and a stream reader, both built into Node 18+, Deno and
-Workers. There is no `TextDecoder`, `window`, `document` or `Blob` on the runtime path, because the
+Workers (the *package's* Node floor is higher, and the boot module rather than `fetch` sets it — see the
+consequences). There is no `TextDecoder`, `window`, `document` or `Blob` on the runtime path, because the
 decoding happens in Rust. One line stood in the way: `wasmReady.ts` called `init()`, which resolves
 `index_bg.wasm` relative to its own module URL and fetches it.
 
@@ -103,8 +104,14 @@ entry point stays single, and a consumer never names a runtime.
 **The boot stays eager in every runtime, and that is the load-bearing choice.** Node's read is
 synchronous, so there is no top-level await and the module finishes booting before anything can import
 it. Workers instantiate an already-compiled module, which is not network I/O and is therefore allowed at
-global scope where a `fetch` is not. Nobody loses the import-time head start, no runtime gets a different
-contract from the others, and — see below — no new export enters the API.
+global scope where a `fetch` is not. Nobody loses the import-time head start, every runtime that boots
+successfully gets the same contract as the others, and — see below — no new export enters the API.
+
+The qualifier is load-bearing: *failure* is where the runtimes differ. The fetch boot fails into a
+rejected `wasmReady`, so the module still evaluates and the error surfaces at the first `grep` or
+`matches`; the Node and Workers boots call `initSync` at module scope, so a failure there throws during
+evaluation and the `import` itself throws. Both are honest reports of the same fault, and neither is
+recoverable, but a caller wrapping the import rather than the call sees only one of them.
 
 **Condition order is not cosmetic, and a wrong order misroutes silently.** That is the 0005 failure
 shape: not a crash, but a search answering `false` because the engine was never instantiated. The rules,
@@ -143,13 +150,29 @@ paths were never API, and almost certainly nobody imports them. Incidentally it 
 self-reference** — `import '@netgrep/netgrep'` from inside the package was `ERR_MODULE_NOT_FOUND` without
 an `exports` field, which is how the probes found it.
 
+**The map keeps `"./package.json"` open, and that entry is not optional.** A first `exports` map closes
+the manifest along with everything else, and `@netgrep/netgrep/package.json` resolved before this record —
+bundler plugins, version probes and `import pkg from '@netgrep/netgrep/package.json' with {type:'json'}`
+all reach for it, and all of them would have started throwing `ERR_PACKAGE_PATH_NOT_EXPORTED` at build
+time. It is the conventional companion to a first map for exactly that reason.
+
+**The package now declares a Node floor, and it is higher than `fetch`'s.** `engines` says
+`^18.19.0 || >=20.6.0`, because the Node boot resolves the binary through a **synchronous, unflagged**
+`import.meta.resolve`, and that is the version pair where Node both stopped returning a Promise and
+stopped requiring `--experimental-import-meta-resolve` (Node's ESM documentation, version history for
+`import.meta.resolve`; 20.0.0 through 20.5.x are synchronous but still flagged, and 19.x never received
+the backport). Below the floor the failure is the loud kind: `fileURLToPath(undefined)` or
+`fileURLToPath(Promise)` throws during module evaluation, so the `import` takes the process down — the
+shape this record exists to remove. The declaration is what makes an install warn instead.
+
 **`@netgrep/search` must keep `pkg/index_bg.wasm` reachable as an unrestricted subpath, and nothing in
 that package says so.** The Node and Workers boots both resolve it as a subpath, which works *precisely
 because* no `exports` map restricts that package. Adding one later — a reasonable-looking tidy-up — would
 break both runtimes, and the coupling is invisible from `packages/search/package.json` — a manifest that
-is plain JSON and cannot carry the warning inline. Recording it here is the whole mitigation for now:
-`scripts/verify-pack.mjs` checks a hardcoded list and resolves nothing from either manifest, and the
-walk over every `imports` and `exports` target is one of the things PR 2 adds.
+is plain JSON and cannot carry the warning inline. Recording it here is most of the mitigation, and
+`scripts/verify-pack.mjs` is the rest: it walks every target named by `imports` and `exports` and fails
+when one is missing from the tarball, so a condition pointing at a file that does not ship is caught at
+`pnpm verify:pack` rather than by a consumer.
 
 **The `unit` project's no-build promise survives, through one alias.** `#wasm-boot` names `./dist/…`, and
 AGENTS.md §2.2 promises `pnpm test:unit` runs with no `pnpm build:wasm` and no `pnpm build`. Vite does not
@@ -171,8 +194,9 @@ the built package, so both loaders now ship and both are tested by the runtime t
 **Four runtimes now have to stay green, and only two of them are cheap.** The `node` leg runs the built
 package, because what it tests is which boot the condition map selects — aliasing it would test the
 browser's loader under Node and prove nothing. The `deno` leg is a smoke script. The `workerd` leg needs
-`@cloudflare/vitest-pool-workers` and lands separately; until it does, the Workers claim rests on the
-run recorded above rather than on CI.
+`@cloudflare/vitest-pool-workers` and its own config file, because the pool's conditions only reach the
+resolver when its config is the root one. All three run in CI's `runtimes` job, so the Workers claim
+rests on a check rather than on the run recorded above.
 
 ## Rejected alongside
 

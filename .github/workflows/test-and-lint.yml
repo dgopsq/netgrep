@@ -22,8 +22,8 @@ concurrency:
 permissions:
   contents: read
 
-# FIVE JOBS, GROUPED BY WHAT THEY NEED INSTALLED
-# ----------------------------------------------
+# SIX JOBS, GROUPED BY WHAT THEY NEED INSTALLED
+# ---------------------------------------------
 # This was a single job running eight commands in sequence. A red build said
 # "Test and lint failed" and you opened the log to find out what, and a clippy
 # warning in the first minute hid every later result because nothing after it
@@ -34,7 +34,8 @@ permissions:
 # the runner time. At this repository's size the parallelism buys nothing; the
 # naming does. So the grouping is by *toolchain*, which is the thing a job
 # actually pays for: a Rust job, a Node-only job, the WASM build, the browser,
-# and the packaging. Five jobs install five sets of tools instead of nine.
+# the packaging, and the server runtimes. Six jobs install six sets of tools
+# instead of one per command.
 #
 # The one cost of grouping is that a failing step could hide the ones after it,
 # which is half of what the split was for. `if: '!cancelled()'` on every
