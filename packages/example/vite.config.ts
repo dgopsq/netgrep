@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { devLogsPlugin } from './plugins/dev-logs';
 import { guidePlugin } from './plugins/guide';
 import { wasmPreloadPlugin } from './plugins/wasm-preload';
 
@@ -12,10 +13,11 @@ export default defineConfig({
   //
   // Stated explicitly rather than left to Vite's default, because it is the one
   // knob that has to move if the site ever goes back onto a project page — and
-  // because `src/data/logs.ts` composes log file URLs from
-  // `import.meta.env.BASE_URL`, which is exactly this value. Keeping that
-  // indirection now that it resolves to `/` costs nothing and means a future
-  // base change stays a one-line edit here.
+  // because `src/data/logs.ts` composes the DEV corpus URLs from
+  // `import.meta.env.BASE_URL`, which is exactly this value. (Production reads
+  // the corpus from R2 instead, so this value does not reach those URLs.)
+  // Keeping the indirection now that it resolves to `/` costs nothing and means
+  // a future base change stays a one-line edit here.
   base: '/',
 
   // Two real documents, not a client-side router: /docs is generated HTML that
@@ -32,7 +34,13 @@ export default defineConfig({
     },
   },
 
-  plugins: [react(), tailwindcss(), guidePlugin(), wasmPreloadPlugin()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    guidePlugin(),
+    wasmPreloadPlugin(),
+    devLogsPlugin(),
+  ],
 
   resolve: {
     alias: {

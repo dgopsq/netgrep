@@ -29,15 +29,34 @@ pnpm dev
 resolves to the workspace package and points at the gitignored `packages/netgrep/dist/`. Without it Vite
 fails to resolve the import. `pnpm bootstrap` covers the install and the WASM, but not `pnpm build`.
 
-**`pnpm dev` writes 408.6 MB into `public/logs/` before Vite starts**, in under a second. `predev` and
-`prebuild` run `scripts/build-logs.mjs`, which tiles the four committed seeds up to the targets in
-`logs.config.json` and skips any file already at size — so it is paid once per checkout, and once per
-worktree. The directory is gitignored and must never be committed. To check the built logs without writing
-anything:
+**`pnpm dev` writes 408.6 MB into `.logs/` before Vite starts**, in under a second. `predev` runs
+`scripts/build-logs.mjs`, which tiles the four committed seeds up to the targets in `logs.config.json` and
+skips any file already at size — so it is paid once per checkout, and once per worktree. The directory is
+gitignored and must never be committed. To check the built logs without writing anything:
 
 ```bash
 node scripts/build-logs.mjs --check
 ```
+
+⚠️ **`.logs/` is not under `public/`, and `build` does not generate it.** Production reads the corpus from R2
+at `logs.netgrep.dev`; only dev reads local files, served at `/logs/*` by `plugins/dev-logs.ts`. Vite copies
+all of `publicDir` into `dist/`, so a corpus living there would add ~429 MB of never-fetched files to the
+Pages artefact — which is why the location is load-bearing rather than a preference. See
+[decision 0017](../../docs/decisions/0017-example-as-hosted-demo.md).
+
+To search a real bucket from dev — the only way to exercise the CORS and `Content-Encoding` path before
+deploying:
+
+```bash
+VITE_LOGS_BASE=https://logs.netgrep.dev/v1 pnpm dev
+```
+
+`r2-cors.json` is the bucket's CORS policy, committed so it is reproducible rather than a setting someone
+once clicked. Apply it with `wrangler r2 bucket cors set netgrep-logs --file r2-cors.json`. The two
+`localhost` origins are for the override above and for `pnpm preview`.
+
+⚠️ **Set CORS before the first public fetch.** Cloudflare caches responses without `Access-Control-*`
+headers, and an object already cached without them keeps serving them missing until the cache is purged.
 
 The dev server runs at <http://localhost:5173/> — the same base path as production, deliberately, so a
 base-path mistake fails here rather than only after deploying.

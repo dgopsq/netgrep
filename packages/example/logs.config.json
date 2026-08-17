@@ -1,4 +1,7 @@
 {
+  "remoteBase": "https://logs.netgrep.dev",
+  "corpusVersion": 1,
+  "corpusHash": "0dbb188deb19a075",
   "sources": [
     {
       "id": "apache",
