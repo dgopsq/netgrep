@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://www.netgrep.dev",
+      "http://localhost:5173",
+      "http://localhost:4173"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "ExposeHeaders": ["Content-Length"],
+    "MaxAgeSeconds": 3600
+  }
+]

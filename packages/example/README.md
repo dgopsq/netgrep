@@ -51,6 +51,13 @@ deploying:
 VITE_LOGS_BASE=https://logs.netgrep.dev/v1 pnpm dev
 ```
 
+`r2-cors.json` is the bucket's CORS policy, committed so it is reproducible rather than a setting someone
+once clicked. Apply it with `wrangler r2 bucket cors set netgrep-logs --file r2-cors.json`. The two
+`localhost` origins are for the override above and for `pnpm preview`.
+
+⚠️ **Set CORS before the first public fetch.** Cloudflare caches responses without `Access-Control-*`
+headers, and an object already cached without them keeps serving them missing until the cache is purged.
+
 The dev server runs at <http://localhost:5173/> — the same base path as production, deliberately, so a
 base-path mistake fails here rather than only after deploying.
 
