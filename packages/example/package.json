@@ -7,12 +7,15 @@
   "scripts": {
     "predev": "pnpm run logs",
     "dev": "vite",
-    "prebuild": "pnpm run logs",
     "build": "vite build",
     "preview": "vite preview",
-    "logs": "node scripts/build-logs.mjs"
+    "logs": "node scripts/build-logs.mjs",
+    "logs:check": "node scripts/build-logs.mjs --check",
+    "logs:hash": "node scripts/build-logs.mjs --write-hash",
+    "logs:upload": "node scripts/upload-logs.mjs",
+    "logs:verify": "node scripts/verify-logs.mjs"
   },
-  "//": "This app is the public demo at https://www.netgrep.dev, so unlike the rest of the repository its dependencies ARE on the maintenance path — see docs/decisions/0017-example-as-hosted-demo.md. Typechecking lives in the root `pnpm typecheck` rather than in `build`, so the TypeScript version stays pinned in one place.",
+  "//": "This app is the public demo at https://www.netgrep.dev, so unlike the rest of the repository its dependencies ARE on the maintenance path — see docs/decisions/0017-example-as-hosted-demo.md. Typechecking lives in the root `pnpm typecheck` rather than in `build`, so the TypeScript version stays pinned in one place. `build` deliberately has NO `prebuild`: production reads the corpus from R2, so generating ~429 MB of logs would only bloat the Pages artefact with files nothing fetches. `predev` still generates them, because dev serves them locally.",
   "dependencies": {
     "@netgrep/netgrep": "workspace:*",
     "@tanstack/react-virtual": "^3.14.9",

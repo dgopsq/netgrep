@@ -15,6 +15,11 @@ name: Deploy demo to GitHub Pages
 # a deployment driven by a workflow ignores a CNAME file in the artefact, so
 # there deliberately is not one in packages/example/public/. See
 # docs/decisions/0017-example-as-hosted-demo.md.
+#
+# THIS ARTEFACT DOES NOT CONTAIN THE LOG CORPUS. The four searchable files come
+# to ~429 MB and are served from R2 at logs.netgrep.dev, uploaded separately by
+# upload-logs.yml. `build:example` has no `prebuild` generating them, so nothing
+# here needs to exclude them.
 
 permissions:
   contents: read

@@ -39,6 +39,7 @@
     "@vitest/browser-playwright": "4.1.10",
     "playwright": "1.62.0",
     "typescript": "7.0.2",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "wrangler": "4.123.0"
   }
 }

@@ -1,4 +1,4 @@
-// Tiles each seed in seeds/ into a large synthetic log under public/logs/, so
+// Tiles each seed in seeds/ into a large synthetic log under .logs/, so
 // the demo has something worth downloading over HTTP instead of files that
 // finish before a progress bar could mean anything.
 //
@@ -6,7 +6,7 @@
 // the output of this script is not — it is gitignored and can run into the
 // hundreds of megabytes. Run it with:
 //
-//     node scripts/build-logs.mjs [--check]
+//     node scripts/build-logs.mjs [--check | --write-hash]
 //
 // Alongside the files it writes `manifest.json`, mapping each source id to the
 // number of bytes that file actually ended up being. The demo reads it at
@@ -19,12 +19,15 @@
 // `--check` verifies each output exists, is already at its target size and is
 // listed in the manifest at its true size — writing nothing, and exiting 1 on
 // the first mismatch, for CI to fail fast rather than silently searching a
-// stale or half-built set of logs.
+// stale or half-built set of logs. It also verifies `corpusHash`, which is what
+// catches an edited seed that needs a `corpusVersion` bump before the R2 objects
+// can be replaced. `--write-hash` refreshes that value after a deliberate change.
 //
 // Every seed MUST end with a newline: copies are concatenated back to back,
 // and a seed without a trailing terminator would join its last line to the
 // next copy's first, inventing a log line that exists in no real system.
 
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createWriteStream, existsSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
@@ -34,14 +37,41 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
 const seedsDir = join(root, 'seeds');
-const outDir = join(root, 'public', 'logs');
+// Outside `public/` deliberately: Vite copies `publicDir` wholesale into
+// `dist/`, and production reads the corpus from R2, so a copy in the Pages
+// artefact is ~429 MB nothing fetches. `plugins/dev-logs.ts` serves this
+// directory at `/logs/*` in dev.
+const outDir = join(root, '.logs');
 const manifestPath = join(outDir, 'manifest.json');
+const configPath = join(root, 'logs.config.json');
 
-const { sources } = JSON.parse(
-  await readFile(join(root, 'logs.config.json'), 'utf8'),
-);
+const config = JSON.parse(await readFile(configPath, 'utf8'));
+const { sources } = config;
 
 const checkOnly = process.argv.includes('--check');
+const writeHash = process.argv.includes('--write-hash');
+
+/**
+ * Fingerprint of the inputs that decide the corpus: each source's name, its
+ * target size, and the bytes of its seed.
+ *
+ * Production serves these objects `immutable` for a year under a
+ * `v<corpusVersion>` prefix, so a changed seed is unreachable until the version
+ * is bumped — and nothing about a stale edge cache looks like an error. This is
+ * what turns that silence into a failed check.
+ */
+async function computeCorpusHash() {
+  const hash = createHash('sha256');
+
+  for (const source of sources) {
+    const seed = await readFile(join(seedsDir, source.seed));
+    hash.update(source.file);
+    hash.update(String(source.targetBytes));
+    hash.update(createHash('sha256').update(seed).digest('hex'));
+  }
+
+  return hash.digest('hex').slice(0, 16);
+}
 
 /**
  * A marker line in the target service's own format, injected at roughly
@@ -180,7 +210,14 @@ async function buildSource(source) {
   console.log(`${source.file}: ${written} bytes in ${elapsedMs.toFixed(0)}ms`);
 }
 
-if (checkOnly) {
+if (writeHash) {
+  const corpusHash = await computeCorpusHash();
+  await writeFile(
+    configPath,
+    `${JSON.stringify({ ...config, corpusHash }, null, 2)}\n`,
+  );
+  console.log(`corpusHash: ${corpusHash}`);
+} else if (checkOnly) {
   const hasManifest = existsSync(manifestPath);
   if (!hasManifest) console.error('✗ manifest.json: missing');
 
@@ -191,7 +228,23 @@ if (checkOnly) {
   const results = await Promise.all(
     sources.map((source) => checkSource(source, manifest)),
   );
-  if (!hasManifest || results.some((ok) => !ok)) process.exit(1);
+
+  // Checked even when the files themselves are fine: this catches an edited
+  // seed, which changes what SHOULD be served without changing whether the
+  // local build is valid.
+  const corpusHash = await computeCorpusHash();
+  const hashOk = corpusHash === config.corpusHash;
+  if (hashOk) {
+    console.log(`✓ corpusHash: ${corpusHash}`);
+  } else {
+    console.error(
+      `✗ corpusHash: config says ${config.corpusHash}, seeds hash to ${corpusHash}.\n` +
+        `  The corpus changed. Bump "corpusVersion" in logs.config.json so the new\n` +
+        `  files get a fresh immutable prefix, run \`pnpm logs:hash\`, and re-upload.`,
+    );
+  }
+
+  if (!hasManifest || !hashOk || results.some((ok) => !ok)) process.exit(1);
 } else {
   await mkdir(outDir, { recursive: true });
   for (const source of sources) {

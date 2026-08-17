@@ -322,3 +322,72 @@ Two operational wrinkles, the first repeated from last time and the second new:
   is **unreachable rather than insecure**. That is worth recording because it changes what a broken
   migration looks like — and because the instinct it provokes, turning the proxy on to get *something*
   answering, is exactly what prevents the certificate being issued.
+
+## Amendment: the corpus moved to R2 (2026-08-17)
+
+**2026-08-17.** The four searchable log files are served from **<https://logs.netgrep.dev/>**, an R2 bucket
+bound to its own subdomain. The *site* is unchanged — still GitHub Pages, still `deploy-pages.yml`, still
+`www.netgrep.dev`. What moved is only the corpus, and only because of what it cost to serve it from a Pages
+artefact.
+
+**The symptom was seconds of dead air before the first byte.** Measured against the live site, cold:
+
+| source | on the wire (gzip) | TTFB cold (`MISS`) | TTFB warm (`HIT`) |
+|---|---|---|---|
+| Apache 8.3 MB | 0.6 MB | 0.37 s | — |
+| ZooKeeper 40.0 MB | 1.9 MB | 0.86 s | 0.07 s |
+| Hadoop YARN 120.1 MB | 9.5 MB | 2.37 s | 0.07 s |
+| OpenSSH 240.2 MB | 17.1 MB | **5.49 s** | **0.08 s** |
+
+Two things follow. **On a cache hit it is ~70 ms regardless of size**, so nothing here was ever the engine or
+the library — `firstByteMs` in `use-grep-stream.ts` exists because this wait was being read as netgrep being
+slow to start. And **GitHub Pages pins `Cache-Control: max-age=600` with no way to change it**, so across
+Fastly's POPs a demo with modest traffic serves a cold object to most visitors. The seconds were the common
+case, not the tail.
+
+**The wait is not compression.** Requesting `Accept-Encoding: identity` still scales TTFB with size — 6.1 s
+uncompressed against 4.3 s gzipped on OpenSSH, both misses. On a miss the edge pulls the whole object from
+origin before releasing a byte, so TTFB is the time to move the entire file, and the fix has to be a cache
+that stays warm rather than a smaller encoding.
+
+**Cloudflare Pages was considered and cannot host this corpus at all.** The maximum size of a single Pages
+asset is **25 MiB**, technical and unraisable, and three of the four files are 40 MB, 120 MB and 240 MB. The
+same 25 MiB ceiling applies to Workers static assets. Cloudflare's own guidance for larger files is R2, which
+is what this amendment does. R2 allows ~5 TiB per object and Cloudflare's CDN caches objects up to 512 MB on
+the free plan, so even the uncompressed 240 MB source is cacheable.
+
+| | |
+|---|---|
+| Bucket | `netgrep-logs`, bound to `logs.netgrep.dev` |
+| Keys | `v<corpusVersion>/<file>` — `v1/openssh.txt` today |
+| Bodies | gzipped, ~26 MB for the whole corpus against ~429 MB raw |
+| Headers | `Content-Encoding: gzip`, `Content-Type: text/plain; charset=utf-8`, `Cache-Control: public, max-age=31536000, immutable` |
+| CORS | `GET`/`HEAD` from `https://www.netgrep.dev`, no credentials |
+| Uploaded by | `upload-logs.yml`, `workflow_dispatch` only |
+
+**The objects keep their `.txt` names even though the bodies are gzipped.** `Content-Encoding` is what says so.
+A `.gz` key would force the page to know which form it was fetching, and dev — which serves the files
+uncompressed — would then need a different URL rather than a different base.
+
+**A year of `immutable` is safe only because the prefix carries a version, and that needs a guard.** The
+failure it invites is silent: edit a seed, forget to bump `corpusVersion`, and every edge serves the old
+corpus for a year with nothing anywhere reporting an error. `logs.config.json` therefore records a
+`corpusHash` over each seed's bytes and target size, and `build-logs.mjs --check` fails when the seeds no
+longer match it, naming the bump as the fix. `pnpm logs:hash` refreshes the value after a deliberate change.
+
+**The corpus is no longer generated into `public/`, and that is structural rather than tidiness.** Vite copies
+the whole `publicDir` into `dist/`, so a corpus sitting there is ~429 MB of files added to the Pages artefact
+that production does not read — it fetches them from R2. Dropping the `prebuild` that generated them is not
+enough, because the copy depends on what happens to be on disk: any machine that has run `pnpm dev` would
+ship them. `build-logs.mjs` writes to `.logs/` instead, outside `publicDir`, and `plugins/dev-logs.ts` serves
+that directory at `/logs/*` in dev. Measured: `dist/` goes from 435 MB to 1.6 MB with the corpus present.
+
+**Dev still reads local files.** `src/data/logs.ts` resolves the base to `.logs/` in dev and to R2 in
+production, with `VITE_LOGS_BASE` overriding both — the only way to exercise the real CORS and
+`Content-Encoding` path before deploying. A contributor needs neither network nor bucket to run the demo.
+
+**The upload is deliberately outside the release path.** The corpus changes only when a seed, a target size or
+`corpusVersion` changes, which is close to never, and every release that ran the upload would need R2
+credentials it otherwise has no use for. `upload-logs.yml` is `workflow_dispatch`, and `verify-logs.mjs` reads
+the objects back over HTTP afterwards — gzipped, cacheable for a year, readable cross-origin — because a
+bucket that uploaded cleanly but has no CORS policy is a demo that fetches nothing, and no build would catch it.

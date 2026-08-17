@@ -1,0 +1,67 @@
+# Regenerates the demo corpus and uploads it to the R2 bucket that
+# https://www.netgrep.dev reads. See docs/decisions/0017-example-as-hosted-demo.md.
+#
+# DELIBERATELY NOT IN THE RELEASE PATH. The corpus changes only when a seed,
+# a target size or `corpusVersion` changes — which is close to never — and every
+# release that ran this would need R2 credentials it otherwise has no use for.
+# Run it by hand after bumping `corpusVersion`.
+#
+# Objects are served `immutable` for a year under a `v<corpusVersion>` prefix, so
+# this never overwrites what the live site is reading unless you point it at a
+# version that is already published. `logs:check` is what refuses to upload a
+# corpus whose seeds moved without a version bump.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: 'Print what would be uploaded without writing to R2'
+        type: boolean
+        default: false
+
+name: Upload demo corpus to R2
+
+permissions:
+  contents: read
+
+# One upload at a time: two runs writing the same keys would interleave
+# multipart uploads for no reason.
+concurrency:
+  group: upload-logs
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/require-main
+      - uses: ./.github/actions/node
+
+      # ~429 MB written to the runner's disk, then gzipped to ~29 MB. Only the
+      # compressed copies are uploaded.
+      - name: Generate the corpus
+        run: pnpm --filter @netgrep/example logs
+
+      # Fails when the seeds no longer hash to `corpusHash`, which means the
+      # corpus changed and `corpusVersion` needs bumping before anything is
+      # written to a prefix that is cached for a year.
+      - name: Verify the corpus matches its recorded hash
+        run: pnpm --filter @netgrep/example logs:check
+
+      - name: Upload to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >
+          pnpm --filter @netgrep/example logs:upload
+          ${{ inputs.dry-run && '-- --dry-run' || '' }}
+
+      # Reads the objects back over HTTP: gzipped, cacheable for a year, and
+      # readable cross-origin from www.netgrep.dev. A bucket that uploaded fine
+      # but has no CORS policy is a demo that fetches nothing.
+      - name: Verify what the bucket actually serves
+        if: ${{ !inputs.dry-run }}
+        run: pnpm --filter @netgrep/example logs:verify

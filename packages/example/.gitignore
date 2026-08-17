@@ -11,6 +11,11 @@ lerna-debug.log*
 # blanket `*.log` above would otherwise swallow them too.
 !/seeds/*.log
 
+# The generated corpus, and the gzipped copies `upload-logs.mjs` sends to R2.
+# Both disposable, and outside `public/` so a build cannot copy them into dist/.
+.logs
+.logs-gz
+
 node_modules
 dist
 dist-ssr
